@@ -32,10 +32,3 @@ export default function HomePage() {
     </div>
   )
 }
-
-export async function generateMetadata() {
-  return {
-    title: 'Image Generation Dashboard',
-    description: 'AI-powered image generation workflow',
-  }
-}
