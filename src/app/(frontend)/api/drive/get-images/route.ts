@@ -40,16 +40,20 @@ export async function POST(request: NextRequest) {
           const response = await drive.files.get({
             fileId: fileId,
             fields: 'id,name,mimeType,thumbnailLink,webContentLink',
+            supportsAllDrives: true,
           })
 
           const data = response.data
+
+          // Generate proper direct download URL
+          const directUrl = `https://drive.google.com/uc?export=view&id=${fileId}`
 
           return {
             id: data.id,
             name: data.name,
             mimeType: data.mimeType,
             thumbnailUrl: data.thumbnailLink,
-            url: data.webContentLink,
+            url: directUrl,
           }
         } catch (error) {
           console.error(`Error fetching file ${fileId}:`, error)

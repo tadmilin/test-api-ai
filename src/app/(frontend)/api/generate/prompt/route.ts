@@ -27,18 +27,6 @@ export async function POST(request: NextRequest) {
     const messages: any[] = []
     
     if (referenceImageUrls && referenceImageUrls.length > 0) {
-      // Convert Google Drive URLs to direct download links
-      const directImageUrls = referenceImageUrls.map((url: string) => {
-        // If it's a Google Drive URL, convert to direct download format
-        if (url.includes('drive.google.com')) {
-          const fileIdMatch = url.match(/[-\w]{25,}/)
-          if (fileIdMatch) {
-            return `https://drive.google.com/uc?export=download&id=${fileIdMatch[0]}`
-          }
-        }
-        return url
-      })
-
       // Use GPT-4 Vision to analyze reference images
       const visionContent = [
         {
@@ -60,7 +48,7 @@ I've provided reference images. Analyze these images carefully and create a DALL
 
 Return ONLY the prompt text, nothing else.`
         },
-        ...directImageUrls.map((url: string) => ({
+        ...referenceImageUrls.map((url: string) => ({
           type: 'image_url',
           image_url: { url, detail: 'high' }
         }))
