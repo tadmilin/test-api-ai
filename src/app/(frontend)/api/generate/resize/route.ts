@@ -53,16 +53,69 @@ export async function POST(request: NextRequest) {
         continue
       }
 
-      const resizedBuffer = await sharp(imageBuffer)
-        .resize(config.width, config.height, {
-          fit: 'cover',
-          position: 'attention',
-        })
-        .png({ 
-          quality: 100,
-          compressionLevel: 6,
-        })
-        .toBuffer()
+      // Get original image dimensions
+      const metadata = await sharp(imageBuffer).metadata()
+      const originalWidth = metadata.width || 1024
+      const originalHeight = metadata.height || 1024
+
+      // Calculate aspect ratios
+      const targetRatio = config.width / config.height
+      const originalRatio = originalWidth / originalHeight
+
+      let resizedBuffer: Buffer
+
+      if (originalRatio > targetRatio) {
+        // Original is wider - crop width, keep height
+        const newWidth = Math.round(originalHeight * targetRatio)
+        const left = Math.round((originalWidth - newWidth) / 2)
+        
+        resizedBuffer = await sharp(imageBuffer)
+          .extract({
+            left,
+            top: 0,
+            width: newWidth,
+            height: originalHeight,
+          })
+          .resize(config.width, config.height, {
+            fit: 'fill',
+          })
+          .png({ 
+            quality: 100,
+            compressionLevel: 6,
+          })
+          .toBuffer()
+      } else if (originalRatio < targetRatio) {
+        // Original is taller - crop height, keep width
+        const newHeight = Math.round(originalWidth / targetRatio)
+        const top = Math.round((originalHeight - newHeight) / 2)
+        
+        resizedBuffer = await sharp(imageBuffer)
+          .extract({
+            left: 0,
+            top,
+            width: originalWidth,
+            height: newHeight,
+          })
+          .resize(config.width, config.height, {
+            fit: 'fill',
+          })
+          .png({ 
+            quality: 100,
+            compressionLevel: 6,
+          })
+          .toBuffer()
+      } else {
+        // Same aspect ratio - just resize
+        resizedBuffer = await sharp(imageBuffer)
+          .resize(config.width, config.height, {
+            fit: 'fill',
+          })
+          .png({ 
+            quality: 100,
+            compressionLevel: 6,
+          })
+          .toBuffer()
+      }
 
       // Upload to Vercel Blob
       const blob = await put(`jobs/${jobId}/${platform}.png`, resizedBuffer, {
