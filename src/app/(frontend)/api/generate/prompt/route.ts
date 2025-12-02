@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
+import OpenAI from 'openai'
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,18 +12,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const apiKey = process.env.CLAUDE_API_KEY
+    const apiKey = process.env.OPENAI_API_KEY
 
     if (!apiKey) {
       return NextResponse.json(
-        { error: 'Claude API key not configured' },
+        { error: 'OpenAI API key not configured' },
         { status: 500 }
       )
     }
 
-    const anthropic = new Anthropic({ apiKey })
+    const openai = new OpenAI({ apiKey })
 
-    // Build the prompt for Claude
+    // Build the prompt for GPT-4
     const userMessage = `You are an expert at creating image generation prompts for DALL-E and Stable Diffusion.
 
 Product Information:
@@ -41,18 +41,18 @@ Task: Create a detailed, high-quality English prompt for generating a marketing 
 
 Return ONLY the prompt text, nothing else.`
 
-    const message = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
-      max_tokens: 1024,
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
       messages: [
         {
           role: 'user',
           content: userMessage,
         },
       ],
+      max_tokens: 1024,
     })
 
-    const prompt = message.content[0].type === 'text' ? message.content[0].text : ''
+    const prompt = completion.choices[0]?.message?.content || ''
 
     return NextResponse.json({ prompt })
   } catch (error) {
