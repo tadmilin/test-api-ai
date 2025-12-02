@@ -75,9 +75,13 @@ export default function DashboardPage() {
 
   // Create Job Form
   const [showCreateForm, setShowCreateForm] = useState(false)
+  const [spreadsheets, setSpreadsheets] = useState<{ id: string; name: string }[]>([])
+  const [selectedSheetId, setSelectedSheetId] = useState<string>('')
   const [sheetData, setSheetData] = useState<SheetData[]>([])
   const [selectedSheetRow, setSelectedSheetRow] = useState<SheetData | null>(null)
-  const [selectedImages, _setSelectedImages] = useState<DriveImage[]>([])
+  const [driveFolderId, setDriveFolderId] = useState<string>('')
+  const [driveImages, setDriveImages] = useState<DriveImage[]>([])
+  const [selectedImages, setSelectedImages] = useState<DriveImage[]>([])
   const [mood, setMood] = useState('')
   const [platforms, setPlatforms] = useState<string[]>(['facebook', 'instagram_feed'])
   const [creating, setCreating] = useState(false)
@@ -90,7 +94,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchDashboardData()
-    fetchSheetData()
+    fetchSpreadsheets()
   }, [])
 
   async function fetchDashboardData() {
@@ -210,10 +214,23 @@ export default function DashboardPage() {
     }
   }
 
-  async function fetchSheetData() {
+  async function fetchSpreadsheets() {
     try {
-      // TODO: Replace with actual sheet ID
-      const res = await fetch('/api/sheets/example-sheet-id/data')
+      const res = await fetch('/api/sheets/list')
+      if (res.ok) {
+        const data = await res.json()
+        setSpreadsheets(data.spreadsheets || [])
+      }
+    } catch (error) {
+      console.error('Error fetching spreadsheets:', error)
+    }
+  }
+
+  async function fetchSheetData() {
+    if (!selectedSheetId) return
+    
+    try {
+      const res = await fetch(`/api/sheets/${selectedSheetId}/data`)
       if (res.ok) {
         const data = await res.json()
         setSheetData(data.data || [])
@@ -224,8 +241,44 @@ export default function DashboardPage() {
   }
 
   function openDrivePicker() {
-    // TODO: Implement Google Drive Picker
-    alert('Google Drive Picker will be implemented here')
+    // Load images from Drive folder
+    loadDriveImages()
+  }
+
+  async function loadDriveImages() {
+    if (!driveFolderId) {
+      alert('Please enter Google Drive Folder ID')
+      return
+    }
+
+    try {
+      const res = await fetch('/api/drive/list-folder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderId: driveFolderId }),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        setDriveImages(data.images || [])
+      } else {
+        alert('Failed to load images from folder')
+      }
+    } catch (error) {
+      console.error('Error loading drive images:', error)
+      alert('Error loading images')
+    }
+  }
+
+  function toggleImageSelection(image: DriveImage) {
+    setSelectedImages(prev => {
+      const exists = prev.find(img => img.id === image.id)
+      if (exists) {
+        return prev.filter(img => img.id !== image.id)
+      } else {
+        return [...prev, image]
+      }
+    })
   }
 
   async function createJob() {
@@ -358,25 +411,60 @@ export default function DashboardPage() {
             <h2 className="text-xl font-bold mb-4">Create New Image Generation Job</h2>
 
             <div className="space-y-4">
-              {/* Select from Google Sheets */}
+              {/* Select Google Sheet */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select Product from Google Sheets
+                  Select Google Sheet
                 </label>
                 <select
                   className="w-full border border-gray-300 rounded-lg p-2"
-                  onChange={(e) => setSelectedSheetRow(sheetData[parseInt(e.target.value)])}
+                  value={selectedSheetId}
+                  onChange={(e) => {
+                    setSelectedSheetId(e.target.value)
+                    setSelectedSheetRow(null)
+                    setSheetData([])
+                  }}
                 >
-                  <option value="">-- Select Product --</option>
-                  {sheetData.map((row, index) => (
-                    <option key={index} value={index}>
-                      {row['Product Name'] || `Row ${index + 1}`}
+                  <option value="">-- Select Sheet --</option>
+                  {spreadsheets.map((sheet) => (
+                    <option key={sheet.id} value={sheet.id}>
+                      {sheet.name}
                     </option>
                   ))}
                 </select>
               </div>
 
-              {/* Selected Product Preview */}
+              {/* Load Sheet Data Button */}
+              {selectedSheetId && (
+                <button
+                  onClick={fetchSheetData}
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                >
+                  Load Products from Sheet
+                </button>
+              )}
+
+              {/* Select from Google Sheets */}
+              {sheetData.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Product from Google Sheets
+                  </label>
+                  <select
+                    className="w-full border border-gray-300 rounded-lg p-2"
+                    onChange={(e) => setSelectedSheetRow(sheetData[parseInt(e.target.value)])}
+                  >
+                    <option value="">-- Select Product --</option>
+                    {sheetData.map((row, index) => (
+                      <option key={index} value={index}>
+                        {row['Product Name'] || `Row ${index + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Show selected product info */}
               {selectedSheetRow && (
                 <div className="bg-gray-50 p-4 rounded">
                   <h3 className="font-semibold mb-2">Selected Product:</h3>
@@ -394,25 +482,57 @@ export default function DashboardPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Reference Images from Google Drive
                 </label>
-                <button
-                  onClick={openDrivePicker}
-                  className="border border-gray-300 rounded-lg p-2 hover:bg-gray-50"
-                >
-                  📂 Select Images from Google Drive
-                </button>
-                {selectedImages.length > 0 && (
-                  <div className="mt-2 flex gap-2 flex-wrap">
-                    {selectedImages.map((img) => (
-                      <div key={img.id} className="relative">
-                        <Image
-                          src={img.thumbnailUrl}
-                          alt={img.name}
-                          width={80}
-                          height={80}
-                          className="object-cover rounded"
-                        />
-                      </div>
-                    ))}
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    placeholder="Enter Folder ID (e.g., 1ABC...XYZ)"
+                    value={driveFolderId}
+                    onChange={(e) => setDriveFolderId(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg p-2"
+                  />
+                  <button
+                    onClick={loadDriveImages}
+                    className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                  >
+                    📂 Load Images from Folder
+                  </button>
+                </div>
+
+                {/* Image Gallery */}
+                {driveImages.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-sm text-gray-600 mb-2">
+                      Select reference images (click to select/deselect):
+                    </p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {driveImages.map((img) => (
+                        <div
+                          key={img.id}
+                          onClick={() => toggleImageSelection(img)}
+                          className={`relative cursor-pointer border-2 rounded-lg overflow-hidden ${
+                            selectedImages.find(i => i.id === img.id)
+                              ? 'border-blue-500'
+                              : 'border-gray-200'
+                          }`}
+                        >
+                          <Image
+                            src={img.thumbnailUrl}
+                            alt={img.name}
+                            width={100}
+                            height={100}
+                            className="w-full h-24 object-cover"
+                          />
+                          {selectedImages.find(i => i.id === img.id) && (
+                            <div className="absolute top-1 right-1 bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">
+                              ✓
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-sm text-gray-600 mt-2">
+                      Selected: {selectedImages.length} image(s)
+                    </p>
                   </div>
                 )}
               </div>
