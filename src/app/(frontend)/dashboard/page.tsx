@@ -598,40 +598,62 @@ export default function DashboardPage() {
 
                 {/* Image Gallery */}
                 {driveImages.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-sm text-gray-600 mb-2">
-                      Select reference images (click to select/deselect):
-                    </p>
-                    <div className="grid grid-cols-4 gap-2">
-                      {driveImages.map((img) => (
-                        <div
-                          key={img.id}
-                          onClick={() => toggleImageSelection(img)}
-                          className={`relative cursor-pointer border-2 rounded-lg overflow-hidden ${
-                            selectedImages.find(i => i.id === img.id)
-                              ? 'border-blue-500'
-                              : 'border-gray-200'
-                          }`}
-                        >
-                          <Image
-                            src={img.thumbnailUrl}
-                            alt={img.name}
-                            width={100}
-                            height={100}
-                            className="w-full h-24 object-cover"
-                            unoptimized
-                          />
-                          {selectedImages.find(i => i.id === img.id) && (
-                            <div className="absolute top-1 right-1 bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">
-                              ✓
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                  <div className="mt-6 bg-gradient-to-br from-gray-50 to-gray-100 p-6 rounded-xl border border-gray-200">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">Reference Images</h3>
+                        <p className="text-sm text-gray-600 mt-1">
+                          Click images to select/deselect for AI analysis
+                        </p>
+                      </div>
+                      <div className="bg-blue-100 text-blue-700 px-4 py-2 rounded-lg font-semibold">
+                        {selectedImages.length} Selected
+                      </div>
                     </div>
-                    <p className="text-sm text-gray-600 mt-2">
-                      Selected: {selectedImages.length} image(s)
-                    </p>
+                    <div className="grid grid-cols-3 gap-4">
+                      {driveImages.map((img) => {
+                        const isSelected = selectedImages.find(i => i.id === img.id)
+                        return (
+                          <div
+                            key={img.id}
+                            onClick={() => toggleImageSelection(img)}
+                            className={`group relative cursor-pointer rounded-xl overflow-hidden transition-all duration-300 ${
+                              isSelected
+                                ? 'ring-4 ring-blue-500 shadow-xl scale-[1.02]'
+                                : 'ring-2 ring-gray-300 hover:ring-gray-400 hover:shadow-lg'
+                            }`}
+                          >
+                            <div className="aspect-[4/3] relative bg-gray-200">
+                              <Image
+                                src={img.thumbnailUrl}
+                                alt={img.name}
+                                fill
+                                className="object-cover"
+                                unoptimized
+                              />
+                            </div>
+                            {/* Overlay */}
+                            <div className={`absolute inset-0 transition-opacity duration-300 ${
+                              isSelected 
+                                ? 'bg-blue-500/20' 
+                                : 'bg-black/0 group-hover:bg-black/10'
+                            }`} />
+                            {/* Checkmark */}
+                            {isSelected && (
+                              <div className="absolute top-3 right-3 bg-blue-500 text-white rounded-full w-10 h-10 flex items-center justify-center shadow-lg animate-in zoom-in duration-200">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                </svg>
+                              </div>
+                            )}
+                            {/* Image Name */}
+                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3">
+                              <p className="text-white text-xs font-medium truncate">{img.name}</p>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
