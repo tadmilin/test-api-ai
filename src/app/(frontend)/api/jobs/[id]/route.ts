@@ -106,14 +106,19 @@ export async function DELETE(
     if (job.generatedImages) {
       const mediaIds: string[] = []
       
-      if (job.generatedImages.facebook?.mediaId) {
-        mediaIds.push(job.generatedImages.facebook.mediaId)
+      const fbMediaId = job.generatedImages.facebook?.mediaId
+      if (fbMediaId && typeof fbMediaId === 'string') {
+        mediaIds.push(fbMediaId)
       }
-      if (job.generatedImages.instagram_feed?.mediaId) {
-        mediaIds.push(job.generatedImages.instagram_feed.mediaId)
+      
+      const igFeedMediaId = job.generatedImages.instagram_feed?.mediaId
+      if (igFeedMediaId && typeof igFeedMediaId === 'string') {
+        mediaIds.push(igFeedMediaId)
       }
-      if (job.generatedImages.instagram_story?.mediaId) {
-        mediaIds.push(job.generatedImages.instagram_story.mediaId)
+      
+      const igStoryMediaId = job.generatedImages.instagram_story?.mediaId
+      if (igStoryMediaId && typeof igStoryMediaId === 'string') {
+        mediaIds.push(igStoryMediaId)
       }
 
       // Delete each media document
