@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
+import { google } from 'googleapis'
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,6 +28,74 @@ export async function POST(request: NextRequest) {
     const messages: any[] = []
     
     if (referenceImageUrls && referenceImageUrls.length > 0) {
+      // Download images from Google Drive and convert to base64
+      const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
+      const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
+
+      if (!serviceAccountEmail || !privateKey) {
+        return NextResponse.json(
+          { error: 'Google Service Account credentials not configured' },
+          { status: 500 }
+        )
+      }
+
+      const auth = new google.auth.GoogleAuth({
+        credentials: {
+          client_email: serviceAccountEmail,
+          private_key: privateKey.replace(/\\n/gm, '\n').replace(/^"|"$/g, ''),
+        },
+        scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+      })
+
+      const drive = google.drive({ version: 'v3', auth })
+
+      // Download images and convert to base64
+      const imageDataUrls = await Promise.all(
+        referenceImageUrls.map(async (url: string) => {
+          try {
+            // Extract file ID from URL
+            const fileIdMatch = url.match(/id=([^&]+)/)
+            if (!fileIdMatch) return null
+
+            const fileId = fileIdMatch[1]
+
+            // Get file metadata to check mime type
+            const metadata = await drive.files.get({
+              fileId,
+              fields: 'mimeType',
+              supportsAllDrives: true,
+            })
+
+            const mimeType = metadata.data.mimeType
+
+            // Download file
+            const response = await drive.files.get(
+              { fileId, alt: 'media', supportsAllDrives: true },
+              { responseType: 'arraybuffer' }
+            )
+
+            const buffer = Buffer.from(response.data as ArrayBuffer)
+            const base64 = buffer.toString('base64')
+            const dataUrl = `data:${mimeType};base64,${base64}`
+
+            return dataUrl
+          } catch (error) {
+            console.error('Error downloading image:', error)
+            return null
+          }
+        })
+      )
+
+      // Filter out failed downloads
+      const validImages = imageDataUrls.filter(img => img !== null)
+
+      if (validImages.length === 0) {
+        return NextResponse.json(
+          { error: 'Failed to download reference images' },
+          { status: 500 }
+        )
+      }
+
       // Use GPT-4 Vision to analyze reference images
       const visionContent = [
         {
@@ -48,9 +117,9 @@ I've provided reference images. Analyze these images carefully and create a DALL
 
 Return ONLY the prompt text, nothing else.`
         },
-        ...referenceImageUrls.map((url: string) => ({
+        ...validImages.map((dataUrl: string) => ({
           type: 'image_url',
-          image_url: { url, detail: 'high' }
+          image_url: { url: dataUrl, detail: 'high' }
         }))
       ]
       
