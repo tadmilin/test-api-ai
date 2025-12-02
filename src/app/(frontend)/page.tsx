@@ -1,5 +1,12 @@
-import PageTemplate, { generateMetadata } from './[slug]/page'
+import { redirect } from 'next/navigation'
 
-export default PageTemplate
+export default function HomePage() {
+  redirect('/dashboard')
+}
 
-export { generateMetadata }
+export async function generateMetadata() {
+  return {
+    title: 'Image Generation Dashboard',
+    description: 'AI-powered image generation workflow',
+  }
+}

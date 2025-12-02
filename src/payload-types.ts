@@ -72,6 +72,9 @@ export interface Config {
     media: Media;
     categories: Category;
     users: User;
+    jobs: Job;
+    'job-logs': JobLog;
+    'api-configs': ApiConfig;
     redirects: Redirect;
     forms: Form;
     'form-submissions': FormSubmission;
@@ -94,6 +97,9 @@ export interface Config {
     media: MediaSelect<false> | MediaSelect<true>;
     categories: CategoriesSelect<false> | CategoriesSelect<true>;
     users: UsersSelect<false> | UsersSelect<true>;
+    jobs: JobsSelect<false> | JobsSelect<true>;
+    'job-logs': JobLogsSelect<false> | JobLogsSelect<true>;
+    'api-configs': ApiConfigsSelect<false> | ApiConfigsSelect<true>;
     redirects: RedirectsSelect<false> | RedirectsSelect<true>;
     forms: FormsSelect<false> | FormsSelect<true>;
     'form-submissions': FormSubmissionsSelect<false> | FormSubmissionsSelect<true>;
@@ -418,7 +424,8 @@ export interface Category {
  */
 export interface User {
   id: string;
-  name?: string | null;
+  name: string;
+  role: 'admin' | 'editor' | 'viewer';
   updatedAt: string;
   createdAt: string;
   email: string;
@@ -781,6 +788,92 @@ export interface Form {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "jobs".
+ */
+export interface Job {
+  id: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'approved' | 'rejected';
+  productName: string;
+  productDescription?: string | null;
+  mood?: string | null;
+  targetPlatforms?: ('facebook' | 'instagram_feed' | 'instagram_story')[] | null;
+  referenceImageIds?:
+    | {
+        imageId?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  referenceImageUrls?:
+    | {
+        url?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  generatedPrompt?: string | null;
+  promptGeneratedAt?: string | null;
+  generatedImages?: {
+    facebook?: (string | null) | Media;
+    instagram_feed?: (string | null) | Media;
+    instagram_story?: (string | null) | Media;
+  };
+  approvedBy?: (string | null) | User;
+  approvedAt?: string | null;
+  rejectedBy?: (string | null) | User;
+  rejectedAt?: string | null;
+  rejectionReason?: string | null;
+  createdBy?: (string | null) | User;
+  errorMessage?: string | null;
+  retryCount?: number | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "job-logs".
+ */
+export interface JobLog {
+  id: string;
+  jobId: string | Job;
+  level: 'info' | 'warning' | 'error';
+  message: string;
+  /**
+   * Additional data in JSON format
+   */
+  metadata?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  timestamp: string;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "api-configs".
+ */
+export interface ApiConfig {
+  id: string;
+  name: 'google_sheets' | 'google_drive' | 'claude' | 'dalle';
+  /**
+   * API Key will be encrypted in database
+   */
+  apiKey: string;
+  /**
+   * Optional: Custom API endpoint URL
+   */
+  endpoint?: string | null;
+  isActive?: boolean | null;
+  lastUsed?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "redirects".
  */
 export interface Redirect {
@@ -988,6 +1081,18 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'users';
         value: string | User;
+      } | null)
+    | ({
+        relationTo: 'jobs';
+        value: string | Job;
+      } | null)
+    | ({
+        relationTo: 'job-logs';
+        value: string | JobLog;
+      } | null)
+    | ({
+        relationTo: 'api-configs';
+        value: string | ApiConfig;
       } | null)
     | ({
         relationTo: 'redirects';
@@ -1337,6 +1442,7 @@ export interface CategoriesSelect<T extends boolean = true> {
  */
 export interface UsersSelect<T extends boolean = true> {
   name?: T;
+  role?: T;
   updatedAt?: T;
   createdAt?: T;
   email?: T;
@@ -1353,6 +1459,74 @@ export interface UsersSelect<T extends boolean = true> {
         createdAt?: T;
         expiresAt?: T;
       };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "jobs_select".
+ */
+export interface JobsSelect<T extends boolean = true> {
+  status?: T;
+  productName?: T;
+  productDescription?: T;
+  mood?: T;
+  targetPlatforms?: T;
+  referenceImageIds?:
+    | T
+    | {
+        imageId?: T;
+        id?: T;
+      };
+  referenceImageUrls?:
+    | T
+    | {
+        url?: T;
+        id?: T;
+      };
+  generatedPrompt?: T;
+  promptGeneratedAt?: T;
+  generatedImages?:
+    | T
+    | {
+        facebook?: T;
+        instagram_feed?: T;
+        instagram_story?: T;
+      };
+  approvedBy?: T;
+  approvedAt?: T;
+  rejectedBy?: T;
+  rejectedAt?: T;
+  rejectionReason?: T;
+  createdBy?: T;
+  errorMessage?: T;
+  retryCount?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "job-logs_select".
+ */
+export interface JobLogsSelect<T extends boolean = true> {
+  jobId?: T;
+  level?: T;
+  message?: T;
+  metadata?: T;
+  timestamp?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "api-configs_select".
+ */
+export interface ApiConfigsSelect<T extends boolean = true> {
+  name?: T;
+  apiKey?: T;
+  endpoint?: T;
+  isActive?: T;
+  lastUsed?: T;
+  updatedAt?: T;
+  createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

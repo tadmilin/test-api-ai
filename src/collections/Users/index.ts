@@ -20,6 +20,27 @@ export const Users: CollectionConfig = {
     {
       name: 'name',
       type: 'text',
+      required: true,
+    },
+    {
+      name: 'role',
+      type: 'select',
+      required: true,
+      defaultValue: 'viewer',
+      options: [
+        {
+          label: 'Admin',
+          value: 'admin',
+        },
+        {
+          label: 'Editor',
+          value: 'editor',
+        },
+        {
+          label: 'Viewer',
+          value: 'viewer',
+        },
+      ],
     },
   ],
   timestamps: true,

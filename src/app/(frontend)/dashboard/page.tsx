@@ -1,0 +1,806 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import Image from 'next/image'
+
+interface JobStats {
+  pending: number
+  processing: number
+  completed: number
+  failed: number
+  approved: number
+  rejected: number
+  total: number
+}
+
+interface Job {
+  id: string
+  productName: string
+  status: string
+  createdAt: string
+  createdBy?: {
+    id: string
+    name: string
+    email: string
+  }
+  generatedPrompt?: string
+  generatedImages?: {
+    facebook?: { url: string; id: string }
+    instagram_feed?: { url: string; id: string }
+    instagram_story?: { url: string; id: string }
+  }
+}
+
+interface UserActivity {
+  userId: string
+  userName: string
+  email: string
+  jobsCreated: number
+  jobsApproved: number
+  jobsRejected: number
+  lastActivity: string
+}
+
+interface SheetData {
+  [key: string]: string
+}
+
+interface DriveImage {
+  id: string
+  name: string
+  thumbnailUrl: string
+  url: string
+}
+
+const IMAGE_SIZES = {
+  facebook: { label: 'Facebook Post', width: 1200, height: 630 },
+  instagram_feed: { label: 'Instagram Feed', width: 1080, height: 1080 },
+  instagram_story: { label: 'Instagram Story', width: 1080, height: 1920 },
+}
+
+export default function DashboardPage() {
+  // Stats & Jobs
+  const [stats, setStats] = useState<JobStats>({
+    pending: 0,
+    processing: 0,
+    completed: 0,
+    failed: 0,
+    approved: 0,
+    rejected: 0,
+    total: 0,
+  })
+  const [recentJobs, setRecentJobs] = useState<Job[]>([])
+  const [userActivities, setUserActivities] = useState<UserActivity[]>([])
+
+  // Create Job Form
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [sheetData, setSheetData] = useState<SheetData[]>([])
+  const [selectedSheetRow, setSelectedSheetRow] = useState<SheetData | null>(null)
+  const [selectedImages, _setSelectedImages] = useState<DriveImage[]>([])
+  const [mood, setMood] = useState('')
+  const [platforms, setPlatforms] = useState<string[]>(['facebook', 'instagram_feed'])
+  const [creating, setCreating] = useState(false)
+
+  // View Generated Images
+  const [viewingJob, setViewingJob] = useState<Job | null>(null)
+  const [selectedPlatform, setSelectedPlatform] = useState<keyof typeof IMAGE_SIZES>('facebook')
+
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchDashboardData()
+    fetchSheetData()
+  }, [])
+
+  async function fetchDashboardData() {
+    try {
+      setLoading(true)
+
+      const jobsRes = await fetch('/api/jobs?limit=100')
+      const jobsData = await jobsRes.json()
+      const jobs = jobsData.jobs || []
+
+      // Calculate stats
+      const newStats: JobStats = {
+        pending: jobs.filter((j: Job) => j.status === 'pending').length,
+        processing: jobs.filter((j: Job) => j.status === 'processing').length,
+        completed: jobs.filter((j: Job) => j.status === 'completed').length,
+        failed: jobs.filter((j: Job) => j.status === 'failed').length,
+        approved: jobs.filter((j: Job) => j.status === 'approved').length,
+        rejected: jobs.filter((j: Job) => j.status === 'rejected').length,
+        total: jobs.length,
+      }
+      setStats(newStats)
+
+      setRecentJobs(jobs.slice(0, 10))
+
+      // Calculate user activities
+      const userMap = new Map<string, UserActivity>()
+
+      jobs.forEach((job: Job & { approvedAt?: string; rejectedAt?: string; approvedBy?: { id: string; name?: string; email: string } | string; rejectedBy?: { id: string; name?: string; email: string } | string }) => {
+        if (job.createdBy) {
+          const userId = typeof job.createdBy === 'string' ? job.createdBy : job.createdBy.id
+          const userName =
+            typeof job.createdBy === 'object' ? job.createdBy.name || job.createdBy.email : 'Unknown'
+          const email = typeof job.createdBy === 'object' ? job.createdBy.email : ''
+
+          if (!userMap.has(userId)) {
+            userMap.set(userId, {
+              userId,
+              userName,
+              email,
+              jobsCreated: 0,
+              jobsApproved: 0,
+              jobsRejected: 0,
+              lastActivity: job.createdAt,
+            })
+          }
+
+          const activity = userMap.get(userId)!
+          activity.jobsCreated++
+
+          if (new Date(job.createdAt) > new Date(activity.lastActivity)) {
+            activity.lastActivity = job.createdAt
+          }
+        }
+
+        if (job.approvedBy) {
+          const userId = typeof job.approvedBy === 'string' ? job.approvedBy : job.approvedBy.id
+          const userName =
+            typeof job.approvedBy === 'object'
+              ? job.approvedBy.name || job.approvedBy.email
+              : 'Unknown'
+          const email = typeof job.approvedBy === 'object' ? job.approvedBy.email : ''
+
+          if (!userMap.has(userId)) {
+            userMap.set(userId, {
+              userId,
+              userName,
+              email,
+              jobsCreated: 0,
+              jobsApproved: 0,
+              jobsRejected: 0,
+              lastActivity: job.approvedAt || job.createdAt,
+            })
+          }
+
+          const activity = userMap.get(userId)!
+          activity.jobsApproved++
+
+          if (job.approvedAt && new Date(job.approvedAt) > new Date(activity.lastActivity)) {
+            activity.lastActivity = job.approvedAt
+          }
+        }
+
+        if (job.rejectedBy) {
+          const userId = typeof job.rejectedBy === 'string' ? job.rejectedBy : job.rejectedBy.id
+          const userName =
+            typeof job.rejectedBy === 'object'
+              ? job.rejectedBy.name || job.rejectedBy.email
+              : 'Unknown'
+          const email = typeof job.rejectedBy === 'object' ? job.rejectedBy.email : ''
+
+          if (!userMap.has(userId)) {
+            userMap.set(userId, {
+              userId,
+              userName,
+              email,
+              jobsCreated: 0,
+              jobsApproved: 0,
+              jobsRejected: 0,
+              lastActivity: job.rejectedAt || job.createdAt,
+            })
+          }
+
+          const activity = userMap.get(userId)!
+          activity.jobsRejected++
+
+          if (job.rejectedAt && new Date(job.rejectedAt) > new Date(activity.lastActivity)) {
+            activity.lastActivity = job.rejectedAt
+          }
+        }
+      })
+
+      setUserActivities(Array.from(userMap.values()))
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function fetchSheetData() {
+    try {
+      // TODO: Replace with actual sheet ID
+      const res = await fetch('/api/sheets/example-sheet-id/data')
+      if (res.ok) {
+        const data = await res.json()
+        setSheetData(data.data || [])
+      }
+    } catch (error) {
+      console.error('Error fetching sheet data:', error)
+    }
+  }
+
+  function openDrivePicker() {
+    // TODO: Implement Google Drive Picker
+    alert('Google Drive Picker will be implemented here')
+  }
+
+  async function createJob() {
+    if (!selectedSheetRow) {
+      alert('Please select product data from sheet')
+      return
+    }
+
+    setCreating(true)
+
+    try {
+      // Create job
+      const jobRes = await fetch('/api/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productName: selectedSheetRow['Product Name'] || 'Untitled',
+          productDescription: selectedSheetRow['Description'] || '',
+          mood,
+          targetPlatforms: platforms,
+          referenceImageIds: selectedImages.map((img) => ({ imageId: img.id })),
+          referenceImageUrls: selectedImages.map((img) => ({ url: img.url })),
+          status: 'pending',
+        }),
+      })
+
+      const job = await jobRes.json()
+
+      // Start processing
+      await fetch('/api/generate/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: job.id }),
+      })
+
+      alert('Job created successfully!')
+      setShowCreateForm(false)
+      fetchDashboardData()
+    } catch (error) {
+      console.error('Error creating job:', error)
+      alert('Failed to create job')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  async function handleApproveReject(jobId: string, action: 'approve' | 'reject') {
+    try {
+      await fetch(`/api/jobs/${jobId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action,
+          userId: 'current-user-id', // TODO: Get from auth
+        }),
+      })
+
+      fetchDashboardData()
+    } catch (error) {
+      console.error(`Error ${action}ing job:`, error)
+    }
+  }
+
+  function downloadImage(url: string, filename: string) {
+    fetch(url)
+      .then((response) => response.blob())
+      .then((blob) => {
+        const blobUrl = window.URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = blobUrl
+        link.download = filename
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(blobUrl)
+      })
+      .catch((error) => {
+        console.error('Error downloading image:', error)
+        alert('Failed to download image')
+      })
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return 'bg-gray-100 text-gray-800'
+      case 'processing':
+        return 'bg-blue-100 text-blue-800'
+      case 'completed':
+        return 'bg-green-100 text-green-800'
+      case 'failed':
+        return 'bg-red-100 text-red-800'
+      case 'approved':
+        return 'bg-emerald-100 text-emerald-800'
+      case 'rejected':
+        return 'bg-orange-100 text-orange-800'
+      default:
+        return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-lg">Loading dashboard...</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-8">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-8 flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Image Generation Dashboard</h1>
+            <p className="text-gray-600 mt-2">Create and manage AI-generated images</p>
+          </div>
+          <button
+            onClick={() => setShowCreateForm(!showCreateForm)}
+            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-semibold"
+          >
+            {showCreateForm ? 'Close' : '+ Create New Job'}
+          </button>
+        </div>
+
+        {/* Create Job Form */}
+        {showCreateForm && (
+          <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 className="text-xl font-bold mb-4">Create New Image Generation Job</h2>
+
+            <div className="space-y-4">
+              {/* Select from Google Sheets */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Product from Google Sheets
+                </label>
+                <select
+                  className="w-full border border-gray-300 rounded-lg p-2"
+                  onChange={(e) => setSelectedSheetRow(sheetData[parseInt(e.target.value)])}
+                >
+                  <option value="">-- Select Product --</option>
+                  {sheetData.map((row, index) => (
+                    <option key={index} value={index}>
+                      {row['Product Name'] || `Row ${index + 1}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Selected Product Preview */}
+              {selectedSheetRow && (
+                <div className="bg-gray-50 p-4 rounded">
+                  <h3 className="font-semibold mb-2">Selected Product:</h3>
+                  <p>
+                    <strong>Name:</strong> {selectedSheetRow['Product Name']}
+                  </p>
+                  <p>
+                    <strong>Description:</strong> {selectedSheetRow['Description']}
+                  </p>
+                </div>
+              )}
+
+              {/* Google Drive Picker */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Reference Images from Google Drive
+                </label>
+                <button
+                  onClick={openDrivePicker}
+                  className="border border-gray-300 rounded-lg p-2 hover:bg-gray-50"
+                >
+                  📂 Select Images from Google Drive
+                </button>
+                {selectedImages.length > 0 && (
+                  <div className="mt-2 flex gap-2 flex-wrap">
+                    {selectedImages.map((img) => (
+                      <div key={img.id} className="relative">
+                        <Image
+                          src={img.thumbnailUrl}
+                          alt={img.name}
+                          width={80}
+                          height={80}
+                          className="object-cover rounded"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Mood */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Mood / Style
+                </label>
+                <input
+                  type="text"
+                  value={mood}
+                  onChange={(e) => setMood(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg p-2"
+                  placeholder="e.g., Professional, Modern, Vibrant"
+                />
+              </div>
+
+              {/* Platforms */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Target Platforms (Select image sizes to generate)
+                </label>
+                <div className="space-y-2">
+                  {Object.entries(IMAGE_SIZES).map(([key, size]) => (
+                    <label key={key} className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={platforms.includes(key)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setPlatforms([...platforms, key])
+                          } else {
+                            setPlatforms(platforms.filter((p) => p !== key))
+                          }
+                        }}
+                        className="mr-2"
+                      />
+                      <span className="font-medium">{size.label}</span>
+                      <span className="text-gray-500 text-sm ml-2">
+                        ({size.width}x{size.height}px)
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <button
+                onClick={createJob}
+                disabled={creating || !selectedSheetRow}
+                className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-semibold disabled:bg-gray-400"
+              >
+                {creating ? 'Creating...' : 'Generate Images'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* View Generated Images Modal */}
+        {viewingJob && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h2 className="text-2xl font-bold">{viewingJob.productName}</h2>
+                    <p className="text-gray-600 mt-1">Generated Images</p>
+                  </div>
+                  <button
+                    onClick={() => setViewingJob(null)}
+                    className="text-gray-500 hover:text-gray-700 text-2xl"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                {/* Prompt Display */}
+                {viewingJob.generatedPrompt && (
+                  <div className="bg-gray-50 p-4 rounded-lg mb-4">
+                    <h3 className="font-semibold mb-2">Generated Prompt:</h3>
+                    <p className="text-sm text-gray-700">{viewingJob.generatedPrompt}</p>
+                  </div>
+                )}
+
+                {/* Platform Selector */}
+                <div className="flex gap-2 mb-4">
+                  {Object.entries(IMAGE_SIZES).map(([key, size]) => {
+                    const hasImage = viewingJob.generatedImages?.[key as keyof typeof IMAGE_SIZES]
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => setSelectedPlatform(key as keyof typeof IMAGE_SIZES)}
+                        disabled={!hasImage}
+                        className={`px-4 py-2 rounded-lg font-medium ${
+                          selectedPlatform === key
+                            ? 'bg-blue-600 text-white'
+                            : hasImage
+                              ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                              : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        }`}
+                      >
+                        {size.label}
+                        <div className="text-xs mt-1">
+                          {size.width}×{size.height}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Image Display */}
+                {viewingJob.generatedImages?.[selectedPlatform] ? (
+                  <div className="space-y-4">
+                    <div className="relative border-2 border-gray-200 rounded-lg overflow-hidden">
+                      <Image
+                        src={viewingJob.generatedImages[selectedPlatform]!.url}
+                        alt={`${IMAGE_SIZES[selectedPlatform].label} Image`}
+                        width={IMAGE_SIZES[selectedPlatform].width}
+                        height={IMAGE_SIZES[selectedPlatform].height}
+                        className="w-full h-auto"
+                      />
+                    </div>
+
+                    {/* Download Button */}
+                    <button
+                      onClick={() =>
+                        downloadImage(
+                          viewingJob.generatedImages![selectedPlatform]!.url,
+                          `${viewingJob.productName}_${selectedPlatform}_${IMAGE_SIZES[selectedPlatform].width}x${IMAGE_SIZES[selectedPlatform].height}.jpg`,
+                        )
+                      }
+                      className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 font-semibold flex items-center justify-center gap-2"
+                    >
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                        />
+                      </svg>
+                      Download {IMAGE_SIZES[selectedPlatform].label} (
+                      {IMAGE_SIZES[selectedPlatform].width}×{IMAGE_SIZES[selectedPlatform].height}
+                      )
+                    </button>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    No image generated for this platform
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-sm font-medium text-gray-600">Total Jobs</div>
+            <div className="text-3xl font-bold text-gray-900 mt-2">{stats.total}</div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-sm font-medium text-gray-600">Pending</div>
+            <div className="text-3xl font-bold text-gray-600 mt-2">{stats.pending}</div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-sm font-medium text-gray-600">Processing</div>
+            <div className="text-3xl font-bold text-blue-600 mt-2">{stats.processing}</div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-sm font-medium text-gray-600">Completed</div>
+            <div className="text-3xl font-bold text-green-600 mt-2">{stats.completed}</div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-sm font-medium text-gray-600">Approved</div>
+            <div className="text-3xl font-bold text-emerald-600 mt-2">{stats.approved}</div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-sm font-medium text-gray-600">Rejected</div>
+            <div className="text-3xl font-bold text-orange-600 mt-2">{stats.rejected}</div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-sm font-medium text-gray-600">Failed</div>
+            <div className="text-3xl font-bold text-red-600 mt-2">{stats.failed}</div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-sm font-medium text-gray-600">Success Rate</div>
+            <div className="text-3xl font-bold text-gray-900 mt-2">
+              {stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0}%
+            </div>
+          </div>
+        </div>
+
+        {/* Recent Jobs */}
+        <div className="bg-white rounded-lg shadow mb-8">
+          <div className="p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-900">Recent Jobs</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Product Name
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Created By
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Created At
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {recentJobs.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
+                      No jobs found. Create your first job!
+                    </td>
+                  </tr>
+                ) : (
+                  recentJobs.map((job) => (
+                    <tr key={job.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">{job.productName}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(job.status)}`}
+                        >
+                          {job.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {job.createdBy
+                            ? typeof job.createdBy === 'object'
+                              ? job.createdBy.name || job.createdBy.email
+                              : 'Unknown'
+                            : 'N/A'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-500">
+                          {new Date(job.createdAt).toLocaleString()}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
+                        {(job.status === 'completed' ||
+                          job.status === 'approved' ||
+                          job.status === 'rejected') &&
+                          job.generatedImages && (
+                            <button
+                              onClick={() => setViewingJob(job)}
+                              className="text-purple-600 hover:text-purple-900 font-medium"
+                            >
+                              🖼️ View Images
+                            </button>
+                          )}
+                        {job.status === 'completed' && (
+                          <>
+                            <button
+                              onClick={() => handleApproveReject(job.id, 'approve')}
+                              className="text-green-600 hover:text-green-900"
+                            >
+                              ✓ Approve
+                            </button>
+                            <button
+                              onClick={() => handleApproveReject(job.id, 'reject')}
+                              className="text-red-600 hover:text-red-900"
+                            >
+                              ✗ Reject
+                            </button>
+                          </>
+                        )}
+                        <Link
+                          href={`/admin/collections/jobs/${job.id}`}
+                          className="text-blue-600 hover:text-blue-900"
+                        >
+                          Details
+                        </Link>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* User Activity */}
+        <div className="bg-white rounded-lg shadow">
+          <div className="p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-900">User Activity History</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    User
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Email
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Jobs Created
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Jobs Approved
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Jobs Rejected
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Last Activity
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {userActivities.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
+                      No user activity found
+                    </td>
+                  </tr>
+                ) : (
+                  userActivities.map((activity) => (
+                    <tr key={activity.userId} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">{activity.userName}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-500">{activity.email}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">{activity.jobsCreated}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-green-600 font-medium">
+                          {activity.jobsApproved}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-orange-600 font-medium">
+                          {activity.jobsRejected}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-500">
+                          {new Date(activity.lastActivity).toLocaleString()}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Admin Link */}
+        <div className="mt-8 text-center">
+          <Link href="/admin" className="text-gray-600 hover:text-gray-900">
+            → Go to Admin Panel (Manage Users & View Logs)
+          </Link>
+        </div>
+      </div>
+    </div>
+  )
+}
