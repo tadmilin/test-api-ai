@@ -55,8 +55,7 @@ export async function POST(request: NextRequest) {
 
       const resizedBuffer = await sharp(imageBuffer)
         .resize(config.width, config.height, {
-          fit: 'inside',
-          withoutEnlargement: false,
+          fit: 'fill',
         })
         .png({ 
           quality: 100,
