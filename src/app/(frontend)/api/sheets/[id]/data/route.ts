@@ -21,7 +21,7 @@ export async function GET(
     const auth = new google.auth.GoogleAuth({
       credentials: {
         client_email: serviceAccountEmail,
-        private_key: privateKey.replace(/\\n/g, '\n'),
+        private_key: privateKey.replace(/\\n/gm, '\n').replace(/^"|"$/g, ''),
       },
       scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
     })

@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     const auth = new google.auth.GoogleAuth({
       credentials: {
         client_email: serviceAccountEmail,
-        private_key: privateKey.replace(/\\n/g, '\n'),
+        private_key: privateKey.replace(/\\n/gm, '\n').replace(/^"|"$/g, ''),
       },
       scopes: ['https://www.googleapis.com/auth/drive.readonly'],
     })
