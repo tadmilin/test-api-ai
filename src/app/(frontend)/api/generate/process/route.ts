@@ -155,15 +155,14 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      // Step 4: Update job with generated images (with Media IDs)
-      const generatedImages: Record<string, { url: string; width: number; height: number; mediaId?: string }> = {}
+      // Step 4: Update job with generated images (Blob URLs only)
+      const generatedImages: Record<string, { url: string; width: number; height: number }> = {}
 
-      for (const [platform, data] of Object.entries(resizedImages) as [string, { url: string; width: number; height: number; mediaId?: string }][]) {
+      for (const [platform, data] of Object.entries(resizedImages) as [string, { url: string; width: number; height: number }][]) {
         generatedImages[platform] = {
           url: data.url,
           width: data.width,
           height: data.height,
-          mediaId: data.mediaId,
         }
       }
 

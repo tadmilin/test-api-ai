@@ -26,9 +26,9 @@ interface Job {
   }
   generatedPrompt?: string
   generatedImages?: {
-    facebook?: { url: string; width: number; height: number; mediaId?: string }
-    instagram_feed?: { url: string; width: number; height: number; mediaId?: string }
-    instagram_story?: { url: string; width: number; height: number; mediaId?: string }
+    facebook?: { url: string; width: number; height: number }
+    instagram_feed?: { url: string; width: number; height: number }
+    instagram_story?: { url: string; width: number; height: number }
   }
 }
 

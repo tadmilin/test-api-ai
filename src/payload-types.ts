@@ -816,19 +816,16 @@ export interface Job {
       url?: string | null;
       width?: number | null;
       height?: number | null;
-      mediaId?: (string | null) | Media;
     };
     instagram_feed?: {
       url?: string | null;
       width?: number | null;
       height?: number | null;
-      mediaId?: (string | null) | Media;
     };
     instagram_story?: {
       url?: string | null;
       width?: number | null;
       height?: number | null;
-      mediaId?: (string | null) | Media;
     };
   };
   approvedBy?: (string | null) | User;
@@ -1508,7 +1505,6 @@ export interface JobsSelect<T extends boolean = true> {
               url?: T;
               width?: T;
               height?: T;
-              mediaId?: T;
             };
         instagram_feed?:
           | T
@@ -1516,7 +1512,6 @@ export interface JobsSelect<T extends boolean = true> {
               url?: T;
               width?: T;
               height?: T;
-              mediaId?: T;
             };
         instagram_story?:
           | T
@@ -1524,7 +1519,6 @@ export interface JobsSelect<T extends boolean = true> {
               url?: T;
               width?: T;
               height?: T;
-              mediaId?: T;
             };
       };
   approvedBy?: T;

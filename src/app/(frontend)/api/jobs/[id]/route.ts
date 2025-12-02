@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getPayload } from 'payload'
 import config from '@payload-config'
+import { del } from '@vercel/blob'
 
 export async function GET(
   request: Request,
@@ -96,40 +97,34 @@ export async function DELETE(
   try {
     const payload = await getPayload({ config })
 
-    // Get job first to find media IDs
+    // Get job first to find Blob URLs
     const job = await payload.findByID({
       collection: 'jobs',
       id,
     })
 
-    // Delete associated media files
+    // Delete associated Blob files
     if (job.generatedImages) {
-      const mediaIds: string[] = []
+      const blobUrls: string[] = []
       
-      const fbMediaId = job.generatedImages.facebook?.mediaId
-      if (fbMediaId && typeof fbMediaId === 'string') {
-        mediaIds.push(fbMediaId)
+      if (job.generatedImages.facebook?.url) {
+        blobUrls.push(job.generatedImages.facebook.url)
       }
       
-      const igFeedMediaId = job.generatedImages.instagram_feed?.mediaId
-      if (igFeedMediaId && typeof igFeedMediaId === 'string') {
-        mediaIds.push(igFeedMediaId)
+      if (job.generatedImages.instagram_feed?.url) {
+        blobUrls.push(job.generatedImages.instagram_feed.url)
       }
       
-      const igStoryMediaId = job.generatedImages.instagram_story?.mediaId
-      if (igStoryMediaId && typeof igStoryMediaId === 'string') {
-        mediaIds.push(igStoryMediaId)
+      if (job.generatedImages.instagram_story?.url) {
+        blobUrls.push(job.generatedImages.instagram_story.url)
       }
 
-      // Delete each media document
-      for (const mediaId of mediaIds) {
+      // Delete each Blob file
+      for (const url of blobUrls) {
         try {
-          await payload.delete({
-            collection: 'media',
-            id: mediaId,
-          })
+          await del(url)
         } catch (err) {
-          console.error(`Failed to delete media ${mediaId}:`, err)
+          console.error(`Failed to delete blob ${url}:`, err)
         }
       }
     }
@@ -142,7 +137,7 @@ export async function DELETE(
 
     return NextResponse.json({
       success: true,
-      message: 'Job and associated media deleted successfully',
+      message: 'Job and associated images deleted successfully',
     })
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to delete job'
