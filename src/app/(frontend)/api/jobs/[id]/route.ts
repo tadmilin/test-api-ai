@@ -87,3 +87,64 @@ export async function GET(
     )
   }
 }
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params
+  try {
+    const payload = await getPayload({ config })
+
+    // Get job first to find media IDs
+    const job = await payload.findByID({
+      collection: 'jobs',
+      id,
+    })
+
+    // Delete associated media files
+    if (job.generatedImages) {
+      const mediaIds: string[] = []
+      
+      if (job.generatedImages.facebook?.mediaId) {
+        mediaIds.push(job.generatedImages.facebook.mediaId)
+      }
+      if (job.generatedImages.instagram_feed?.mediaId) {
+        mediaIds.push(job.generatedImages.instagram_feed.mediaId)
+      }
+      if (job.generatedImages.instagram_story?.mediaId) {
+        mediaIds.push(job.generatedImages.instagram_story.mediaId)
+      }
+
+      // Delete each media document
+      for (const mediaId of mediaIds) {
+        try {
+          await payload.delete({
+            collection: 'media',
+            id: mediaId,
+          })
+        } catch (err) {
+          console.error(`Failed to delete media ${mediaId}:`, err)
+        }
+      }
+    }
+
+    // Delete the job
+    await payload.delete({
+      collection: 'jobs',
+      id,
+    })
+
+    return NextResponse.json({
+      success: true,
+      message: 'Job and associated media deleted successfully',
+    })
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to delete job'
+    console.error('Error deleting job:', error)
+    return NextResponse.json(
+      { error: errorMessage },
+      { status: 500 }
+    )
+  }
+}

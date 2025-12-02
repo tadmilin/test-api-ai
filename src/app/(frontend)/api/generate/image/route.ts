@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       prompt: prompt,
       n: 1,
       size: '1024x1024',
-      quality: 'standard',
+      quality: 'hd', // เปลี่ยนเป็น HD
     })
 
     if (!response.data || response.data.length === 0) {

@@ -907,7 +907,7 @@ export default function DashboardPage() {
                               onClick={() => setViewingJob(job)}
                               className="text-purple-600 hover:text-purple-900 font-medium"
                             >
-                              🖼️ View Images
+                              🖼️ View
                             </button>
                           )}
                         {job.status === 'completed' && (
@@ -926,12 +926,17 @@ export default function DashboardPage() {
                             </button>
                           </>
                         )}
-                        <Link
-                          href={`/admin/collections/jobs/${job.id}`}
-                          className="text-blue-600 hover:text-blue-900"
+                        <button
+                          onClick={async () => {
+                            if (confirm('Delete this job?')) {
+                              await fetch(`/api/jobs/${job.id}`, { method: 'DELETE' })
+                              fetchDashboardData()
+                            }
+                          }}
+                          className="text-gray-600 hover:text-red-600"
                         >
-                          Details
-                        </Link>
+                          🗑️ Delete
+                        </button>
                       </td>
                     </tr>
                   ))

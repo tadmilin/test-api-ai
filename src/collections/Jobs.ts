@@ -129,6 +129,11 @@ export const Jobs: CollectionConfig = {
                       name: 'height',
                       type: 'number',
                     },
+                    {
+                      name: 'mediaId',
+                      type: 'relationship',
+                      relationTo: 'media',
+                    },
                   ],
                 },
                 {
@@ -147,6 +152,11 @@ export const Jobs: CollectionConfig = {
                       name: 'height',
                       type: 'number',
                     },
+                    {
+                      name: 'mediaId',
+                      type: 'relationship',
+                      relationTo: 'media',
+                    },
                   ],
                 },
                 {
@@ -164,6 +174,11 @@ export const Jobs: CollectionConfig = {
                     {
                       name: 'height',
                       type: 'number',
+                    },
+                    {
+                      name: 'mediaId',
+                      type: 'relationship',
+                      relationTo: 'media',
                     },
                   ],
                 },

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import sharp from 'sharp'
 import { put } from '@vercel/blob'
+import { getPayload } from 'payload'
+import config from '@payload-config'
 
 const IMAGE_SIZES = {
   facebook: {
@@ -43,8 +45,10 @@ export async function POST(request: NextRequest) {
 
     const imageBuffer = Buffer.from(await imageResponse.arrayBuffer())
 
-    // Resize for each platform and upload to Vercel Blob
-    const results: Record<string, { url: string; width: number; height: number }> = {}
+    const payload = await getPayload({ config })
+
+    // Resize for each platform and upload to Media collection
+    const results: Record<string, { url: string; width: number; height: number; mediaId: string }> = {}
 
     for (const platform of platforms) {
       const config = IMAGE_SIZES[platform as keyof typeof IMAGE_SIZES]
@@ -58,19 +62,37 @@ export async function POST(request: NextRequest) {
           fit: 'cover',
           position: 'center',
         })
-        .jpeg({ quality: 90 })
+        .png({ 
+          quality: 100,
+          compressionLevel: 6,
+        })
         .toBuffer()
 
       // Upload to Vercel Blob
-      const blob = await put(`jobs/${jobId}/${platform}.jpg`, resizedBuffer, {
+      const blob = await put(`jobs/${jobId}/${platform}.png`, resizedBuffer, {
         access: 'public',
-        contentType: 'image/jpeg',
+        contentType: 'image/png',
+      })
+
+      // Create Media document
+      const media = await payload.create({
+        collection: 'media',
+        data: {
+          alt: `${platform} - Job ${jobId}`,
+          url: blob.url,
+          filename: `${platform}.png`,
+          mimeType: 'image/png',
+          filesize: resizedBuffer.length,
+          width: config.width,
+          height: config.height,
+        },
       })
 
       results[platform] = {
         url: blob.url,
         width: config.width,
         height: config.height,
+        mediaId: media.id,
       }
     }
 
