@@ -3,6 +3,14 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
+
+interface CurrentUser {
+  id: string
+  name: string
+  email: string
+  role: string
+}
 
 interface JobStats {
   pending: number
@@ -60,6 +68,12 @@ const IMAGE_SIZES = {
 }
 
 export default function DashboardPage() {
+  const router = useRouter()
+  
+  // Auth state
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  
   // Stats & Jobs
   const [stats, setStats] = useState<JobStats>({
     pending: 0,
@@ -97,9 +111,41 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchDashboardData()
-    fetchSpreadsheets()
+    checkAuth()
   }, [])
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchDashboardData()
+      fetchSpreadsheets()
+    }
+  }, [currentUser])
+
+  async function checkAuth() {
+    try {
+      const res = await fetch('/api/users/me')
+      if (!res.ok) {
+        // Not authenticated, redirect to login page (not admin panel)
+        router.push('/login')
+        return
+      }
+      const data = await res.json()
+      setCurrentUser(data.user)
+      setAuthLoading(false)
+    } catch (error) {
+      console.error('Auth error:', error)
+      router.push('/login')
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      await fetch('/api/users/logout', { method: 'POST' })
+      router.push('/login')
+    } catch (error) {
+      console.error('Logout error:', error)
+    }
+  }
 
   async function fetchDashboardData() {
     try {
@@ -452,6 +498,21 @@ export default function DashboardPage() {
         return 'bg-gray-100 text-gray-800'
     }
   }
+  
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-lg">กำลังตรวจสอบ...</div>
+      </div>
+    )
+  }
+
+  if (!currentUser) {
+    return null
+  }
+
+  const isAdmin = currentUser.role === 'admin'
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-8">
       <div className="max-w-7xl mx-auto">
@@ -462,13 +523,24 @@ export default function DashboardPage() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900">แดชบอร์ดสร้างภาพด้วย AI</h1>
               <p className="text-gray-600 mt-2">สร้างและจัดการภาพที่สร้างด้วย AI</p>
+              <p className="text-sm text-gray-500 mt-1">
+                ผู้ใช้: {currentUser.name || currentUser.email} {isAdmin && <span className="text-blue-600 font-semibold">(Admin)</span>}
+              </p>
             </div>
-            <button
-              onClick={() => setShowCreateForm(!showCreateForm)}
-              className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-semibold shadow-lg hover:shadow-xl transition-all"
-            >
-              {showCreateForm ? 'ปิด' : '+ สร้างงานใหม่'}
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={handleLogout}
+                className="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 font-semibold shadow-lg hover:shadow-xl transition-all"
+              >
+                ออกจากระบบ
+              </button>
+              <button
+                onClick={() => setShowCreateForm(!showCreateForm)}
+                className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-semibold shadow-lg hover:shadow-xl transition-all"
+              >
+                {showCreateForm ? 'ปิด' : '+ สร้างงานใหม่'}
+              </button>
+            </div>
           </div>
 
         {/* Processing Status Banner */}
@@ -846,13 +918,6 @@ export default function DashboardPage() {
             <div className="text-sm font-medium text-gray-600">ล้มเหลว</div>
             <div className="text-3xl font-bold text-red-600 mt-2">{stats.failed}</div>
           </div>
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-sm font-medium text-gray-600">อัตราความสำเร็จ</div>
-            <div className="text-3xl font-bold text-gray-900 mt-2">
-              {stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0}%
-            </div>
-          </div>
         </div>
 
         {/* Recent Jobs */}
@@ -962,84 +1027,6 @@ export default function DashboardPage() {
             </table>
           </div>
         </div>
-
-        {/* User Activity */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">ประวัติกิจกรรมผู้ใช้</h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    ผู้ใช้
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    อีเมล
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    งานที่สร้าง
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    งานที่อนุมัติ
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    งานที่ปฏิเสธ
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    กิจกรรมล่าสุด
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {userActivities.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
-                      ไม่พบกิจกรรมผู้ใช้
-                    </td>
-                  </tr>
-                ) : (
-                  userActivities.map((activity) => (
-                    <tr key={activity.userId} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{activity.userName}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-500">{activity.email}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{activity.jobsCreated}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-green-600 font-medium">
-                          {activity.jobsApproved}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-orange-600 font-medium">
-                          {activity.jobsRejected}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-500">
-                          {new Date(activity.lastActivity).toLocaleString()}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-        </div>
-
-        {/* Admin Link */}
-        <div className="mt-8 text-center">
-          <Link href="/admin" className="text-gray-600 hover:text-gray-900 font-medium">
-            → ไปที่แผงผู้ดูแลระบบ (จัดการผู้ใช้และดูบันทึก)
-          </Link>
         </div>
       </div>
     </div>

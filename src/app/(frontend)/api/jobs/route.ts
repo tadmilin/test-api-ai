@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPayload } from 'payload'
 import config from '@payload-config'
+import { cookies } from 'next/headers'
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,11 +11,32 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '10')
 
     const payload = await getPayload({ config })
+    
+    // Get current user
+    const cookieStore = await cookies()
+    const token = cookieStore.get('payload-token')
+    
+    let currentUser = null
+    if (token) {
+      try {
+        const headers = new Headers()
+        headers.set('Authorization', `JWT ${token.value}`)
+        const authResult = await payload.auth({ headers })
+        currentUser = authResult.user
+      } catch (error) {
+        console.error('Auth error:', error)
+      }
+    }
 
     // Build where clause
-    const where: Record<string, { equals: string }> = {}
+    const where: any = {}
     if (status) {
       where.status = { equals: status }
+    }
+    
+    // If not admin, filter by current user
+    if (currentUser && currentUser.role !== 'admin') {
+      where.createdBy = { equals: currentUser.id }
     }
 
     // Get jobs with filters
@@ -64,8 +86,24 @@ export async function POST(request: NextRequest) {
     }
 
     const payload = await getPayload({ config })
+    
+    // Get current user
+    const cookieStore = await cookies()
+    const token = cookieStore.get('payload-token')
+    
+    let currentUser = null
+    if (token) {
+      try {
+        const headers = new Headers()
+        headers.set('Authorization', `JWT ${token.value}`)
+        const authResult = await payload.auth({ headers })
+        currentUser = authResult.user
+      } catch (error) {
+        console.error('Auth error:', error)
+      }
+    }
 
-    // Create new job (without createdBy for now - TODO: Add auth)
+    // Create new job
     const job = await payload.create({
       collection: 'jobs',
       data: {
@@ -76,7 +114,7 @@ export async function POST(request: NextRequest) {
         referenceImageIds: referenceImageIds || [],
         referenceImageUrls: referenceImageUrls || [],
         status,
-        // createdBy will be set by auth hook when auth is implemented
+        createdBy: currentUser?.id || undefined,
       },
     })
 
