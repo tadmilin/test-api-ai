@@ -619,6 +619,7 @@ export default function DashboardPage() {
                             width={100}
                             height={100}
                             className="w-full h-24 object-cover"
+                            unoptimized
                           />
                           {selectedImages.find(i => i.id === img.id) && (
                             <div className="absolute top-1 right-1 bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">
@@ -752,6 +753,7 @@ export default function DashboardPage() {
                         width={IMAGE_SIZES[selectedPlatform].width}
                         height={IMAGE_SIZES[selectedPlatform].height}
                         className="w-full h-auto"
+                        unoptimized
                       />
                     </div>
 
@@ -760,7 +762,7 @@ export default function DashboardPage() {
                       onClick={() =>
                         downloadImage(
                           viewingJob.generatedImages![selectedPlatform]!.url,
-                          `${viewingJob.productName}_${selectedPlatform}_${IMAGE_SIZES[selectedPlatform].width}x${IMAGE_SIZES[selectedPlatform].height}.jpg`,
+                          `${viewingJob.productName}_${selectedPlatform}_${IMAGE_SIZES[selectedPlatform].width}x${IMAGE_SIZES[selectedPlatform].height}.png`,
                         )
                       }
                       className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 font-semibold flex items-center justify-center gap-2"
