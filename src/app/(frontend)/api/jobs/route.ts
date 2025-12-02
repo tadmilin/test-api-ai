@@ -42,3 +42,51 @@ export async function GET(request: NextRequest) {
     )
   }
 }
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const {
+      productName,
+      productDescription,
+      mood,
+      targetPlatforms,
+      referenceImageIds,
+      referenceImageUrls,
+      status = 'pending',
+    } = body
+
+    if (!productName) {
+      return NextResponse.json(
+        { error: 'productName is required' },
+        { status: 400 }
+      )
+    }
+
+    const payload = await getPayload({ config })
+
+    // Create new job
+    const job = await payload.create({
+      collection: 'jobs',
+      data: {
+        productName,
+        productDescription: productDescription || '',
+        mood: mood || '',
+        targetPlatforms: targetPlatforms || ['facebook', 'instagram_feed'],
+        referenceImageIds: referenceImageIds || [],
+        referenceImageUrls: referenceImageUrls || [],
+        status,
+        createdBy: 'current-user-id', // TODO: Get from auth session
+      },
+    })
+
+    return NextResponse.json(job)
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to create job'
+    console.error('Error creating job:', error)
+    return NextResponse.json(
+      { error: errorMessage },
+      { status: 500 }
+    )
+  }
+}
