@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
 
     const payload = await getPayload({ config })
 
-    // Create new job
+    // Create new job (without createdBy for now - TODO: Add auth)
     const job = await payload.create({
       collection: 'jobs',
       data: {
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
         referenceImageIds: referenceImageIds || [],
         referenceImageUrls: referenceImageUrls || [],
         status,
-        createdBy: 'current-user-id', // TODO: Get from auth session
+        // createdBy will be set by auth hook when auth is implemented
       },
     })
 
