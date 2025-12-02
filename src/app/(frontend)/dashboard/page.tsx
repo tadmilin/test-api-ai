@@ -54,9 +54,9 @@ interface DriveImage {
 }
 
 const IMAGE_SIZES = {
-  facebook: { label: 'Facebook Post', width: 1200, height: 630 },
-  instagram_feed: { label: 'Instagram Feed', width: 1080, height: 1080 },
-  instagram_story: { label: 'Instagram Story', width: 1080, height: 1920 },
+  facebook: { label: 'โพสต์ Facebook', width: 1200, height: 630 },
+  instagram_feed: { label: 'ฟีด Instagram', width: 1080, height: 1080 },
+  instagram_story: { label: 'สตอรี่ Instagram', width: 1080, height: 1920 },
 }
 
 export default function DashboardPage() {
@@ -452,31 +452,24 @@ export default function DashboardPage() {
         return 'bg-gray-100 text-gray-800'
     }
   }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-lg">Loading dashboard...</div>
-      </div>
-    )
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-8">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8 flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Image Generation Dashboard</h1>
-            <p className="text-gray-600 mt-2">Create and manage AI-generated images</p>
+        {/* Main Container with Card Effect */}
+        <div className="bg-white rounded-2xl shadow-2xl p-8 mb-8">
+          {/* Header */}
+          <div className="mb-8 flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">แดชบอร์ดสร้างภาพด้วย AI</h1>
+              <p className="text-gray-600 mt-2">สร้างและจัดการภาพที่สร้างด้วย AI</p>
+            </div>
+            <button
+              onClick={() => setShowCreateForm(!showCreateForm)}
+              className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-semibold shadow-lg hover:shadow-xl transition-all"
+            >
+              {showCreateForm ? 'ปิด' : '+ สร้างงานใหม่'}
+            </button>
           </div>
-          <button
-            onClick={() => setShowCreateForm(!showCreateForm)}
-            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-semibold"
-          >
-            {showCreateForm ? 'Close' : '+ Create New Job'}
-          </button>
-        </div>
 
         {/* Processing Status Banner */}
         {processingJobId && processingStatus && (
@@ -485,9 +478,9 @@ export default function DashboardPage() {
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
                 <div>
-                  <h3 className="text-lg font-bold text-blue-900">Processing Job...</h3>
+                  <h3 className="text-lg font-bold text-blue-900">กำลังประมวลผล...</h3>
                   <p className="text-blue-700 text-sm mt-1">{processingStatus}</p>
-                  <p className="text-blue-600 text-xs mt-1">This may take 30-60 seconds. Please wait...</p>
+                  <p className="text-blue-600 text-xs mt-1">อาจใช้เวลา 30-60 วินาที กรุณารอสักครู่...</p>
                 </div>
               </div>
               <button
@@ -497,7 +490,7 @@ export default function DashboardPage() {
                 }}
                 className="text-blue-600 hover:text-blue-800 text-sm font-medium"
               >
-                Hide
+                ซ่อน
               </button>
             </div>
           </div>
@@ -506,13 +499,13 @@ export default function DashboardPage() {
         {/* Create Job Form */}
         {showCreateForm && (
           <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
-            <h2 className="text-xl font-bold mb-4">Create New Image Generation Job</h2>
+            <h2 className="text-xl font-bold mb-4">สร้างงานสร้างภาพใหม่</h2>
 
             <div className="space-y-4">
               {/* Select Google Sheet */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select Google Sheet
+                  เลือกชีท Google
                 </label>
                 <select
                   className="w-full border border-gray-300 rounded-lg p-2 text-gray-900"
@@ -523,7 +516,7 @@ export default function DashboardPage() {
                     setSheetData([])
                   }}
                 >
-                  <option value="">-- Select Sheet --</option>
+                  <option value="">-- เลือกชีท --</option>
                   {spreadsheets.map((sheet) => (
                     <option key={sheet.id} value={sheet.id}>
                       {sheet.name}
@@ -538,7 +531,7 @@ export default function DashboardPage() {
                   onClick={fetchSheetData}
                   className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
                 >
-                  Load Products from Sheet
+                  โหลดข้อมูลสินค้าจากชีท
                 </button>
               )}
 
@@ -546,13 +539,13 @@ export default function DashboardPage() {
               {sheetData.length > 0 && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Select Product from Google Sheets
+                    เลือกสินค้าจาก Google Sheets
                   </label>
                   <select
                     className="w-full border border-gray-300 rounded-lg p-2 text-gray-900"
                     onChange={(e) => setSelectedSheetRow(sheetData[parseInt(e.target.value)])}
                   >
-                    <option value="">-- Select Product --</option>
+                    <option value="">-- เลือกสินค้า --</option>
                     {sheetData.map((row, index) => (
                       <option key={index} value={index}>
                         {row['Product Name'] || `Row ${index + 1}`}
@@ -565,12 +558,12 @@ export default function DashboardPage() {
               {/* Show selected product info */}
               {selectedSheetRow && (
                 <div className="bg-gray-50 p-4 rounded">
-                  <h3 className="font-semibold mb-2 text-gray-900">Selected Product:</h3>
+                  <h3 className="font-semibold mb-2 text-gray-900">สินค้าที่เลือก:</h3>
                   <p className="text-gray-900">
-                    <strong>Name:</strong> {selectedSheetRow['Product Name']}
+                    <strong>ชื่อ:</strong> {selectedSheetRow['Product Name']}
                   </p>
                   <p className="text-gray-900">
-                    <strong>Description:</strong> {selectedSheetRow['Product Description'] || selectedSheetRow['Description']}
+                    <strong>รายละเอียด:</strong> {selectedSheetRow['Product Description'] || selectedSheetRow['Description']}
                   </p>
                 </div>
               )}
@@ -578,12 +571,12 @@ export default function DashboardPage() {
               {/* Google Drive Images */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Reference Images from Google Drive
+                  รูปอ้างอิงจาก Google Drive
                 </label>
                 <div className="space-y-2">
                   <input
                     type="text"
-                    placeholder="Folder ID (optional - leave empty to load all images)"
+                    placeholder="ID โฟลเดอร์ (ไม่บังคับ - ว่างไว้เพื่อโหลดรูปทั้งหมด)"
                     value={driveFolderId}
                     onChange={(e) => setDriveFolderId(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg p-2 text-gray-900"
@@ -592,7 +585,7 @@ export default function DashboardPage() {
                     onClick={loadDriveImages}
                     className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
                   >
-                    📂 {driveFolderId ? 'Load Images from Folder' : 'Load All Images'}
+                    📂 {driveFolderId ? 'โหลดรูปจากโฟลเดอร์' : 'โหลดรูปทั้งหมด'}
                   </button>
                 </div>
 
@@ -601,13 +594,13 @@ export default function DashboardPage() {
                   <div className="mt-6 bg-gradient-to-br from-gray-50 to-gray-100 p-6 rounded-xl border border-gray-200">
                     <div className="flex items-center justify-between mb-4">
                       <div>
-                        <h3 className="text-lg font-semibold text-gray-900">Reference Images</h3>
+                        <h3 className="text-lg font-semibold text-gray-900">รูปอ้างอิง</h3>
                         <p className="text-sm text-gray-600 mt-1">
-                          Click images to select/deselect for AI analysis
+                          คลิกรูปเพื่อเลือก/ยกเลิกสำหรับวิเคราะห์ด้วย AI
                         </p>
                       </div>
                       <div className="bg-blue-100 text-blue-700 px-4 py-2 rounded-lg font-semibold">
-                        {selectedImages.length} Selected
+                        {selectedImages.length} เลือกแล้ว
                       </div>
                     </div>
                     <div className="grid grid-cols-3 gap-4">
@@ -661,21 +654,21 @@ export default function DashboardPage() {
               {/* Mood */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Mood / Style
+                  อารมณ์ / สไตล์
                 </label>
                 <input
                   type="text"
                   value={mood}
                   onChange={(e) => setMood(e.target.value)}
                   className="w-full border border-gray-300 rounded-lg p-2 text-gray-900"
-                  placeholder="e.g., Professional, Modern, Vibrant"
+                  placeholder="เช่น มืออาชีพ ทันสมัย สดใส"
                 />
               </div>
 
               {/* Platforms */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Target Platforms (Select image sizes to generate)
+                  แพลตฟอร์มเป้าหมาย (เลือกขนาดรูปที่ต้องการสร้าง)
                 </label>
                 <div className="space-y-2">
                   {Object.entries(IMAGE_SIZES).map(([key, size]) => (
@@ -707,7 +700,7 @@ export default function DashboardPage() {
                 disabled={creating || !selectedSheetRow}
                 className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-semibold disabled:bg-gray-400"
               >
-                {creating ? 'Creating...' : 'Generate Images'}
+                {creating ? 'กำลังสร้าง...' : 'สร้างภาพ'}
               </button>
             </div>
           </div>
@@ -721,7 +714,7 @@ export default function DashboardPage() {
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <h2 className="text-2xl font-bold">{viewingJob.productName}</h2>
-                    <p className="text-gray-600 mt-1">Generated Images</p>
+                    <p className="text-gray-600 mt-1">ภาพที่สร้างแล้ว</p>
                   </div>
                   <button
                     onClick={() => setViewingJob(null)}
@@ -734,7 +727,7 @@ export default function DashboardPage() {
                 {/* Prompt Display */}
                 {viewingJob.generatedPrompt && (
                   <div className="bg-gray-50 p-4 rounded-lg mb-4">
-                    <h3 className="font-semibold mb-2">Generated Prompt:</h3>
+                    <h3 className="font-semibold mb-2">Prompt ที่สร้าง:</h3>
                     <p className="text-sm text-gray-700">{viewingJob.generatedPrompt}</p>
                   </div>
                 )}
@@ -802,14 +795,14 @@ export default function DashboardPage() {
                           d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
                         />
                       </svg>
-                      Download {IMAGE_SIZES[selectedPlatform].label} (
+                      ดาวน์โหลด {IMAGE_SIZES[selectedPlatform].label} (
                       {IMAGE_SIZES[selectedPlatform].width}×{IMAGE_SIZES[selectedPlatform].height}
                       )
                     </button>
                   </div>
                 ) : (
                   <div className="text-center py-8 text-gray-500">
-                    No image generated for this platform
+                    ไม่มีภาพสำหรับแพลตฟอร์มนี้
                   </div>
                 )}
               </div>
@@ -820,42 +813,42 @@ export default function DashboardPage() {
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-sm font-medium text-gray-600">Total Jobs</div>
+            <div className="text-sm font-medium text-gray-600">งานทั้งหมด</div>
             <div className="text-3xl font-bold text-gray-900 mt-2">{stats.total}</div>
           </div>
 
           <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-sm font-medium text-gray-600">Pending</div>
+            <div className="text-sm font-medium text-gray-600">รอดำเนินการ</div>
             <div className="text-3xl font-bold text-gray-600 mt-2">{stats.pending}</div>
           </div>
 
           <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-sm font-medium text-gray-600">Processing</div>
+            <div className="text-sm font-medium text-gray-600">กำลังประมวลผล</div>
             <div className="text-3xl font-bold text-blue-600 mt-2">{stats.processing}</div>
           </div>
 
           <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-sm font-medium text-gray-600">Completed</div>
+            <div className="text-sm font-medium text-gray-600">เสร็จสมบูรณ์</div>
             <div className="text-3xl font-bold text-green-600 mt-2">{stats.completed}</div>
           </div>
 
           <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-sm font-medium text-gray-600">Approved</div>
+            <div className="text-sm font-medium text-gray-600">อนุมัติแล้ว</div>
             <div className="text-3xl font-bold text-emerald-600 mt-2">{stats.approved}</div>
           </div>
 
           <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-sm font-medium text-gray-600">Rejected</div>
+            <div className="text-sm font-medium text-gray-600">ปฏิเสธแล้ว</div>
             <div className="text-3xl font-bold text-orange-600 mt-2">{stats.rejected}</div>
           </div>
 
           <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-sm font-medium text-gray-600">Failed</div>
+            <div className="text-sm font-medium text-gray-600">ล้มเหลว</div>
             <div className="text-3xl font-bold text-red-600 mt-2">{stats.failed}</div>
           </div>
 
           <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-sm font-medium text-gray-600">Success Rate</div>
+            <div className="text-sm font-medium text-gray-600">อัตราความสำเร็จ</div>
             <div className="text-3xl font-bold text-gray-900 mt-2">
               {stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0}%
             </div>
@@ -865,26 +858,26 @@ export default function DashboardPage() {
         {/* Recent Jobs */}
         <div className="bg-white rounded-lg shadow mb-8">
           <div className="p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">Recent Jobs</h2>
+            <h2 className="text-xl font-semibold text-gray-900">งานล่าสุด</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Product Name
+                    ชื่อสินค้า
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
+                    สถานะ
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Created By
+                    สร้างโดย
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Created At
+                    สร้างเมื่อ
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
+                    การกระทำ
                   </th>
                 </tr>
               </thead>
@@ -892,7 +885,7 @@ export default function DashboardPage() {
                 {recentJobs.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
-                      No jobs found. Create your first job!
+                      ไม่พบงาน สร้างงานแรกของคุณ!
                     </td>
                   </tr>
                 ) : (
@@ -931,7 +924,7 @@ export default function DashboardPage() {
                               onClick={() => setViewingJob(job)}
                               className="text-purple-600 hover:text-purple-900 font-medium"
                             >
-                              🖼️ View
+                              🖼️ ดู
                             </button>
                           )}
                         {job.status === 'completed' && (
@@ -940,26 +933,26 @@ export default function DashboardPage() {
                               onClick={() => handleApproveReject(job.id, 'approve')}
                               className="text-green-600 hover:text-green-900"
                             >
-                              ✓ Approve
+                              ✓ อนุมัติ
                             </button>
                             <button
                               onClick={() => handleApproveReject(job.id, 'reject')}
                               className="text-red-600 hover:text-red-900"
                             >
-                              ✗ Reject
+                              ✗ ปฏิเสธ
                             </button>
                           </>
                         )}
                         <button
                           onClick={async () => {
-                            if (confirm('Delete this job?')) {
+                            if (confirm('ลบงานนี้?')) {
                               await fetch(`/api/jobs/${job.id}`, { method: 'DELETE' })
                               fetchDashboardData()
                             }
                           }}
                           className="text-gray-600 hover:text-red-600"
                         >
-                          🗑️ Delete
+                          🗑️ ลบ
                         </button>
                       </td>
                     </tr>
@@ -973,29 +966,29 @@ export default function DashboardPage() {
         {/* User Activity */}
         <div className="bg-white rounded-lg shadow">
           <div className="p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">User Activity History</h2>
+            <h2 className="text-xl font-semibold text-gray-900">ประวัติกิจกรรมผู้ใช้</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    User
+                    ผู้ใช้
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Email
+                    อีเมล
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Jobs Created
+                    งานที่สร้าง
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Jobs Approved
+                    งานที่อนุมัติ
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Jobs Rejected
+                    งานที่ปฏิเสธ
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Last Activity
+                    กิจกรรมล่าสุด
                   </th>
                 </tr>
               </thead>
@@ -1003,7 +996,7 @@ export default function DashboardPage() {
                 {userActivities.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
-                      No user activity found
+                      ไม่พบกิจกรรมผู้ใช้
                     </td>
                   </tr>
                 ) : (
@@ -1040,11 +1033,12 @@ export default function DashboardPage() {
             </table>
           </div>
         </div>
+        </div>
 
         {/* Admin Link */}
         <div className="mt-8 text-center">
-          <Link href="/admin" className="text-gray-600 hover:text-gray-900">
-            → Go to Admin Panel (Manage Users & View Logs)
+          <Link href="/admin" className="text-gray-600 hover:text-gray-900 font-medium">
+            → ไปที่แผงผู้ดูแลระบบ (จัดการผู้ใช้และดูบันทึก)
           </Link>
         </div>
       </div>
