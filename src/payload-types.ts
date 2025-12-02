@@ -812,9 +812,24 @@ export interface Job {
   generatedPrompt?: string | null;
   promptGeneratedAt?: string | null;
   generatedImages?: {
-    facebook?: (string | null) | Media;
-    instagram_feed?: (string | null) | Media;
-    instagram_story?: (string | null) | Media;
+    facebook?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mediaId?: (string | null) | Media;
+    };
+    instagram_feed?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mediaId?: (string | null) | Media;
+    };
+    instagram_story?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mediaId?: (string | null) | Media;
+    };
   };
   approvedBy?: (string | null) | User;
   approvedAt?: string | null;
@@ -1487,9 +1502,30 @@ export interface JobsSelect<T extends boolean = true> {
   generatedImages?:
     | T
     | {
-        facebook?: T;
-        instagram_feed?: T;
-        instagram_story?: T;
+        facebook?:
+          | T
+          | {
+              url?: T;
+              width?: T;
+              height?: T;
+              mediaId?: T;
+            };
+        instagram_feed?:
+          | T
+          | {
+              url?: T;
+              width?: T;
+              height?: T;
+              mediaId?: T;
+            };
+        instagram_story?:
+          | T
+          | {
+              url?: T;
+              width?: T;
+              height?: T;
+              mediaId?: T;
+            };
       };
   approvedBy?: T;
   approvedAt?: T;
