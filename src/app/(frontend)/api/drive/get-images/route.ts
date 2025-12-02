@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { google } from 'googleapis'
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,28 +12,37 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const apiKey = process.env.GOOGLE_DRIVE_API_KEY
+    const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
+    const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
 
-    if (!apiKey) {
+    if (!serviceAccountEmail || !privateKey) {
       return NextResponse.json(
-        { error: 'Google Drive API key not configured' },
+        { error: 'Google Service Account credentials not configured' },
         { status: 500 }
       )
     }
+
+    // Create auth client
+    const auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: serviceAccountEmail,
+        private_key: privateKey.replace(/\\n/g, '\n'),
+      },
+      scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+    })
+
+    const drive = google.drive({ version: 'v3', auth })
 
     // Fetch metadata for each file
     const images = await Promise.all(
       fileIds.map(async (fileId: string) => {
         try {
-          const response = await fetch(
-            `https://www.googleapis.com/drive/v3/files/${fileId}?fields=id,name,mimeType,thumbnailLink,webContentLink&key=${apiKey}`
-          )
+          const response = await drive.files.get({
+            fileId: fileId,
+            fields: 'id,name,mimeType,thumbnailLink,webContentLink',
+          })
 
-          if (!response.ok) {
-            throw new Error(`Failed to fetch file ${fileId}`)
-          }
-
-          const data = await response.json()
+          const data = response.data
 
           return {
             id: data.id,

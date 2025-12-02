@@ -7,16 +7,26 @@ export async function GET(
 ) {
   const { id } = await params
   try {
-    const apiKey = process.env.GOOGLE_SHEETS_API_KEY
+    const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
+    const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
 
-    if (!apiKey) {
+    if (!serviceAccountEmail || !privateKey) {
       return NextResponse.json(
-        { error: 'Google Sheets API key not configured' },
+        { error: 'Google Service Account credentials not configured' },
         { status: 500 }
       )
     }
 
-    const sheets = google.sheets({ version: 'v4', auth: apiKey })
+    // Create auth client
+    const auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: serviceAccountEmail,
+        private_key: privateKey.replace(/\\n/g, '\n'),
+      },
+      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+    })
+
+    const sheets = google.sheets({ version: 'v4', auth })
 
     // Get sheet data
     const response = await sheets.spreadsheets.values.get({
