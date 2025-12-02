@@ -114,6 +114,8 @@ I've provided reference images. Analyze these images carefully and create a DALL
 4. Maintains the aesthetic feel of the reference images
 5. Be optimized for DALL-E 3 image generation
 6. Maximum 300 words
+7. IMPORTANT: Use only safe, family-friendly language. Avoid any potentially sensitive words.
+8. Focus on product marketing, artistic style, and commercial photography terms.
 
 Return ONLY the prompt text, nothing else.`
         },
@@ -144,6 +146,8 @@ Task: Create a detailed, high-quality English prompt for generating a marketing 
 3. Be optimized for DALL-E 3 image generation
 4. Be suitable for social media marketing (Facebook, Instagram)
 5. Maximum 300 words
+6. IMPORTANT: Use only safe, family-friendly language. Avoid any potentially sensitive words.
+7. Focus on product marketing, artistic style, and commercial photography terms.
 
 Return ONLY the prompt text, nothing else.`
       })
