@@ -240,29 +240,28 @@ export default function DashboardPage() {
     }
   }
 
-  function openDrivePicker() {
-    // Load images from Drive folder
-    loadDriveImages()
-  }
-
   async function loadDriveImages() {
-    if (!driveFolderId) {
-      alert('Please enter Google Drive Folder ID')
-      return
-    }
-
     try {
-      const res = await fetch('/api/drive/list-folder', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folderId: driveFolderId }),
-      })
+      let url = '/api/drive/list-all-images'
+      let options: RequestInit = {}
+
+      // ถ้ามี Folder ID ให้ใช้ list-folder แทน
+      if (driveFolderId) {
+        url = '/api/drive/list-folder'
+        options = {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folderId: driveFolderId }),
+        }
+      }
+
+      const res = await fetch(url, options)
 
       if (res.ok) {
         const data = await res.json()
         setDriveImages(data.images || [])
       } else {
-        alert('Failed to load images from folder')
+        alert('Failed to load images')
       }
     } catch (error) {
       console.error('Error loading drive images:', error)
@@ -296,7 +295,7 @@ export default function DashboardPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           productName: selectedSheetRow['Product Name'] || 'Untitled',
-          productDescription: selectedSheetRow['Description'] || '',
+          productDescription: selectedSheetRow['Product Description'] || selectedSheetRow['Description'] || '',
           mood,
           targetPlatforms: platforms,
           referenceImageIds: selectedImages.map((img) => ({ imageId: img.id })),
@@ -417,7 +416,7 @@ export default function DashboardPage() {
                   Select Google Sheet
                 </label>
                 <select
-                  className="w-full border border-gray-300 rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2 text-gray-900"
                   value={selectedSheetId}
                   onChange={(e) => {
                     setSelectedSheetId(e.target.value)
@@ -451,7 +450,7 @@ export default function DashboardPage() {
                     Select Product from Google Sheets
                   </label>
                   <select
-                    className="w-full border border-gray-300 rounded-lg p-2"
+                    className="w-full border border-gray-300 rounded-lg p-2 text-gray-900"
                     onChange={(e) => setSelectedSheetRow(sheetData[parseInt(e.target.value)])}
                   >
                     <option value="">-- Select Product --</option>
@@ -467,17 +466,17 @@ export default function DashboardPage() {
               {/* Show selected product info */}
               {selectedSheetRow && (
                 <div className="bg-gray-50 p-4 rounded">
-                  <h3 className="font-semibold mb-2">Selected Product:</h3>
-                  <p>
+                  <h3 className="font-semibold mb-2 text-gray-900">Selected Product:</h3>
+                  <p className="text-gray-900">
                     <strong>Name:</strong> {selectedSheetRow['Product Name']}
                   </p>
-                  <p>
-                    <strong>Description:</strong> {selectedSheetRow['Description']}
+                  <p className="text-gray-900">
+                    <strong>Description:</strong> {selectedSheetRow['Product Description'] || selectedSheetRow['Description']}
                   </p>
                 </div>
               )}
 
-              {/* Google Drive Picker */}
+              {/* Google Drive Images */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Reference Images from Google Drive
@@ -485,16 +484,16 @@ export default function DashboardPage() {
                 <div className="space-y-2">
                   <input
                     type="text"
-                    placeholder="Enter Folder ID (e.g., 1ABC...XYZ)"
+                    placeholder="Folder ID (optional - leave empty to load all images)"
                     value={driveFolderId}
                     onChange={(e) => setDriveFolderId(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg p-2"
+                    className="w-full border border-gray-300 rounded-lg p-2 text-gray-900"
                   />
                   <button
                     onClick={loadDriveImages}
                     className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
                   >
-                    📂 Load Images from Folder
+                    📂 {driveFolderId ? 'Load Images from Folder' : 'Load All Images'}
                   </button>
                 </div>
 
@@ -546,7 +545,7 @@ export default function DashboardPage() {
                   type="text"
                   value={mood}
                   onChange={(e) => setMood(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2 text-gray-900"
                   placeholder="e.g., Professional, Modern, Vibrant"
                 />
               </div>
