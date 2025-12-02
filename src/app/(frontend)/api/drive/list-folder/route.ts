@@ -42,13 +42,21 @@ export async function POST(request: NextRequest) {
 
     const files = response.data.files || []
 
-    const images = files.map(file => ({
-      id: file.id || '',
-      name: file.name || '',
-      mimeType: file.mimeType || '',
-      thumbnailUrl: file.thumbnailLink || '',
-      url: file.webContentLink || file.webViewLink || '',
-    }))
+    const images = files.map(file => {
+      // Use Drive thumbnail API or convert to direct link
+      const fileId = file.id || ''
+      const thumbnailUrl = file.thumbnailLink 
+        ? file.thumbnailLink.replace('=s220', '=s400') // Larger thumbnail
+        : `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`
+      
+      return {
+        id: fileId,
+        name: file.name || '',
+        mimeType: file.mimeType || '',
+        thumbnailUrl: thumbnailUrl,
+        url: `https://drive.google.com/uc?export=view&id=${fileId}`,
+      }
+    })
 
     return NextResponse.json({ images })
   } catch (error: unknown) {

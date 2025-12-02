@@ -28,10 +28,17 @@ export async function GET(
 
     const sheets = google.sheets({ version: 'v4', auth })
 
+    // Get sheet metadata to find the first sheet name
+    const metadataResponse = await sheets.spreadsheets.get({
+      spreadsheetId: id,
+    })
+
+    const firstSheet = metadataResponse.data.sheets?.[0]?.properties?.title || 'Sheet1'
+
     // Get sheet data
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: id,
-      range: 'Sheet1!A1:Z1000', // Adjust range as needed
+      range: `${firstSheet}!A1:Z1000`, // Use actual sheet name
     })
 
     const rows = response.data.values || []
