@@ -156,12 +156,13 @@ export async function POST(request: NextRequest) {
       })
 
       // Step 4: Update job with generated images from Vercel Blob
-      const generatedImages: Record<string, { url: string; id: string }> = {}
+      const generatedImages: Record<string, { url: string; width: number; height: number }> = {}
 
       for (const [platform, data] of Object.entries(resizedImages) as [string, { url: string; width: number; height: number }][]) {
         generatedImages[platform] = {
           url: data.url,
-          id: '', // Vercel Blob doesn't use IDs, only URLs
+          width: data.width,
+          height: data.height,
         }
       }
 

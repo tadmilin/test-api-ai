@@ -115,18 +115,57 @@ export const Jobs: CollectionConfig = {
               fields: [
                 {
                   name: 'facebook',
-                  type: 'relationship',
-                  relationTo: 'media',
+                  type: 'group',
+                  fields: [
+                    {
+                      name: 'url',
+                      type: 'text',
+                    },
+                    {
+                      name: 'width',
+                      type: 'number',
+                    },
+                    {
+                      name: 'height',
+                      type: 'number',
+                    },
+                  ],
                 },
                 {
                   name: 'instagram_feed',
-                  type: 'relationship',
-                  relationTo: 'media',
+                  type: 'group',
+                  fields: [
+                    {
+                      name: 'url',
+                      type: 'text',
+                    },
+                    {
+                      name: 'width',
+                      type: 'number',
+                    },
+                    {
+                      name: 'height',
+                      type: 'number',
+                    },
+                  ],
                 },
                 {
                   name: 'instagram_story',
-                  type: 'relationship',
-                  relationTo: 'media',
+                  type: 'group',
+                  fields: [
+                    {
+                      name: 'url',
+                      type: 'text',
+                    },
+                    {
+                      name: 'width',
+                      type: 'number',
+                    },
+                    {
+                      name: 'height',
+                      type: 'number',
+                    },
+                  ],
                 },
               ],
             },
