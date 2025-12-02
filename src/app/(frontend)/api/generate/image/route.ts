@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
+import { put } from '@vercel/blob'
 
 export async function POST(request: NextRequest) {
   try {
-    const { prompt } = await request.json()
+    const { prompt, jobId } = await request.json()
 
     if (!prompt) {
       return NextResponse.json(
         { error: 'prompt is required' },
+        { status: 400 }
+      )
+    }
+
+    if (!jobId) {
+      return NextResponse.json(
+        { error: 'jobId is required' },
         { status: 400 }
       )
     }
@@ -42,8 +50,22 @@ export async function POST(request: NextRequest) {
       throw new Error('No image URL returned from DALL-E')
     }
 
+    // Download the image from DALL-E
+    const imageResponse = await fetch(imageUrl)
+    if (!imageResponse.ok) {
+      throw new Error('Failed to download image from DALL-E')
+    }
+
+    const imageBuffer = await imageResponse.arrayBuffer()
+
+    // Upload to Vercel Blob
+    const blob = await put(`jobs/${jobId}/original.png`, imageBuffer, {
+      access: 'public',
+      contentType: 'image/png',
+    })
+
     return NextResponse.json({
-      imageUrl,
+      imageUrl: blob.url,
       revisedPrompt: response.data[0]?.revised_prompt,
     })
   } catch (error: unknown) {

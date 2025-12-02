@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import sharp from 'sharp'
+import { put } from '@vercel/blob'
 
 const IMAGE_SIZES = {
   facebook: {
@@ -18,11 +19,18 @@ const IMAGE_SIZES = {
 
 export async function POST(request: NextRequest) {
   try {
-    const { sourceUrl, platforms, jobId: _jobId } = await request.json()
+    const { sourceUrl, platforms, jobId } = await request.json()
 
     if (!sourceUrl || !platforms || !Array.isArray(platforms)) {
       return NextResponse.json(
         { error: 'sourceUrl and platforms array are required' },
+        { status: 400 }
+      )
+    }
+
+    if (!jobId) {
+      return NextResponse.json(
+        { error: 'jobId is required' },
         { status: 400 }
       )
     }
@@ -35,8 +43,8 @@ export async function POST(request: NextRequest) {
 
     const imageBuffer = Buffer.from(await imageResponse.arrayBuffer())
 
-    // Resize for each platform
-    const resizedImages: Record<string, { buffer: Buffer; width: number; height: number }> = {}
+    // Resize for each platform and upload to Vercel Blob
+    const results: Record<string, { url: string; width: number; height: number }> = {}
 
     for (const platform of platforms) {
       const config = IMAGE_SIZES[platform as keyof typeof IMAGE_SIZES]
@@ -45,7 +53,7 @@ export async function POST(request: NextRequest) {
         continue
       }
 
-      const resized = await sharp(imageBuffer)
+      const resizedBuffer = await sharp(imageBuffer)
         .resize(config.width, config.height, {
           fit: 'cover',
           position: 'center',
@@ -53,24 +61,16 @@ export async function POST(request: NextRequest) {
         .jpeg({ quality: 90 })
         .toBuffer()
 
-      resizedImages[platform] = {
-        buffer: resized,
+      // Upload to Vercel Blob
+      const blob = await put(`jobs/${jobId}/${platform}.jpg`, resizedBuffer, {
+        access: 'public',
+        contentType: 'image/jpeg',
+      })
+
+      results[platform] = {
+        url: blob.url,
         width: config.width,
         height: config.height,
-      }
-    }
-
-    // TODO: Upload resized images to PayloadCMS Media collection
-    // For now, return placeholder URLs
-    const results: Record<string, { url: string; width: number; height: number }> = {}
-
-    for (const [platform, data] of Object.entries(resizedImages)) {
-      // In production, upload the buffer to Payload Media
-      // and return the actual URL
-      results[platform] = {
-        url: `/api/media/placeholder-${platform}.jpg`,
-        width: data.width,
-        height: data.height,
       }
     }
 

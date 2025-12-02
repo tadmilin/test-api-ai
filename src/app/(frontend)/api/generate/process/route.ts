@@ -140,13 +140,22 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      // Step 4: Update job status to completed
+      // Step 4: Update job with generated images from Vercel Blob
+      const generatedImages: Record<string, { url: string; id: string }> = {}
+
+      for (const [platform, data] of Object.entries(resizedImages) as [string, { url: string; width: number; height: number }][]) {
+        generatedImages[platform] = {
+          url: data.url,
+          id: '', // Vercel Blob doesn't use IDs, only URLs
+        }
+      }
+
       await payload.update({
         collection: 'jobs',
         id: jobId,
         data: {
           status: 'completed',
-          // TODO: Store actual media IDs after uploading resized images
+          generatedImages,
         },
       })
 
