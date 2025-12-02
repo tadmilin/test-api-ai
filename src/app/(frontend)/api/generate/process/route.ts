@@ -49,8 +49,12 @@ export async function POST(request: NextRequest) {
     })
 
     try {
-      // Step 1: Generate prompt with Claude
-      const promptResponse = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/api/generate/prompt`, {
+      // Get base URL for internal API calls
+      const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
+      
+      // Step 1: Generate prompt with GPT-4
+      console.log('Generating prompt...')
+      const promptResponse = await fetch(`${baseUrl}/api/generate/prompt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -62,10 +66,13 @@ export async function POST(request: NextRequest) {
       })
 
       if (!promptResponse.ok) {
-        throw new Error('Failed to generate prompt')
+        const errorText = await promptResponse.text()
+        console.error('Prompt generation failed:', errorText)
+        throw new Error(`Failed to generate prompt: ${errorText}`)
       }
 
       const { prompt } = await promptResponse.json()
+      console.log('Prompt generated:', prompt.substring(0, 100) + '...')
 
       // Update job with generated prompt
       await payload.update({
@@ -88,7 +95,8 @@ export async function POST(request: NextRequest) {
       })
 
       // Step 2: Generate image with DALL-E
-      const imageResponse = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/api/generate/image`, {
+      console.log('Generating image with DALL-E...')
+      const imageResponse = await fetch(`${baseUrl}/api/generate/image`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -98,10 +106,13 @@ export async function POST(request: NextRequest) {
       })
 
       if (!imageResponse.ok) {
-        throw new Error('Failed to generate image')
+        const errorText = await imageResponse.text()
+        console.error('Image generation failed:', errorText)
+        throw new Error(`Failed to generate image: ${errorText}`)
       }
 
       const { imageUrl } = await imageResponse.json()
+      console.log('Image generated:', imageUrl)
 
       await payload.create({
         collection: 'job-logs',
@@ -114,7 +125,8 @@ export async function POST(request: NextRequest) {
       })
 
       // Step 3: Resize image for different platforms
-      const resizeResponse = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/api/generate/resize`, {
+      console.log('Resizing images...')
+      const resizeResponse = await fetch(`${baseUrl}/api/generate/resize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -125,10 +137,13 @@ export async function POST(request: NextRequest) {
       })
 
       if (!resizeResponse.ok) {
-        throw new Error('Failed to resize images')
+        const errorText = await resizeResponse.text()
+        console.error('Resize failed:', errorText)
+        throw new Error(`Failed to resize images: ${errorText}`)
       }
 
       const resizedImages = await resizeResponse.json()
+      console.log('Images resized:', Object.keys(resizedImages))
 
       await payload.create({
         collection: 'job-logs',

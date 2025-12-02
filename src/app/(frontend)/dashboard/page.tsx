@@ -90,6 +90,10 @@ export default function DashboardPage() {
   const [viewingJob, setViewingJob] = useState<Job | null>(null)
   const [selectedPlatform, setSelectedPlatform] = useState<keyof typeof IMAGE_SIZES>('facebook')
 
+  // Processing status
+  const [processingJobId, setProcessingJobId] = useState<string | null>(null)
+  const [processingStatus, setProcessingStatus] = useState<string>('')
+
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -304,21 +308,91 @@ export default function DashboardPage() {
         }),
       })
 
-      const job = await jobRes.json()
+      if (!jobRes.ok) {
+        throw new Error('Failed to create job')
+      }
 
-      // Start processing
-      await fetch('/api/generate/process', {
+      const job = await jobRes.json()
+      console.log('Job created:', job)
+
+      // Set processing state
+      setProcessingJobId(job.id)
+      setProcessingStatus('🔄 Creating job...')
+      setShowCreateForm(false)
+
+      // Start processing in background
+      setProcessingStatus('🤖 Generating prompt with GPT-4...')
+      
+      fetch('/api/generate/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jobId: job.id }),
-      })
+      }).catch(err => console.error('Process error:', err))
 
-      alert('Job created successfully!')
-      setShowCreateForm(false)
+      // Refresh dashboard immediately to show new job
       fetchDashboardData()
+      
+      // Poll for updates every 3 seconds
+      let pollCount = 0
+      const maxPolls = 100 // 5 minutes max
+      
+      const pollInterval = setInterval(async () => {
+        pollCount++
+        
+        const jobsRes = await fetch('/api/jobs')
+        const data = await jobsRes.json()
+        const currentJob = data.jobs.find((j: Job) => j.id === job.id)
+        
+        if (currentJob) {
+          // Update status message
+          if (currentJob.status === 'processing') {
+            if (currentJob.generatedPrompt && !currentJob.generatedImages) {
+              setProcessingStatus('🎨 Generating image with DALL-E 3...')
+            } else if (currentJob.generatedImages) {
+              setProcessingStatus('📐 Resizing images for platforms...')
+            } else {
+              setProcessingStatus('🤖 Generating prompt with GPT-4...')
+            }
+          } else if (currentJob.status === 'completed') {
+            clearInterval(pollInterval)
+            setProcessingStatus('✅ Complete!')
+            fetchDashboardData()
+            
+            // Auto-open the result
+            setTimeout(() => {
+              setViewingJob(currentJob)
+              setProcessingJobId(null)
+              setProcessingStatus('')
+            }, 1000)
+            
+            return
+          } else if (currentJob.status === 'failed') {
+            clearInterval(pollInterval)
+            setProcessingStatus('❌ Failed')
+            fetchDashboardData()
+            alert('Job failed: ' + (currentJob.errorMessage || 'Unknown error'))
+            setProcessingJobId(null)
+            setProcessingStatus('')
+            return
+          }
+          
+          // Update dashboard data
+          fetchDashboardData()
+        }
+        
+        // Stop after max polls
+        if (pollCount >= maxPolls) {
+          clearInterval(pollInterval)
+          setProcessingStatus('⏱️ Timeout - check job status')
+          setProcessingJobId(null)
+        }
+      }, 3000)
+      
     } catch (error) {
       console.error('Error creating job:', error)
-      alert('Failed to create job')
+      alert('Failed to create job: ' + (error instanceof Error ? error.message : 'Unknown error'))
+      setProcessingJobId(null)
+      setProcessingStatus('')
     } finally {
       setCreating(false)
     }
@@ -403,6 +477,31 @@ export default function DashboardPage() {
             {showCreateForm ? 'Close' : '+ Create New Job'}
           </button>
         </div>
+
+        {/* Processing Status Banner */}
+        {processingJobId && processingStatus && (
+          <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-8 animate-pulse">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                <div>
+                  <h3 className="text-lg font-bold text-blue-900">Processing Job...</h3>
+                  <p className="text-blue-700 text-sm mt-1">{processingStatus}</p>
+                  <p className="text-blue-600 text-xs mt-1">This may take 30-60 seconds. Please wait...</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setProcessingJobId(null)
+                  setProcessingStatus('')
+                }}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+              >
+                Hide
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Create Job Form */}
         {showCreateForm && (
