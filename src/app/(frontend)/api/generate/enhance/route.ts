@@ -107,23 +107,20 @@ export async function POST(request: NextRequest) {
       console.log(`Image size: ${imageSizeKB.toFixed(2)} KB`)
     }
 
-    // ใช้ SDXL img2img + Refiner เพื่อ RETOUCH รูป (ไม่ใช่สร้างใหม่)
-    // Refiner จะช่วยให้รายละเอียดดีขึ้นโดยไม่เปลี่ยนโครงสร้าง
-    console.log('🎨 Using SDXL Base + Refiner for high-quality retouching...')
+    // ใช้ Instruct-Pix2Pix สำหรับ photo editing โดยเฉพาะ
+    // Model นี้ออกแบบมาเพื่อแก้ไขรูปตาม instruction โดยไม่สร้างใหม่
+    console.log('🎨 Using Instruct-Pix2Pix for photo editing...')
     
     const output = await replicate.run(
-      'stability-ai/sdxl:7762fd07cf82c948538e41f63f77d685e02b063e37e496e96eefd46c929f9bdc',
+      'timbrooks/instruct-pix2pix:30c1d0b916a6f8efce20493f5d61ee27491ab2a60437c13c588468b9810ec23f',
       {
         input: {
           image: processedImageUrl,
-          prompt: prompt || `Professional photo retouch: enhance lighting, improve color balance, increase sharpness. Preserve all original elements exactly as they are.`,
-          negative_prompt: 'overprocessed, oversharpened, distorted, warped, unrealistic lighting, plastic texture, artificial colors, oversaturated, luxury decoration, five-star hotel, surreal, cartoonish, painting style, fake, synthetic, excessive editing, HDR artifacts, halos, glowing edges',
-          num_inference_steps: 25, // เพิ่มขึ้นเพื่อให้ refiner ทำงานได้ดี
-          refine: 'expert_ensemble_refiner', // เปิดใช้ refiner
-          high_noise_frac: 0.8, // refiner จะทำงาน 20% สุดท้าย
-          guidance_scale: 4.0, // ปรับเพื่อให้รูปเดิมมีน้ำหนัก
-          strength: Math.min(Math.max(strength || 0.15, 0.12), 0.20), // 0.12-0.20 เพราะมี refiner ช่วย
-          apply_watermark: false,
+          prompt: prompt || 'Improve lighting and colors, make it look professional',
+          negative_prompt: 'cartoon, anime, painting, drawing, illustration, sketch, 3d render, unrealistic',
+          num_inference_steps: 20,
+          guidance_scale: 7.5, // image guidance
+          image_guidance_scale: 1.5, // ควบคุมว่าจะเปลี่ยนแปลงรูปต้นฉบับมากน้อยแค่ไหน (1.0-2.0 = น้อย)
         },
       }
     ) as string[]
