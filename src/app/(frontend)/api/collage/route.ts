@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         image_urls: imageUrls,
         template: template || null,
-        canvas_size: [1792, 1024],
+        canvas_size: [1024, 585], // ลดขนาดให้เหมาะกับ SDXL และเข้า memory ได้
       }),
     })
 

@@ -62,21 +62,21 @@ export async function POST(request: NextRequest) {
     }
 
     // ใช้ SDXL img2img เพื่อ RETOUCH รูป (ไม่ใช่สร้างใหม่)
-    // ลด parameters เพื่อลด memory usage
+    // เพิ่ม strength และ guidance เพื่อให้รักษารูปเดิมไว้ดีขึ้น
     const output = await replicate.run(
       'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
       {
         input: {
           image: processedImageUrl,
-          prompt: `${prompt}\n\nCRITICAL: Keep EXACT same layout, composition, and positions. Only enhance quality, lighting, and colors. Do NOT move, resize, or rearrange any elements.`,
-          negative_prompt: 'low quality, blurry, distorted, ugly, bad anatomy, watermark, text, signature, duplicate, clone, overlapping, messy, chaotic, glitch, deformed, mutation, changed composition, different layout, moved objects, resized elements, new arrangement, altered structure',
-          num_inference_steps: 15, // ลดจาก 20 เป็น 15 เพื่อลด memory
-          guidance_scale: 5.0, // ลดจาก 5.5 เป็น 5.0
-          strength: Math.min(strength || 0.1, 0.2), // ใช้ 0.1-0.2 เท่านั้น (retouching เบามาก)
+          prompt: `Professional photo retouching: ${prompt}. CRITICAL: Preserve exact original composition, layout, and all elements in their current positions. Only enhance lighting quality, color balance, and sharpness. No repositioning, no new elements, no layout changes.`,
+          negative_prompt: 'deformed, distorted, disfigured, bad anatomy, wrong anatomy, extra limbs, mutation, ugly, fat, missing limb, floating limbs, disconnected limbs, out of frame, long body, disgusting, poorly drawn, mutilated, mangled, old, blurry, duplicate, watermark, signature, text, logo, new objects, added elements, different layout, moved items, rearranged composition, altered structure, changed perspective, reimagined scene, synthetic, artificial, fake, unrealistic',
+          num_inference_steps: 20, // เพิ่มเป็น 20 เพื่อคุณภาพดีขึ้น
+          guidance_scale: 7.5, // เพิ่มเป็น 7.5 เพื่อทำตาม prompt มากขึ้น
+          strength: Math.min(Math.max(strength || 0.3, 0.25), 0.35), // ใช้ 0.25-0.35 (sweet spot สำหรับ retouching)
           scheduler: 'DPMSolverMultistep',
           num_outputs: 1,
-          width: 1024, // SDXL รองรับ 1024 พอดี
-          height: 576, // 1024/576 = 1.78:1 ใกล้เคียง aspect ratio ของ collage (1024x585)
+          width: 1024,
+          height: 576,
         },
       }
     ) as string[]

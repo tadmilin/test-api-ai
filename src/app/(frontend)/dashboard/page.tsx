@@ -100,9 +100,9 @@ export default function DashboardPage() {
   const [creating, setCreating] = useState(false)
   
   // Collage options
-  const [useCollage, setUseCollage] = useState(false) // ปิดการใช้ collage เป็นค่า default
+  const [useCollage, setUseCollage] = useState(true) // เปิดการใช้ collage เป็น default (สำหรับโรงแรม)
   const [collageTemplate, setCollageTemplate] = useState<string>('auto')
-  const [enhancementStrength, setEnhancementStrength] = useState(0.1) // เริ่มที่ 0.1 (เบามากที่สุด)
+  const [enhancementStrength, setEnhancementStrength] = useState(0.3) // เริ่มที่ 0.3 (sweet spot)
 
   // View Generated Images
   const [viewingJob, setViewingJob] = useState<Job | null>(null)

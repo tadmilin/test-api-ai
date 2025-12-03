@@ -118,47 +118,39 @@ export async function POST(request: NextRequest) {
       const visionContent: VisionContent = [
         {
           type: 'text',
-          text: `You are an expert at creating image RETOUCHING prompts, NOT image generation.
+          text: `You are a professional photo retouching specialist for luxury hotels and resorts.
 
-CRITICAL INSTRUCTIONS:
-This is for PHOTO RETOUCHING/ENHANCEMENT only. The AI will receive existing photos and must:
-- Keep EXACT same layout, composition, and camera angles
-- Keep EXACT same product positions and arrangements  
-- Keep EXACT same background design
-- ONLY improve quality, lighting, color, and sharpness
+CRITICAL: This is PHOTO EDITING ONLY - PRESERVE THE ORIGINAL IMAGES EXACTLY.
 
-Content Brief:
-- Topic: ${contentTopic || productName}
-- Title/Headline: ${postTitleHeadline || 'Professional product photography'}
-- Content Description: ${contentDescription || productDescription || 'High-quality marketing image'}
-- Product: ${productName}
-- Style Direction: ${mood || 'Professional and modern'}
+The input is a collage/layout of hotel photos. Your job is to create a prompt for subtle enhancement that:
 
-Create an enhancement prompt that focuses ONLY on quality improvements:
+✓ MUST PRESERVE:
+- Exact same layout and composition
+- All original elements in their positions
+- Same camera angles and perspectives
+- Original structure of each photo
+- The collage arrangement
 
-✓ ALLOWED:
-- Enhance lighting (soft, professional studio lighting)
-- Improve color balance and vibrancy
-- Increase sharpness and details
-- Reduce noise and grain
-- Refine shadows and highlights
-- Professional retouching and polish
+✓ ENHANCE ONLY:
+- Lighting quality (warm, inviting, professional)
+- Color grading (rich, luxurious tones)
+- Sharpness and clarity
+- Remove minor imperfections/noise
+- Professional photo finishing
 
-✗ NOT ALLOWED:
-- Moving, resizing, or repositioning ANY element
-- Changing the layout or composition
-- Adding or removing objects
-- Changing camera angles or perspective
-- Altering the background structure
+Content: ${contentTopic || productName}
+Description: ${contentDescription || productDescription || 'Luxury hotel property'}
+Style: ${mood || 'High-end hospitality photography'}
 
-Use phrases like:
-"Enhance the existing photo", "Retouch", "Improve lighting on the current composition", 
-"Professional color grading", "High-end photography quality", "Studio-quality refinement"
+Create a brief prompt (max 150 words) using ONLY these phrases:
+- "Enhance the existing photos"
+- "Professional photo retouching"
+- "Preserve original composition"
+- "Improve lighting and colors"
+- "High-end hotel photography finish"
 
-AVOID phrases like:
-"Create", "Generate", "New composition", "Rearrange", "Add", "Design"
-
-Maximum 200 words. Return ONLY the enhancement prompt in English.`
+FORBIDDEN words: create, generate, new, add, design, reimagine, transform
+Return ONLY the enhancement prompt in English.`
         },
         ...validImages.map((dataUrl: string) => ({
           type: 'image_url' as const,
@@ -174,26 +166,22 @@ Maximum 200 words. Return ONLY the enhancement prompt in English.`
       // No reference images/collage - create basic enhancement prompt
       messages.push({
         role: 'user',
-        content: `You are an expert at creating photo retouching prompts.
+        content: `You are a professional photo retouching specialist.
 
-Content Brief:
-- Topic: ${contentTopic || productName}
-- Title/Headline: ${postTitleHeadline || 'Professional product photography'}
-- Content Description: ${contentDescription || productDescription || 'High-quality marketing image'}
-- Product: ${productName}
-- Style Direction: ${mood || 'Professional and modern'}
+Content: ${contentTopic || productName}
+Description: ${contentDescription || productDescription || 'Professional photography'}
+Style: ${mood || 'High-end professional'}
 
-Create a professional product photography retouching prompt focusing on:
-- High-end studio lighting and soft shadows
-- Professional color grading
-- Enhanced sharpness and detail
-- Clean, luxury aesthetic
-- Natural yet vibrant colors
+Create a brief photo enhancement prompt (max 100 words) that:
+- Enhances lighting and color balance
+- Improves sharpness and clarity
+- Maintains natural look
+- Professional hospitality/commercial quality
 
-Use retouching language: "enhance", "retouch", "refine", "improve quality"
-Avoid generation language: "create", "generate", "design from scratch"
+Use only: "enhance", "retouch", "improve", "refine"
+Avoid: "create", "generate", "new", "add"
 
-Maximum 200 words. Return ONLY the prompt in English.`
+Return ONLY the prompt in English.`
       })
     }
 
