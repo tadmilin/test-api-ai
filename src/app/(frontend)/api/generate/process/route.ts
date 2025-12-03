@@ -145,18 +145,23 @@ export async function POST(request: NextRequest) {
         console.log(`✅ All ${enhancedImageUrls.length} images enhanced successfully`)
       }
       
-      // Step 2: สร้าง Collage จากรูปที่ปรับแล้ว (ถ้ามีมากกว่า 1 รูป และเปิด useCollage)
+      // Step 2: สร้าง Collage จากรูปที่ปรับแล้ว (บังคับเสมอถ้ามีมากกว่า 1 รูป)
       let finalImageUrl: string | null = null
       
-      if (enhancedImageUrls.length > 1 && job.useCollage) {
+      if (enhancedImageUrls.length > 1) {
         console.log('🖼️ Step 2: Creating collage from enhanced images...')
+        
+        // Default template ถ้าไม่ได้เลือก
+        const collageTemplate = job.collageTemplate || 'hero_grid'
+        console.log(`📐 Using template: ${collageTemplate}`)
+        
         try {
           const collageResponse = await fetch(`${baseUrl}/api/collage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               imageUrls: enhancedImageUrls,
-              template: job.collageTemplate || null,
+              template: collageTemplate,
             }),
           })
 

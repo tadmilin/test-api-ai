@@ -72,11 +72,18 @@ export async function POST(request: NextRequest) {
       const imageDataUrls = await Promise.all(
         referenceImageUrls.map(async (url: string) => {
           try {
-            // Extract file ID from URL
-            const fileIdMatch = url.match(/id=([^&]+)/)
-            if (!fileIdMatch) return null
-
-            const fileId = fileIdMatch[1]
+            // Extract file ID from various Google Drive URL formats
+            let fileId = null
+            
+            if (url.includes('id=')) {
+              const match = url.match(/[?&]id=([^&]+)/)
+              fileId = match ? match[1] : null
+            } else if (url.includes('/file/d/')) {
+              const match = url.match(/\/file\/d\/([^/]+)/)
+              fileId = match ? match[1] : null
+            }
+            
+            if (!fileId) return null
 
             // Get file metadata to check mime type
             const metadata = await drive.files.get({

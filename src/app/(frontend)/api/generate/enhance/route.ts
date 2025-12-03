@@ -47,16 +47,28 @@ export async function POST(request: NextRequest) {
     // ตรวจสอบว่าเป็น Google Drive URL หรือไม่
     let processedImageUrl = collageUrl
     
-    if (collageUrl.includes('drive.google.com') || collageUrl.includes('id=')) {
+    if (collageUrl.includes('drive.google.com')) {
       console.log('🔄 Detected Google Drive URL, downloading and uploading to Blob...')
       
-      // Extract file ID from Google Drive URL
-      const fileIdMatch = collageUrl.match(/id=([^&]+)/)
-      if (!fileIdMatch) {
-        throw new Error('Invalid Google Drive URL format')
+      // Extract file ID from various Google Drive URL formats
+      let fileId = null
+      
+      // Format 1: /uc?export=view&id=FILE_ID
+      // Format 2: /open?id=FILE_ID
+      // Format 3: /file/d/FILE_ID/view
+      if (collageUrl.includes('id=')) {
+        const match = collageUrl.match(/[?&]id=([^&]+)/)
+        fileId = match ? match[1] : null
+      } else if (collageUrl.includes('/file/d/')) {
+        const match = collageUrl.match(/\/file\/d\/([^/]+)/)
+        fileId = match ? match[1] : null
       }
       
-      const fileId = fileIdMatch[1]
+      if (!fileId) {
+        throw new Error('Could not extract file ID from Google Drive URL')
+      }
+      
+      console.log('📎 Extracted file ID:', fileId)
       
       // Setup Google Drive API
       const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
