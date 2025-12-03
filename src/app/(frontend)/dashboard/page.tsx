@@ -103,7 +103,7 @@ export default function DashboardPage() {
   // Collage options
   const [useCollage, setUseCollage] = useState(false) // ปิดการใช้ collage เป็นค่า default
   const [collageTemplate, setCollageTemplate] = useState<string>('auto')
-  const [enhancementStrength, setEnhancementStrength] = useState(0.15) // เริ่มที่ 0.15 เพื่อให้ใกล้ต้นฉบับที่สุด
+  const [enhancementStrength, setEnhancementStrength] = useState(0.1) // เริ่มที่ 0.1 (เบามากที่สุด)
 
   // View Generated Images
   const [viewingJob, setViewingJob] = useState<Job | null>(null)
@@ -792,8 +792,8 @@ export default function DashboardPage() {
                   <div className="flex-1">
                     <input
                       type="range"
-                      min="0.15"
-                      max="0.8"
+                      min="0.1"
+                      max="0.5"
                       step="0.05"
                       value={enhancementStrength}
                       onChange={(e) => setEnhancementStrength(parseFloat(e.target.value))}
@@ -811,14 +811,14 @@ export default function DashboardPage() {
                     ค่าที่เลือก: <span className="font-bold text-black">{enhancementStrength.toFixed(2)}</span>
                   </div>
                   <div className="text-xs text-gray-600 bg-white px-3 py-1 rounded-full">
-                    {enhancementStrength <= 0.3 ? '🟢 เบามาก - เกือบเหมือนต้นฉบับ' : 
-                     enhancementStrength <= 0.5 ? '🟡 เบา-ปานกลาง - สมดุล' : 
-                     '🟠 หนัก - เปลี่ยนแปลงมาก'}
+                    {enhancementStrength <= 0.2 ? '🟢 เบามาก - เกือบเหมือนต้นฉบับ 100%' : 
+                     enhancementStrength <= 0.35 ? '🟡 เบา-ปานกลาง - ปรับนิดหน่อย' : 
+                     '🟠 ปานกลาง - เปลี่ยนแปลงพอสมควร'}
                   </div>
                 </div>
                 
                 <p className="text-xs text-gray-600 mt-3 bg-white/50 p-2 rounded">
-                  💡 แนะนำ: 0.15-0.25 สำหรับใกล้เคียงต้นฉบับที่สุด, 0.3-0.5 สำหรับปรับแต่งปานกลาง, 0.6-0.8 สำหรับปรับมาก
+                  💡 แนะนำ: 0.1-0.15 สำหรับ retouching เบาที่สุด (แค่ปรับแสง/สี), 0.2-0.3 สำหรับปรับแต่งเล็กน้อย, 0.4-0.5 สำหรับปรับปานกลาง
                 </p>
               </div>
 
