@@ -183,7 +183,7 @@ export async function POST(request: NextRequest) {
                   auth: process.env.REPLICATE_API_TOKEN 
                 })
                 
-                const polishedResult = await replicate.run(
+                const polishedOutput = await replicate.run(
                   'nightmareai/real-esrgan:f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa',
                   {
                     input: {
@@ -192,9 +192,7 @@ export async function POST(request: NextRequest) {
                       face_enhance: false,
                     },
                   }
-                ) as { output: string }
-                
-                const polishedOutput = polishedResult.output || (polishedResult as any as string)
+                ) as unknown as string
                 
                 console.log('✅ Final polish complete:', polishedOutput)
                 finalImageUrl = polishedOutput

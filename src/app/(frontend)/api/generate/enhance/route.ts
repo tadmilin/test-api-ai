@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
     // ขั้นตอนที่ 1: ESRGAN Pre-Enhance (ทำให้รูปคมก่อน)
     console.log('🔍 Step 1: ESRGAN pre-enhance for clarity...')
     
-    const preEnhanceResult = await replicate.run(
+    const preEnhanceOutput = await replicate.run(
       'nightmareai/real-esrgan:f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa',
       {
         input: {
@@ -119,11 +119,9 @@ export async function POST(request: NextRequest) {
           face_enhance: false,
         },
       }
-    ) as { output: string }
+    ) as unknown as string
 
-    const preEnhanceOutput = preEnhanceResult.output || (preEnhanceResult as any as string)
-
-    console.log('✅ Pre-enhance complete, now sharp and clean')
+    console.log('✅ Pre-enhance complete:', preEnhanceOutput)
 
     // ขั้นตอนที่ 2: SDXL img2img retouching (ปรับแสง สี ตามรูปแบบ)
     console.log('🎨 Step 2: SDXL img2img retouching...')
@@ -153,7 +151,7 @@ export async function POST(request: NextRequest) {
     // ขั้นตอนที่ 3: ESRGAN Post-Enhance (ขยายและเพิ่มความคม)
     console.log('✨ Step 3: ESRGAN post-enhance for final quality...')
     
-    const postEnhanceResult = await replicate.run(
+    const finalEnhancedUrl = await replicate.run(
       'nightmareai/real-esrgan:f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa',
       {
         input: {
@@ -162,10 +160,9 @@ export async function POST(request: NextRequest) {
           face_enhance: false,
         },
       }
-    ) as { output: string }
+    ) as unknown as string
 
-    const finalEnhancedUrl = postEnhanceResult.output || (postEnhanceResult as any as string)
-    console.log('✅ Post-enhance complete, final quality achieved')
+    console.log('✅ Post-enhance complete:', finalEnhancedUrl)
 
     // ดาวน์โหลดรูปสุดท้าย
     const finalImageResponse = await fetch(finalEnhancedUrl)
