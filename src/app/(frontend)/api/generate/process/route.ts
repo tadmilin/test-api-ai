@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
           
           try {
             // Generate content-aware prompt สำหรับแต่ละรูป
-            let enhancePrompt = 'Enhance this affordable hotel/resort photo with natural, realistic lighting. Improve brightness, color balance, clarity, and fine details while keeping the entire structure and layout unchanged. Make it look more inviting and professional without adding fake elements or changing the scene.'
+            let enhancePrompt = 'Professional photo retouch: improve lighting and colors. Keep everything else unchanged.'
             
             if (contentDescription) {
               console.log(`  🔍 Analyzing if image matches content...`)

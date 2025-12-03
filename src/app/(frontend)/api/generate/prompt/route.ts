@@ -139,8 +139,10 @@ Response format:
   "enhancePrompt": "prompt for enhancement"
 }
 
-If relevant → Create content-specific prompt (e.g., "Enhance this breakfast buffet photo, improve food presentation, warm inviting lighting...")
-If NOT relevant → Create general hotel enhancement prompt (e.g., "Enhance this hotel photo with natural, realistic lighting...")`
+If relevant → Create MINIMAL content-specific prompt (e.g., "Retouch: enhance food colors and lighting", "Retouch: brighten room, improve clarity")
+If NOT relevant → Use minimal general prompt (e.g., "Retouch: improve lighting and sharpness")
+
+KEEP PROMPT UNDER 15 WORDS. Focus on: lighting, color, clarity ONLY.`
         },
         ...validImages.map((dataUrl: string) => ({
           type: 'image_url' as const,

@@ -68,11 +68,11 @@ export async function POST(request: NextRequest) {
       {
         input: {
           image: processedImageUrl,
-          prompt: prompt || `Enhance this affordable hotel/resort photo with natural, realistic lighting. Improve brightness, color balance, clarity, and fine details while keeping the entire structure and layout unchanged. Maintain the authentic, welcoming, clean and comfortable atmosphere without redesigning or making it look luxurious or artificial.`,
+          prompt: prompt || `Professional photo retouch: enhance lighting, improve color balance, increase sharpness. Preserve all original elements exactly as they are.`,
           negative_prompt: 'overprocessed, oversharpened, distorted, warped, unrealistic lighting, plastic texture, artificial colors, oversaturated, luxury decoration, five-star hotel, surreal, cartoonish, painting style, fake, synthetic, excessive editing, HDR artifacts, halos, glowing edges',
-          num_inference_steps: 25, // เพิ่มขึ้นเล็กน้อยเพื่อความละเอียด
-          guidance_scale: 5.5, // เพิ่มขึ้นเพื่อให้ prompt มีผลชัดเจนขึ้น
-          strength: Math.min(Math.max(strength || 0.25, 0.20), 0.30), // 0.20-0.30 (ปรับให้เห็นผลชัดขึ้น แต่ยังเป็นธรรมชาติ)
+          num_inference_steps: 20, // ลดลงเพื่อไม่ให้ AI "คิดมาก"
+          guidance_scale: 3.5, // ลดลงเพื่อให้รูปเดิมมีน้ำหนักมากกว่า prompt
+          strength: Math.min(Math.max(strength || 0.10, 0.08), 0.12), // 0.08-0.12 (เปลี่ยนแปลงเพียง 8-12% เท่านั้น!)
           scheduler: 'DPMSolverMultistep',
           num_outputs: 1,
           width: 1024,
