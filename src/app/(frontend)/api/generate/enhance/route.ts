@@ -107,22 +107,23 @@ export async function POST(request: NextRequest) {
       console.log(`Image size: ${imageSizeKB.toFixed(2)} KB`)
     }
 
-    // ใช้ SDXL img2img เพื่อ RETOUCH รูป (ไม่ใช่สร้างใหม่)
-    // Parameters ปรับให้เหมาะกับโรงแรม/รีสอร์ทราคาถูก-กลาง
+    // ใช้ SDXL img2img + Refiner เพื่อ RETOUCH รูป (ไม่ใช่สร้างใหม่)
+    // Refiner จะช่วยให้รายละเอียดดีขึ้นโดยไม่เปลี่ยนโครงสร้าง
+    console.log('🎨 Using SDXL Base + Refiner for high-quality retouching...')
+    
     const output = await replicate.run(
-      'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
+      'stability-ai/sdxl:7762fd07cf82c948538e41f63f77d685e02b063e37e496e96eefd46c929f9bdc',
       {
         input: {
           image: processedImageUrl,
           prompt: prompt || `Professional photo retouch: enhance lighting, improve color balance, increase sharpness. Preserve all original elements exactly as they are.`,
           negative_prompt: 'overprocessed, oversharpened, distorted, warped, unrealistic lighting, plastic texture, artificial colors, oversaturated, luxury decoration, five-star hotel, surreal, cartoonish, painting style, fake, synthetic, excessive editing, HDR artifacts, halos, glowing edges',
-          num_inference_steps: 20, // ลดลงเพื่อไม่ให้ AI "คิดมาก"
-          guidance_scale: 3.5, // ลดลงเพื่อให้รูปเดิมมีน้ำหนักมากกว่า prompt
-          strength: Math.min(Math.max(strength || 0.10, 0.08), 0.12), // 0.08-0.12 (เปลี่ยนแปลงเพียง 8-12% เท่านั้น!)
-          scheduler: 'DPMSolverMultistep',
-          num_outputs: 1,
-          width: 1024,
-          height: 576,
+          num_inference_steps: 25, // เพิ่มขึ้นเพื่อให้ refiner ทำงานได้ดี
+          refine: 'expert_ensemble_refiner', // เปิดใช้ refiner
+          high_noise_frac: 0.8, // refiner จะทำงาน 20% สุดท้าย
+          guidance_scale: 4.0, // ปรับเพื่อให้รูปเดิมมีน้ำหนัก
+          strength: Math.min(Math.max(strength || 0.15, 0.12), 0.20), // 0.12-0.20 เพราะมี refiner ช่วย
+          apply_watermark: false,
         },
       }
     ) as string[]
