@@ -638,16 +638,33 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              {/* Show selected product info */}
+              {/* Show selected sheet row as table with all columns */}
               {selectedSheetRow && (
-                <div className="bg-gray-50 p-4 rounded">
-                  <h3 className="font-semibold mb-2 text-gray-900">สินค้าที่เลือก:</h3>
-                  <p className="text-gray-900">
-                    <strong>ชื่อ:</strong> {selectedSheetRow['Product Name']}
-                  </p>
-                  <p className="text-gray-900">
-                    <strong>รายละเอียด:</strong> {selectedSheetRow['Product Description'] || selectedSheetRow['Description']}
-                  </p>
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl border-2 border-blue-200">
+                  <h3 className="font-bold text-lg mb-4 text-blue-900">📋 ข้อมูลที่เลือกจาก Google Sheet:</h3>
+                  
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full bg-white rounded-lg shadow-sm">
+                      <thead className="bg-blue-600 text-white">
+                        <tr>
+                          <th className="px-4 py-3 text-left font-semibold text-sm">คอลัมน์</th>
+                          <th className="px-4 py-3 text-left font-semibold text-sm">ข้อมูล</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {Object.entries(selectedSheetRow).map(([key, value], index) => (
+                          <tr key={key} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            <td className="px-4 py-3 text-sm font-medium text-gray-700 whitespace-nowrap">
+                              {key}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-900">
+                              {value?.toString() || '-'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
 
