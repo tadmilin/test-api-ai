@@ -11,7 +11,8 @@ export async function POST(request: NextRequest) {
       referenceImageUrls,
       contentTopic,
       postTitleHeadline,
-      contentDescription 
+      contentDescription,
+      analysisOnly // NEW: ถ้าเป็น true = แค่วิเคราะห์รูป ไม่ต้อง full prompt
     } = await request.json()
 
     if (!productName) {
@@ -114,8 +115,38 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // Use GPT-4 Vision to analyze reference images (collage)
-      const visionContent: VisionContent = [
+      // Use GPT-4 Vision to analyze reference images
+      const visionContent: VisionContent = analysisOnly ? [
+        {
+          type: 'text',
+          text: `You are analyzing a hotel/resort photo to determine if it matches the content topic.
+
+Content Topic: "${contentDescription || contentTopic || productName}"
+
+Analyze this photo and answer:
+1. What is in this photo? (room type, area, features)
+2. Does this photo match the content topic?
+
+If the content is about FOOD/RESTAURANT/BREAKFAST but the photo shows a BEDROOM/ENTRANCE/POOL → NOT relevant
+If the content is about ROOMS but the photo shows DINING AREA → NOT relevant
+If they match → IS relevant
+
+Response format:
+{
+  "isRelevant": true/false,
+  "photoType": "bedroom/dining/pool/entrance/etc",
+  "reasoning": "brief explanation",
+  "enhancePrompt": "prompt for enhancement"
+}
+
+If relevant → Create content-specific prompt (e.g., "Enhance this breakfast buffet photo, improve food presentation, warm inviting lighting...")
+If NOT relevant → Create general hotel enhancement prompt (e.g., "Enhance this hotel photo with natural, realistic lighting...")`
+        },
+        ...validImages.map((dataUrl: string) => ({
+          type: 'image_url' as const,
+          image_url: { url: dataUrl, detail: 'high' as const }
+        }))
+      ] : [
         {
           type: 'text',
           text: `You are a professional photo retouching specialist for luxury hotels and resorts.
@@ -190,15 +221,38 @@ Return ONLY the prompt in English.`
       messages,
       max_tokens: 1024,
       temperature: 0.7,
+      response_format: analysisOnly ? { type: 'json_object' } : undefined,
     })
 
-    const prompt = completion.choices[0]?.message?.content || ''
+    const responseText = completion.choices[0]?.message?.content || ''
 
-    if (!prompt) {
-      throw new Error('Empty prompt returned from GPT-4')
+    if (!responseText) {
+      throw new Error('Empty response from GPT-4')
     }
 
-    return NextResponse.json({ prompt })
+    // If analysisOnly, parse JSON response
+    if (analysisOnly) {
+      try {
+        const analysis = JSON.parse(responseText)
+        return NextResponse.json({
+          prompt: analysis.enhancePrompt || '',
+          isRelevant: analysis.isRelevant || false,
+          photoType: analysis.photoType || 'unknown',
+          reasoning: analysis.reasoning || '',
+        })
+      } catch (parseError) {
+        console.error('Failed to parse analysis response:', parseError)
+        // Fallback to general prompt
+        return NextResponse.json({
+          prompt: 'Enhance this affordable hotel/resort photo with natural, realistic lighting. Improve brightness, color balance, clarity, and fine details.',
+          isRelevant: false,
+          photoType: 'unknown',
+          reasoning: 'Failed to parse analysis',
+        })
+      }
+    }
+
+    return NextResponse.json({ prompt: responseText })
   } catch (error) {
     console.error('Error generating prompt:', error)
     

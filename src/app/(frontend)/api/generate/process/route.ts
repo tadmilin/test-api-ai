@@ -60,7 +60,11 @@ export async function POST(request: NextRequest) {
       const enhancedImageUrls: string[] = []
       
       if (referenceUrls.length > 0) {
-        console.log('🎨 Step 1: Enhancing each image individually...')
+        console.log('🎨 Step 1: Analyzing images and generating prompts...')
+        
+        // ใช้ GPT-4 Vision วิเคราะห์แต่ละรูปว่าเกี่ยวข้องกับ content หรือไม่
+        const contentDescription = job.contentDescription || job.contentTopic || ''
+        console.log('Content from sheet:', contentDescription)
         
         // Loop ปรับแต่ละรูป
         for (let i = 0; i < referenceUrls.length; i++) {
@@ -68,12 +72,44 @@ export async function POST(request: NextRequest) {
           console.log(`  📷 Enhancing image ${i + 1}/${referenceUrls.length}...`)
           
           try {
+            // Generate content-aware prompt สำหรับแต่ละรูป
+            let enhancePrompt = 'Enhance this affordable hotel/resort photo with natural, realistic lighting. Improve brightness, color balance, clarity, and fine details while keeping the entire structure and layout unchanged. Make it look more inviting and professional without adding fake elements or changing the scene.'
+            
+            if (contentDescription) {
+              console.log(`  🔍 Analyzing if image matches content...`)
+              const analysisResponse = await fetch(`${baseUrl}/api/generate/prompt`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  productName: job.productName,
+                  productDescription: job.productDescription,
+                  contentTopic: job.contentTopic,
+                  postTitleHeadline: job.postTitleHeadline,
+                  contentDescription: contentDescription,
+                  mood: job.mood,
+                  referenceImageUrls: [imageUrl],
+                }),
+              })
+              
+              if (analysisResponse.ok) {
+                const { prompt } = await analysisResponse.json()
+                if (prompt && prompt.trim()) {
+                  enhancePrompt = prompt
+                  console.log(`  ✅ Using content-aware prompt`)
+                } else {
+                  console.log(`  ⚠️ Empty prompt from API, using default`)
+                }
+              } else {
+                console.log(`  ⚠️ Prompt API failed, using default`)
+              }
+            }
+            
             const enhanceResponse = await fetch(`${baseUrl}/api/generate/enhance`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 collageUrl: imageUrl,
-                prompt: '', // ใช้ fixed prompt ใน enhance route
+                prompt: enhancePrompt, // ใช้ prompt ที่ปรับตาม content
                 strength: job.enhancementStrength || 0.15,
               }),
             })

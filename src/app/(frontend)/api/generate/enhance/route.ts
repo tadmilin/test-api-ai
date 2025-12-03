@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
       {
         input: {
           image: processedImageUrl,
-          prompt: `Enhance this affordable hotel/resort photo with natural, realistic lighting. Improve brightness, color balance, clarity, and fine details while keeping the entire structure and layout unchanged. Maintain the authentic, welcoming, clean and comfortable atmosphere without redesigning or making it look luxurious or artificial.`,
+          prompt: prompt || `Enhance this affordable hotel/resort photo with natural, realistic lighting. Improve brightness, color balance, clarity, and fine details while keeping the entire structure and layout unchanged. Maintain the authentic, welcoming, clean and comfortable atmosphere without redesigning or making it look luxurious or artificial.`,
           negative_prompt: 'overprocessed, oversharpened, distorted, warped, unrealistic lighting, plastic texture, artificial colors, oversaturated, luxury decoration, five-star hotel, surreal, cartoonish, painting style, fake, synthetic, excessive editing, HDR artifacts, halos, glowing edges',
           num_inference_steps: 22, // 20-24 steps (ใช้ค่ากลาง)
           guidance_scale: 4.5, // 4.0-5.0 (ค่ากลาง)
