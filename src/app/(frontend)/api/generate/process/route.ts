@@ -147,39 +147,35 @@ export async function POST(request: NextRequest) {
                   face_enhance: false,
                 },
               })
-                
-                // Wait for completion
-                const polishResult = await replicate.wait(polishPrediction)
-                const polishedOutput = Array.isArray(polishResult.output)
-                  ? polishResult.output[0]
-                  : polishResult.output as string
-                
-                console.log('✅ Final polish complete:', polishedOutput)
-                finalImageUrl = polishedOutput
-                
-                await payload.create({
-                  collection: 'job-logs',
-                  data: {
-                    jobId: jobId,
-                    level: 'info',
-                    message: 'Applied ESRGAN final polish to collage',
-                    timestamp: new Date().toISOString(),
-                  },
-                })
-              } catch (polishError) {
-                console.error('⚠️ Final polish failed, using unpolished collage:', polishError)
-                finalImageUrl = collageUrl
-              }
-            } else {
-              finalImageUrl = collageUrl
+              
+              // Wait for completion
+              const polishResult = await replicate.wait(polishPrediction)
+              const polishedOutput = Array.isArray(polishResult.output)
+                ? polishResult.output[0]
+                : polishResult.output as string
+              
+              console.log('✅ Final polish complete:', polishedOutput)
+              finalImageUrl = polishedOutput
+              
+              await payload.create({
+                collection: 'job-logs',
+                data: {
+                  jobId: jobId,
+                  level: 'info',
+                  message: 'Applied ESRGAN final polish to collage',
+                  timestamp: new Date().toISOString(),
+                },
+              })
+            } catch (polishError) {
+              console.error('⚠️ Final polish failed, using unpolished collage:', polishError)
             }
           } else {
             const errorText = await collageResponse.text()
-            console.error('❌ Final collage creation failed:', errorText)
-            throw new Error(`Final collage failed: ${errorText}`)
+            console.error('❌ Collage creation failed:', errorText)
+            throw new Error(`Collage creation failed: ${errorText}`)
           }
         } catch (collageError) {
-          console.error('💥 Final collage failed:', collageError)
+          console.error('💥 Collage process failed:', collageError)
           throw collageError
         }
       } else {
