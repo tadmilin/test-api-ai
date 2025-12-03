@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Replicate from 'replicate'
 import { put } from '@vercel/blob'
+import { google } from 'googleapis'
 
 export async function POST(request: NextRequest) {
   try {
@@ -39,26 +40,71 @@ export async function POST(request: NextRequest) {
     const replicate = new Replicate({ auth: apiToken })
 
     console.log('Enhancing image with Replicate SDXL...')
-    console.log('Collage URL:', collageUrl)
+    console.log('Input URL:', collageUrl)
     console.log('Prompt:', prompt.substring(0, 100) + '...')
-    console.log('Strength:', strength || 0.15)
+    console.log('Strength:', strength || 0.10)
 
-    // ดาวน์โหลดรูปและตรวจสอบขนาด
-    const checkImageResponse = await fetch(collageUrl)
-    if (!checkImageResponse.ok) {
-      throw new Error('Failed to fetch collage image')
-    }
+    // ตรวจสอบว่าเป็น Google Drive URL หรือไม่
+    let processedImageUrl = collageUrl
     
-    const checkImageBuffer = await checkImageResponse.arrayBuffer()
-    const imageSizeKB = checkImageBuffer.byteLength / 1024
-    console.log(`Original image size: ${imageSizeKB.toFixed(2)} KB`)
-    
-    // ถ้ารูปใหญ่เกิน 2MB ให้ลดขนาดก่อน
-    const processedImageUrl = collageUrl
-    if (imageSizeKB > 2048) {
-      console.log('Image too large, resizing before enhancement...')
-      // ใช้ sharp หรือ resize service (ถ้ามี) หรือส่ง URL ตรงไป
-      // ตอนนี้ส่งไปตรงๆ แต่ลด inference steps
+    if (collageUrl.includes('drive.google.com') || collageUrl.includes('id=')) {
+      console.log('🔄 Detected Google Drive URL, downloading and uploading to Blob...')
+      
+      // Extract file ID from Google Drive URL
+      const fileIdMatch = collageUrl.match(/id=([^&]+)/)
+      if (!fileIdMatch) {
+        throw new Error('Invalid Google Drive URL format')
+      }
+      
+      const fileId = fileIdMatch[1]
+      
+      // Setup Google Drive API
+      const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
+      const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
+
+      if (!serviceAccountEmail || !privateKey) {
+        throw new Error('Google Service Account credentials not configured')
+      }
+
+      const auth = new google.auth.GoogleAuth({
+        credentials: {
+          client_email: serviceAccountEmail,
+          private_key: privateKey.replace(/\\n/gm, '\n').replace(/^"|"$/g, ''),
+        },
+        scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+      })
+
+      const drive = google.drive({ version: 'v3', auth })
+
+      // Download image from Google Drive
+      const response = await drive.files.get(
+        { fileId, alt: 'media', supportsAllDrives: true },
+        { responseType: 'arraybuffer' }
+      )
+
+      const imageBuffer = Buffer.from(response.data as ArrayBuffer)
+      console.log(`Downloaded from Drive: ${(imageBuffer.byteLength / 1024).toFixed(2)} KB`)
+
+      // Upload to Vercel Blob as source image
+      const timestamp = Date.now()
+      const sourceBlob = await put(`jobs/${jobId}/source-${timestamp}.png`, imageBuffer, {
+        access: 'public',
+        contentType: 'image/png',
+      })
+      
+      processedImageUrl = sourceBlob.url
+      console.log('✅ Uploaded to Blob:', processedImageUrl)
+    } else {
+      // ถ้าเป็น URL ปกติ (เช่น Blob URL) ดาวน์โหลดและตรวจสอบขนาด
+      console.log('📥 Downloading image from URL...')
+      const checkImageResponse = await fetch(collageUrl)
+      if (!checkImageResponse.ok) {
+        throw new Error('Failed to fetch image')
+      }
+      
+      const checkImageBuffer = await checkImageResponse.arrayBuffer()
+      const imageSizeKB = checkImageBuffer.byteLength / 1024
+      console.log(`Image size: ${imageSizeKB.toFixed(2)} KB`)
     }
 
     // ใช้ SDXL img2img เพื่อ RETOUCH รูป (ไม่ใช่สร้างใหม่)
