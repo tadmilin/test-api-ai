@@ -110,16 +110,18 @@ export async function POST(request: NextRequest) {
     // ขั้นตอนที่ 1: ESRGAN Pre-Enhance (ทำให้รูปคมก่อน)
     console.log('🔍 Step 1: ESRGAN pre-enhance for clarity...')
     
-    const preEnhanceOutput = await replicate.run(
-      'nightmareai/real-esrgan:f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa',
-      {
-        input: {
-          image: processedImageUrl,
-          scale: 1, // ไม่ขยาย แค่ทำให้คม
-          face_enhance: false,
-        },
-      }
-    ) as unknown as string
+    const preEnhancePrediction = await replicate.predictions.create({
+      version: 'f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa',
+      input: {
+        image: processedImageUrl,
+        scale: 1,
+        face_enhance: false,
+      },
+    })
+    
+    // Wait for completion
+    const preEnhanceResult = await replicate.wait(preEnhancePrediction)
+    const preEnhanceOutput = preEnhanceResult.output as string
 
     console.log('✅ Pre-enhance complete:', preEnhanceOutput)
 
@@ -151,16 +153,18 @@ export async function POST(request: NextRequest) {
     // ขั้นตอนที่ 3: ESRGAN Post-Enhance (ขยายและเพิ่มความคม)
     console.log('✨ Step 3: ESRGAN post-enhance for final quality...')
     
-    const finalEnhancedUrl = await replicate.run(
-      'nightmareai/real-esrgan:f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa',
-      {
-        input: {
-          image: sdxlImageUrl, // ใช้รูปที่ผ่าน SDXL
-          scale: 2, // ขยาย 2 เท่า
-          face_enhance: false,
-        },
-      }
-    ) as unknown as string
+    const postEnhancePrediction = await replicate.predictions.create({
+      version: 'f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa',
+      input: {
+        image: sdxlImageUrl,
+        scale: 2,
+        face_enhance: false,
+      },
+    })
+    
+    // Wait for completion
+    const postEnhanceResult = await replicate.wait(postEnhancePrediction)
+    const finalEnhancedUrl = postEnhanceResult.output as string
 
     console.log('✅ Post-enhance complete:', finalEnhancedUrl)
 

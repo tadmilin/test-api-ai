@@ -183,16 +183,18 @@ export async function POST(request: NextRequest) {
                   auth: process.env.REPLICATE_API_TOKEN 
                 })
                 
-                const polishedOutput = await replicate.run(
-                  'nightmareai/real-esrgan:f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa',
-                  {
-                    input: {
-                      image: collageUrl,
-                      scale: 1, // ไม่ขยาย แค่เพิ่มความคม
-                      face_enhance: false,
-                    },
-                  }
-                ) as unknown as string
+                const polishPrediction = await replicate.predictions.create({
+                  version: 'f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa',
+                  input: {
+                    image: collageUrl,
+                    scale: 1,
+                    face_enhance: false,
+                  },
+                })
+                
+                // Wait for completion
+                const polishResult = await replicate.wait(polishPrediction)
+                const polishedOutput = polishResult.output as string
                 
                 console.log('✅ Final polish complete:', polishedOutput)
                 finalImageUrl = polishedOutput
