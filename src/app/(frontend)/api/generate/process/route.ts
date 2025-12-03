@@ -111,6 +111,7 @@ export async function POST(request: NextRequest) {
                 collageUrl: imageUrl,
                 prompt: enhancePrompt, // ใช้ prompt ที่ปรับตาม content
                 strength: job.enhancementStrength || 0.15,
+                jobId: jobId, // เพิ่ม jobId
               }),
             })
 
