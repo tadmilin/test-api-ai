@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     console.log(`Original image size: ${imageSizeKB.toFixed(2)} KB`)
     
     // ถ้ารูปใหญ่เกิน 2MB ให้ลดขนาดก่อน
-    let processedImageUrl = collageUrl
+    const processedImageUrl = collageUrl
     if (imageSizeKB > 2048) {
       console.log('Image too large, resizing before enhancement...')
       // ใช้ sharp หรือ resize service (ถ้ามี) หรือส่ง URL ตรงไป

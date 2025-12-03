@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Build where clause
+    // Build where clause with proper typing
     const where: any = {}
     if (status) {
       where.status = { equals: status }

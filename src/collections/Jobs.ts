@@ -132,7 +132,7 @@ export const Jobs: CollectionConfig = {
                 { label: 'Grid (2x2)', value: 'grid' },
               ],
               admin: {
-                condition: (data: any) => data.useCollage === true,
+                condition: (data: { useCollage?: boolean }) => data.useCollage === true,
                 description: 'Layout template for collage creation',
               },
             },

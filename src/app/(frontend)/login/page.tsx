@@ -32,7 +32,7 @@ export default function LoginPage() {
       // Login success
       router.push('/dashboard')
       router.refresh()
-    } catch (err) {
+    } catch (_err) {
       setError('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง')
       setLoading(false)
     }

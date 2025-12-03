@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import { useEffect, useState, useCallback } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 
@@ -115,9 +114,26 @@ export default function DashboardPage() {
 
   const [loading, setLoading] = useState(true)
 
+  const checkAuth = useCallback(async () => {
+    try {
+      const res = await fetch('/api/users/me')
+      if (!res.ok) {
+        router.push('/login')
+        return
+      }
+      const userData = await res.json()
+      setCurrentUser(userData.user)
+    } catch (err) {
+      console.error('Auth error:', err)
+      router.push('/login')
+    } finally {
+      setAuthLoading(false)
+    }
+  }, [router])
+
   useEffect(() => {
     checkAuth()
-  }, [])
+  }, [checkAuth])
 
   useEffect(() => {
     if (currentUser) {
@@ -125,23 +141,6 @@ export default function DashboardPage() {
       fetchSpreadsheets()
     }
   }, [currentUser])
-
-  async function checkAuth() {
-    try {
-      const res = await fetch('/api/users/me')
-      if (!res.ok) {
-        // Not authenticated, redirect to login page (not admin panel)
-        router.push('/login')
-        return
-      }
-      const data = await res.json()
-      setCurrentUser(data.user)
-      setAuthLoading(false)
-    } catch (error) {
-      console.error('Auth error:', error)
-      router.push('/login')
-    }
-  }
 
   async function handleLogout() {
     try {

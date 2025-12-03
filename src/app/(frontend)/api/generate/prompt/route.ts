@@ -33,7 +33,17 @@ export async function POST(request: NextRequest) {
     const openai = new OpenAI({ apiKey })
 
     // Build messages with vision if reference images exist
-    const messages: any[] = []
+    type VisionContent = Array<{
+      type: 'text'
+      text: string
+    } | {
+      type: 'image_url'
+      image_url: { url: string; detail: 'high' | 'low' | 'auto' }
+    }>
+
+    type MessageContent = string | VisionContent
+
+    const messages: Array<{ role: 'user'; content: MessageContent }> = []
     
     if (referenceImageUrls && referenceImageUrls.length > 0) {
       // Download images from Google Drive and convert to base64
@@ -105,7 +115,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Use GPT-4 Vision to analyze reference images (collage)
-      const visionContent = [
+      const visionContent: VisionContent = [
         {
           type: 'text',
           text: `You are an expert at creating image RETOUCHING prompts, NOT image generation.
@@ -151,8 +161,8 @@ AVOID phrases like:
 Maximum 200 words. Return ONLY the enhancement prompt in English.`
         },
         ...validImages.map((dataUrl: string) => ({
-          type: 'image_url',
-          image_url: { url: dataUrl, detail: 'high' }
+          type: 'image_url' as const,
+          image_url: { url: dataUrl, detail: 'high' as const }
         }))
       ]
       

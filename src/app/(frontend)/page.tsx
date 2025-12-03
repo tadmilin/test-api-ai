@@ -17,7 +17,7 @@ export default function HomePage() {
           // Not logged in, go to login
           router.push('/login')
         }
-      } catch (error) {
+      } catch (_error) {
         // Error, go to login
         router.push('/login')
       }
