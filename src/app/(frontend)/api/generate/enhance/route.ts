@@ -107,44 +107,63 @@ export async function POST(request: NextRequest) {
       console.log(`Image size: ${imageSizeKB.toFixed(2)} KB`)
     }
 
-    // ใช้ Instruct-Pix2Pix สำหรับ photo editing โดยเฉพาะ
-    // Model นี้ออกแบบมาเพื่อแก้ไขรูปตาม instruction โดยไม่สร้างใหม่
-    console.log('🎨 Using Instruct-Pix2Pix for photo editing...')
+    // ขั้นตอนที่ 1: ESRGAN Pre-Enhance (ทำให้รูปคมก่อน)
+    console.log('🔍 Step 1: ESRGAN pre-enhance for clarity...')
     
-    const output = await replicate.run(
-      'timbrooks/instruct-pix2pix:30c1d0b916a6f8efce20493f5d61ee27491ab2a60437c13c588468b9810ec23f',
+    const preEnhanceResult = await replicate.run(
+      'nightmareai/real-esrgan:f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa',
       {
         input: {
           image: processedImageUrl,
-          prompt: prompt || 'Improve lighting and colors, make it look professional',
-          negative_prompt: 'cartoon, anime, painting, drawing, illustration, sketch, 3d render, unrealistic',
-          num_inference_steps: 20,
-          guidance_scale: 7.5, // image guidance
-          image_guidance_scale: 1.5, // ควบคุมว่าจะเปลี่ยนแปลงรูปต้นฉบับมากน้อยแค่ไหน (1.0-2.0 = น้อย)
+          scale: 1, // ไม่ขยาย แค่ทำให้คม
+          face_enhance: false,
+        },
+      }
+    ) as { output: string }
+
+    const preEnhanceOutput = preEnhanceResult.output || (preEnhanceResult as any as string)
+
+    console.log('✅ Pre-enhance complete, now sharp and clean')
+
+    // ขั้นตอนที่ 2: SDXL img2img retouching (ปรับแสง สี ตามรูปแบบ)
+    console.log('🎨 Step 2: SDXL img2img retouching...')
+    
+    const sdxlOutput = await replicate.run(
+      'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
+      {
+        input: {
+          image: preEnhanceOutput, // ใช้รูปที่ผ่าน ESRGAN แล้ว
+          prompt: prompt || 'Enhance lighting and colors, improve clarity while keeping layout unchanged',
+          negative_prompt: 'overprocessed, oversharpened, distorted, warped, unrealistic lighting, luxury decoration, five-star hotel, artificial colors, fake-looking, cartoonish, painting style, added objects, removed objects',
+          num_inference_steps: 22,
+          guidance_scale: 4.5, // 4.0-5.0
+          strength: Math.min(Math.max(strength || 0.15, 0.12), 0.18), // 0.12-0.18
+          scheduler: 'DPMSolverMultistep',
         },
       }
     ) as string[]
 
-    if (!output || output.length === 0) {
-      throw new Error('No image returned from Replicate')
+    if (!sdxlOutput || sdxlOutput.length === 0) {
+      throw new Error('No output from SDXL')
     }
 
-    const enhancedImageUrl = output[0]
+    const sdxlImageUrl = sdxlOutput[0]
+    console.log('✅ SDXL retouching complete')
 
-    // ดาวน์โหลดรูปที่ตกแต่งแล้ว
-    const imageResponse = await fetch(enhancedImageUrl)
-    if (!imageResponse.ok) {
-      throw new Error('Failed to download enhanced image')
+    // ดาวน์โหลดรูปที่ผ่าน SDXL แล้ว
+    const finalImageResponse = await fetch(sdxlImageUrl)
+    if (!finalImageResponse.ok) {
+      throw new Error('Failed to download SDXL output')
     }
 
-    const imageBuffer = await imageResponse.arrayBuffer()
+    const finalImageBuffer = await finalImageResponse.arrayBuffer()
 
-    // Upload ไป Vercel Blob with unique filename
+    // Upload รูปสุดท้ายไป Vercel Blob
     const timestamp = Date.now()
     const randomSuffix = Math.random().toString(36).substring(2, 8)
     const filename = `enhanced-${timestamp}-${randomSuffix}.png`
     
-    const blob = await put(`jobs/${jobId}/${filename}`, imageBuffer, {
+    const blob = await put(`jobs/${jobId}/${filename}`, finalImageBuffer, {
       access: 'public',
       contentType: 'image/png',
     })

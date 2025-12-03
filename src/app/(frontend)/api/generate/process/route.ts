@@ -162,8 +162,8 @@ export async function POST(request: NextRequest) {
 
           if (collageResponse.ok) {
             const collageData = await collageResponse.json()
-            finalImageUrl = collageData.url
-            console.log('✅ Final collage created:', finalImageUrl)
+            const collageUrl = collageData.url
+            console.log('✅ Final collage created:', collageUrl)
             
             await payload.create({
               collection: 'job-logs',
@@ -174,6 +174,47 @@ export async function POST(request: NextRequest) {
                 timestamp: new Date().toISOString(),
               },
             })
+            
+            // Step 3 (Optional): ESRGAN Final Polish สำหรับ Collage
+            if (enhancedImageUrls.length > 1) {
+              console.log('✨ Step 3: ESRGAN final polish for collage...')
+              try {
+                const replicate = new (await import('replicate')).default({ 
+                  auth: process.env.REPLICATE_API_TOKEN 
+                })
+                
+                const polishedResult = await replicate.run(
+                  'nightmareai/real-esrgan:f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa',
+                  {
+                    input: {
+                      image: collageUrl,
+                      scale: 1, // ไม่ขยาย แค่เพิ่มความคม
+                      face_enhance: false,
+                    },
+                  }
+                ) as { output: string }
+                
+                const polishedOutput = polishedResult.output || (polishedResult as any as string)
+                
+                console.log('✅ Final polish complete:', polishedOutput)
+                finalImageUrl = polishedOutput
+                
+                await payload.create({
+                  collection: 'job-logs',
+                  data: {
+                    jobId: jobId,
+                    level: 'info',
+                    message: 'Applied ESRGAN final polish to collage',
+                    timestamp: new Date().toISOString(),
+                  },
+                })
+              } catch (polishError) {
+                console.error('⚠️ Final polish failed, using unpolished collage:', polishError)
+                finalImageUrl = collageUrl
+              }
+            } else {
+              finalImageUrl = collageUrl
+            }
           } else {
             const errorText = await collageResponse.text()
             console.error('❌ Final collage creation failed:', errorText)
@@ -189,7 +230,7 @@ export async function POST(request: NextRequest) {
         console.log('⏭️ Using first enhanced image:', finalImageUrl)
       }
       
-      // Step 3: Update job status to completed
+      // Step 4: Update job status to completed
       console.log('✅ Job processing complete! Final image:', finalImageUrl)
       
       // Prepare generated images object for different platforms
