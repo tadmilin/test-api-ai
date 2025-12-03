@@ -97,12 +97,12 @@ export async function POST(request: NextRequest) {
       const imageBuffer = Buffer.from(response.data as ArrayBuffer)
       console.log(`Downloaded from Drive: ${(imageBuffer.byteLength / 1024).toFixed(2)} KB`)
 
-      // Resize if too large for GPU (max ~2M pixels = 1440x1440)
+      // Resize if too large for GPU (max ~1.2M pixels for safety)
       const sharp = (await import('sharp')).default
       const metadata = await sharp(imageBuffer).metadata()
       console.log(`Original dimensions: ${metadata.width}x${metadata.height}`)
       
-      const maxPixels = 2000000 // 2M pixels safe limit
+      const maxPixels = 1200000 // 1.2M pixels safe limit
       const currentPixels = (metadata.width || 0) * (metadata.height || 0)
       
       let processedBuffer = imageBuffer
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
         const scale = Math.sqrt(maxPixels / currentPixels)
         const newWidth = Math.floor((metadata.width || 0) * scale)
         const newHeight = Math.floor((metadata.height || 0) * scale)
-        console.log(`📐 Resizing to ${newWidth}x${newHeight} (${(newWidth * newHeight / 1000000).toFixed(1)}M pixels)`)
+        console.log(`📐 Resizing to ${newWidth}x${newHeight} (${(newWidth * newHeight / 1000000).toFixed(2)}M pixels)`)
         
         processedBuffer = await sharp(imageBuffer)
           .resize(newWidth, newHeight, { fit: 'inside', withoutEnlargement: true })
@@ -167,11 +167,11 @@ export async function POST(request: NextRequest) {
       version: '39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
       input: {
         image: preEnhanceOutput,
-        prompt: prompt || 'Enhance lighting and colors, improve clarity while keeping layout unchanged',
-        negative_prompt: 'overprocessed, oversharpened, distorted, warped, unrealistic lighting, luxury decoration, five-star hotel, artificial colors, fake-looking, cartoonish, painting style, added objects, removed objects',
-        num_inference_steps: 22,
-        guidance_scale: 4.5,
-        strength: Math.min(Math.max(strength || 0.15, 0.12), 0.18),
+        prompt: prompt || 'Professional photo enhancement: improve lighting, colors, and clarity. Natural and realistic style. Keep all subjects and layout unchanged.',
+        negative_prompt: 'blurry, low quality, distorted, warped, unrealistic, artificial, overprocessed, oversharpened, luxury hotel, five-star, fake-looking, cartoon, anime, painting, sketch, illustration, CG, 3D render, added objects, removed objects, changed layout',
+        num_inference_steps: 25,
+        guidance_scale: 7.5,
+        strength: Math.min(Math.max(strength || 0.3, 0.25), 0.35),
         scheduler: 'DPMSolverMultistep',
       },
     })

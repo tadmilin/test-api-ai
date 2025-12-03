@@ -14,7 +14,7 @@ class CollageGenerator:
     4. grid - 4 รูปเท่ากันแบบ 2x2
     """
     
-    def __init__(self, canvas_size: Tuple[int, int] = (1792, 1024)):
+    def __init__(self, canvas_size: Tuple[int, int] = (1024, 768)):
         self.canvas_size = canvas_size
         # ถ้า canvas ใหญ่เกิน 1024 ให้ลดลง เพื่อประหยัด memory
         max_dimension = 1024
@@ -23,9 +23,9 @@ class CollageGenerator:
             self.canvas_size = (int(canvas_size[0] * ratio), int(canvas_size[1] * ratio))
             print(f"Canvas resized from {canvas_size} to {self.canvas_size} to save memory")
         
-        self.spacing = 30  # เพิ่มระยะห่างระหว่างรูป (จาก 20 เป็น 30)
-        self.padding = 50  # เพิ่ม padding รอบๆ (จาก 40 เป็น 50)
-        self.bg_color = (255, 255, 255)  # เปลี่ยนพื้นหลังเป็นสีขาวสะอาด (จาก 245,245,250)
+        self.spacing = 8  # ลดระยะห่างระหว่างรูปให้เนียนขึ้น
+        self.padding = 12  # ลด padding รอบๆ ให้กระชับ
+        self.bg_color = (255, 255, 255)  # พื้นหลังสีขาว
         
     def download_image(self, url: str) -> Image.Image:
         """ดาวน์โหลดรูปจาก URL"""
