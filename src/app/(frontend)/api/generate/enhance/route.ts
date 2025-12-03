@@ -150,10 +150,27 @@ export async function POST(request: NextRequest) {
     const sdxlImageUrl = sdxlOutput[0]
     console.log('✅ SDXL retouching complete')
 
-    // ดาวน์โหลดรูปที่ผ่าน SDXL แล้ว
-    const finalImageResponse = await fetch(sdxlImageUrl)
+    // ขั้นตอนที่ 3: ESRGAN Post-Enhance (ขยายและเพิ่มความคม)
+    console.log('✨ Step 3: ESRGAN post-enhance for final quality...')
+    
+    const postEnhanceResult = await replicate.run(
+      'nightmareai/real-esrgan:f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa',
+      {
+        input: {
+          image: sdxlImageUrl, // ใช้รูปที่ผ่าน SDXL
+          scale: 2, // ขยาย 2 เท่า
+          face_enhance: false,
+        },
+      }
+    ) as { output: string }
+
+    const finalEnhancedUrl = postEnhanceResult.output || (postEnhanceResult as any as string)
+    console.log('✅ Post-enhance complete, final quality achieved')
+
+    // ดาวน์โหลดรูปสุดท้าย
+    const finalImageResponse = await fetch(finalEnhancedUrl)
     if (!finalImageResponse.ok) {
-      throw new Error('Failed to download SDXL output')
+      throw new Error('Failed to download final enhanced image')
     }
 
     const finalImageBuffer = await finalImageResponse.arrayBuffer()
