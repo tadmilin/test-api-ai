@@ -194,7 +194,9 @@ export async function POST(request: NextRequest) {
                 
                 // Wait for completion
                 const polishResult = await replicate.wait(polishPrediction)
-                const polishedOutput = polishResult.output as string
+                const polishedOutput = Array.isArray(polishResult.output)
+                  ? polishResult.output[0]
+                  : polishResult.output as string
                 
                 console.log('✅ Final polish complete:', polishedOutput)
                 finalImageUrl = polishedOutput

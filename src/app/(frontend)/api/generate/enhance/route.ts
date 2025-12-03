@@ -142,7 +142,9 @@ export async function POST(request: NextRequest) {
     
     // Wait for completion
     const preEnhanceResult = await replicate.wait(preEnhancePrediction)
-    const preEnhanceOutput = preEnhanceResult.output as string
+    const preEnhanceOutput = Array.isArray(preEnhanceResult.output) 
+      ? preEnhanceResult.output[0] 
+      : preEnhanceResult.output as string
 
     console.log('✅ Pre-enhance complete:', preEnhanceOutput)
 
@@ -185,7 +187,9 @@ export async function POST(request: NextRequest) {
     
     // Wait for completion
     const postEnhanceResult = await replicate.wait(postEnhancePrediction)
-    const finalEnhancedUrl = postEnhanceResult.output as string
+    const finalEnhancedUrl = Array.isArray(postEnhanceResult.output)
+      ? postEnhanceResult.output[0]
+      : postEnhanceResult.output as string
 
     console.log('✅ Post-enhance complete:', finalEnhancedUrl)
 
