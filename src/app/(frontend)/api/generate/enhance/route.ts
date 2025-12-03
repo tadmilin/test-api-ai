@@ -151,28 +151,26 @@ export async function POST(request: NextRequest) {
     // ขั้นตอนที่ 2: SDXL img2img retouching (ปรับแสง สี ตามรูปแบบ)
     console.log('🎨 Step 2: SDXL img2img retouching...')
     
-    const sdxlOutput = await replicate.run(
-      'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
-      {
-        input: {
-          image: preEnhanceOutput, // ใช้รูปที่ผ่าน ESRGAN แล้ว
-          prompt: prompt || 'Enhance lighting and colors, improve clarity while keeping layout unchanged',
-          negative_prompt: 'overprocessed, oversharpened, distorted, warped, unrealistic lighting, luxury decoration, five-star hotel, artificial colors, fake-looking, cartoonish, painting style, added objects, removed objects',
-          num_inference_steps: 22,
-          guidance_scale: 4.5, // 4.0-5.0
-          strength: Math.min(Math.max(strength || 0.15, 0.12), 0.18), // 0.12-0.18
-          scheduler: 'DPMSolverMultistep',
-        },
-      }
-    ) as string[]
+    const sdxlPrediction = await replicate.predictions.create({
+      version: '39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
+      input: {
+        image: preEnhanceOutput,
+        prompt: prompt || 'Enhance lighting and colors, improve clarity while keeping layout unchanged',
+        negative_prompt: 'overprocessed, oversharpened, distorted, warped, unrealistic lighting, luxury decoration, five-star hotel, artificial colors, fake-looking, cartoonish, painting style, added objects, removed objects',
+        num_inference_steps: 22,
+        guidance_scale: 4.5,
+        strength: Math.min(Math.max(strength || 0.15, 0.12), 0.18),
+        scheduler: 'DPMSolverMultistep',
+      },
+    })
 
-    if (!sdxlOutput || sdxlOutput.length === 0) {
-      throw new Error('No output from SDXL')
-    }
+    // Wait for completion
+    const sdxlResult = await replicate.wait(sdxlPrediction)
+    const sdxlImageUrl = Array.isArray(sdxlResult.output)
+      ? sdxlResult.output[0]
+      : sdxlResult.output as string
 
-    const sdxlImageUrl = sdxlOutput[0]
-    console.log('✅ SDXL retouching complete')
-    console.log('DEBUG - SDXL output type:', typeof sdxlImageUrl, 'value:', JSON.stringify(sdxlImageUrl).substring(0, 200))
+    console.log('✅ SDXL retouching complete:', sdxlImageUrl)
 
     // ขั้นตอนที่ 3: ESRGAN Post-Enhance (ขยายและเพิ่มความคม)
     console.log('✨ Step 3: ESRGAN post-enhance for final quality...')
