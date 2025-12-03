@@ -43,17 +43,17 @@ export async function POST(request: NextRequest) {
     console.log('Prompt:', prompt.substring(0, 100) + '...')
     console.log('Strength:', strength || 0.4)
 
-    // ใช้ SDXL img2img เพื่อตกแต่งรูป
+    // ใช้ SDXL img2img เพื่อ RETOUCH รูป (ไม่ใช่สร้างใหม่)
     const output = await replicate.run(
       'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
       {
         input: {
           image: collageUrl,
-          prompt: prompt,
-          negative_prompt: 'low quality, blurry, distorted, ugly, bad anatomy, watermark, text, signature',
-          num_inference_steps: 30,
-          guidance_scale: 7.5,
-          strength: strength || 0.4, // ควบคุมว่าจะเปลี่ยนแปลงมากน้อยแค่ไหน (0.3-0.5 = เบา, 0.6-0.8 = หนัก)
+          prompt: `${prompt}\n\nCRITICAL: Keep EXACT same layout, composition, and positions. Only enhance quality, lighting, and colors. Do NOT move, resize, or rearrange any elements.`,
+          negative_prompt: 'low quality, blurry, distorted, ugly, bad anatomy, watermark, text, signature, duplicate, clone, overlapping, messy, chaotic, glitch, deformed, mutation, changed composition, different layout, moved objects, resized elements, new arrangement, altered structure',
+          num_inference_steps: 20, // ลดเหลือ 20 เพื่อให้เปลี่ยนแปลงน้อยที่สุด
+          guidance_scale: 5.5, // ลดเหลือ 5.5 เพื่อยึดต้นฉบับมากขึ้น
+          strength: Math.min(strength || 0.15, 0.35), // บังคับไม่เกิน 0.35 สำหรับ retouching เท่านั้น
           scheduler: 'DPMSolverMultistep',
           num_outputs: 1,
         },

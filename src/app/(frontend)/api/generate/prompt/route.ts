@@ -108,9 +108,14 @@ export async function POST(request: NextRequest) {
       const visionContent = [
         {
           type: 'text',
-          text: `You are an expert at creating image enhancement prompts for AI.
+          text: `You are an expert at creating image RETOUCHING prompts, NOT image generation.
 
-IMPORTANT: This is for IMAGE ENHANCEMENT, not creating from scratch. The AI will receive a collage of existing photos and enhance/refine them.
+CRITICAL INSTRUCTIONS:
+This is for PHOTO RETOUCHING/ENHANCEMENT only. The AI will receive existing photos and must:
+- Keep EXACT same layout, composition, and camera angles
+- Keep EXACT same product positions and arrangements  
+- Keep EXACT same background design
+- ONLY improve quality, lighting, color, and sharpness
 
 Content Brief:
 - Topic: ${contentTopic || productName}
@@ -119,17 +124,31 @@ Content Brief:
 - Product: ${productName}
 - Style Direction: ${mood || 'Professional and modern'}
 
-I've provided a collage image. Create an enhancement prompt in English that:
-1. KEEPS the existing composition and main elements from the collage
-2. ENHANCES quality, lighting, colors, and details
-3. Incorporates the Content Description theme while maintaining the original photos
-4. Adds professional touches: better lighting, refined colors, subtle improvements
-5. Uses terms like: "enhance", "refine", "professional lighting", "high-end", "luxury feel"
-6. Maximum 250 words, family-friendly language only
+Create an enhancement prompt that focuses ONLY on quality improvements:
 
-The result should look like a professionally enhanced version of the original collage.
+✓ ALLOWED:
+- Enhance lighting (soft, professional studio lighting)
+- Improve color balance and vibrancy
+- Increase sharpness and details
+- Reduce noise and grain
+- Refine shadows and highlights
+- Professional retouching and polish
 
-Return ONLY the enhancement prompt in English, nothing else.`
+✗ NOT ALLOWED:
+- Moving, resizing, or repositioning ANY element
+- Changing the layout or composition
+- Adding or removing objects
+- Changing camera angles or perspective
+- Altering the background structure
+
+Use phrases like:
+"Enhance the existing photo", "Retouch", "Improve lighting on the current composition", 
+"Professional color grading", "High-end photography quality", "Studio-quality refinement"
+
+AVOID phrases like:
+"Create", "Generate", "New composition", "Rearrange", "Add", "Design"
+
+Maximum 200 words. Return ONLY the enhancement prompt in English.`
         },
         ...validImages.map((dataUrl: string) => ({
           type: 'image_url',
@@ -145,7 +164,7 @@ Return ONLY the enhancement prompt in English, nothing else.`
       // No reference images/collage - create basic enhancement prompt
       messages.push({
         role: 'user',
-        content: `You are an expert at creating image enhancement prompts.
+        content: `You are an expert at creating photo retouching prompts.
 
 Content Brief:
 - Topic: ${contentTopic || productName}
@@ -154,14 +173,17 @@ Content Brief:
 - Product: ${productName}
 - Style Direction: ${mood || 'Professional and modern'}
 
-Task: Create a detailed English prompt for professional product photography that will be used for image enhancement. The prompt should:
-1. Focus on the Content Description and Title/Headline concept
-2. Include professional lighting, composition, and styling
-3. Emphasize quality, clarity, and commercial appeal
-4. Be suitable for social media marketing (Facebook, Instagram)
-5. Maximum 250 words, family-friendly language only
+Create a professional product photography retouching prompt focusing on:
+- High-end studio lighting and soft shadows
+- Professional color grading
+- Enhanced sharpness and detail
+- Clean, luxury aesthetic
+- Natural yet vibrant colors
 
-Return ONLY the enhancement prompt in English, nothing else.`
+Use retouching language: "enhance", "retouch", "refine", "improve quality"
+Avoid generation language: "create", "generate", "design from scratch"
+
+Maximum 200 words. Return ONLY the prompt in English.`
       })
     }
 

@@ -16,9 +16,9 @@ class CollageGenerator:
     
     def __init__(self, canvas_size: Tuple[int, int] = (1792, 1024)):
         self.canvas_size = canvas_size
-        self.spacing = 20  # ระยะห่างระหว่างรูป
-        self.padding = 40  # padding รอบๆ canvas
-        self.bg_color = (245, 245, 250)  # สีพื้นหลัง
+        self.spacing = 30  # เพิ่มระยะห่างระหว่างรูป (จาก 20 เป็น 30)
+        self.padding = 50  # เพิ่ม padding รอบๆ (จาก 40 เป็น 50)
+        self.bg_color = (255, 255, 255)  # เปลี่ยนพื้นหลังเป็นสีขาวสะอาด (จาก 245,245,250)
         
     def download_image(self, url: str) -> Image.Image:
         """ดาวน์โหลดรูปจาก URL"""
