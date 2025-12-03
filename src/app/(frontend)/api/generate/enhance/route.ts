@@ -85,9 +85,30 @@ export async function POST(request: NextRequest) {
       const imageBuffer = Buffer.from(response.data as ArrayBuffer)
       console.log(`Downloaded from Drive: ${(imageBuffer.byteLength / 1024).toFixed(2)} KB`)
 
+      // Resize if too large for GPU (max ~2M pixels = 1440x1440)
+      const sharp = (await import('sharp')).default
+      const metadata = await sharp(imageBuffer).metadata()
+      console.log(`Original dimensions: ${metadata.width}x${metadata.height}`)
+      
+      const maxPixels = 2000000 // 2M pixels safe limit
+      const currentPixels = (metadata.width || 0) * (metadata.height || 0)
+      
+      let processedBuffer = imageBuffer
+      if (currentPixels > maxPixels) {
+        const scale = Math.sqrt(maxPixels / currentPixels)
+        const newWidth = Math.floor((metadata.width || 0) * scale)
+        const newHeight = Math.floor((metadata.height || 0) * scale)
+        console.log(`📐 Resizing to ${newWidth}x${newHeight} (${(newWidth * newHeight / 1000000).toFixed(1)}M pixels)`)
+        
+        processedBuffer = await sharp(imageBuffer)
+          .resize(newWidth, newHeight, { fit: 'inside', withoutEnlargement: true })
+          .png()
+          .toBuffer()
+      }
+
       // Upload to Vercel Blob as source image
       const timestamp = Date.now()
-      const sourceBlob = await put(`jobs/${jobId}/source-${timestamp}.png`, imageBuffer, {
+      const sourceBlob = await put(`jobs/${jobId}/source-${timestamp}.png`, processedBuffer, {
         access: 'public',
         contentType: 'image/png',
       })
