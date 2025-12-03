@@ -172,6 +172,7 @@ export async function POST(request: NextRequest) {
 
     const sdxlImageUrl = sdxlOutput[0]
     console.log('✅ SDXL retouching complete')
+    console.log('DEBUG - SDXL output type:', typeof sdxlImageUrl, 'value:', JSON.stringify(sdxlImageUrl).substring(0, 200))
 
     // ขั้นตอนที่ 3: ESRGAN Post-Enhance (ขยายและเพิ่มความคม)
     console.log('✨ Step 3: ESRGAN post-enhance for final quality...')
