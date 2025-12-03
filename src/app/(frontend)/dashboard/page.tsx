@@ -571,7 +571,7 @@ export default function DashboardPage() {
         {/* Create Job Form */}
         {showCreateForm && (
           <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
-            <h2 className="text-xl font-bold mb-4">สร้างงานสร้างภาพใหม่</h2>
+            <h2 className="text-xl font-bold mb-4 text-black">สร้างงานสร้างภาพใหม่</h2>
 
             <div className="space-y-4">
               {/* Select Google Sheet */}
@@ -757,8 +757,8 @@ export default function DashboardPage() {
                         }}
                         className="mr-2"
                       />
-                      <span className="font-medium">{size.label}</span>
-                      <span className="text-gray-500 text-sm ml-2">
+                      <span className="font-medium text-black">{size.label}</span>
+                      <span className="text-black text-sm ml-2">
                         ({size.width}x{size.height}px)
                       </span>
                     </label>

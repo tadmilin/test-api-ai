@@ -36,8 +36,8 @@ export async function POST(request: NextRequest) {
       model: 'dall-e-3',
       prompt: prompt,
       n: 1,
-      size: '1024x1024',
-      quality: 'hd', // เปลี่ยนเป็น HD
+      size: '1792x1024',
+      quality: 'hd',
     })
 
     if (!response.data || response.data.length === 0) {
