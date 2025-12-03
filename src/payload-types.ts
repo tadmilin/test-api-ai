@@ -795,6 +795,18 @@ export interface Job {
   status: 'pending' | 'processing' | 'completed' | 'failed' | 'approved' | 'rejected';
   productName: string;
   productDescription?: string | null;
+  /**
+   * Main topic from Google Sheet (Content_Topic column)
+   */
+  contentTopic?: string | null;
+  /**
+   * Title or headline from Google Sheet (Post_Title_Headline column)
+   */
+  postTitleHeadline?: string | null;
+  /**
+   * Full content description from Google Sheet (Content_Description column)
+   */
+  contentDescription?: string | null;
   mood?: string | null;
   targetPlatforms?: ('facebook' | 'instagram_feed' | 'instagram_story')[] | null;
   referenceImageIds?:
@@ -809,6 +821,18 @@ export interface Job {
         id?: string | null;
       }[]
     | null;
+  /**
+   * Combine multiple images into a collage before enhancement
+   */
+  useCollage?: boolean | null;
+  /**
+   * Layout template for collage creation
+   */
+  collageTemplate?: ('auto' | 'hero_grid' | 'split' | 'masonry' | 'grid') | null;
+  /**
+   * How much the AI modifies the image (0.3 = subtle, 0.8 = heavy)
+   */
+  enhancementStrength?: number | null;
   generatedPrompt?: string | null;
   promptGeneratedAt?: string | null;
   generatedImages?: {
@@ -1480,6 +1504,9 @@ export interface JobsSelect<T extends boolean = true> {
   status?: T;
   productName?: T;
   productDescription?: T;
+  contentTopic?: T;
+  postTitleHeadline?: T;
+  contentDescription?: T;
   mood?: T;
   targetPlatforms?: T;
   referenceImageIds?:
@@ -1494,6 +1521,9 @@ export interface JobsSelect<T extends boolean = true> {
         url?: T;
         id?: T;
       };
+  useCollage?: T;
+  collageTemplate?: T;
+  enhancementStrength?: T;
   generatedPrompt?: T;
   promptGeneratedAt?: T;
   generatedImages?:

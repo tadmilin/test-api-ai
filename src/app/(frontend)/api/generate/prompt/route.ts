@@ -4,7 +4,15 @@ import { google } from 'googleapis'
 
 export async function POST(request: NextRequest) {
   try {
-    const { productName, productDescription, mood, referenceImageUrls } = await request.json()
+    const { 
+      productName, 
+      productDescription, 
+      mood, 
+      referenceImageUrls,
+      contentTopic,
+      postTitleHeadline,
+      contentDescription 
+    } = await request.json()
 
     if (!productName) {
       return NextResponse.json(
@@ -96,28 +104,32 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // Use GPT-4 Vision to analyze reference images
+      // Use GPT-4 Vision to analyze reference images (collage)
       const visionContent = [
         {
           type: 'text',
-          text: `You are an expert at creating image generation prompts for DALL-E.
+          text: `You are an expert at creating image enhancement prompts for AI.
 
-Product Information:
-- Name: ${productName}
-- Description: ${productDescription || 'N/A'}
-- Mood/Style: ${mood || 'Professional and modern'}
+IMPORTANT: This is for IMAGE ENHANCEMENT, not creating from scratch. The AI will receive a collage of existing photos and enhance/refine them.
 
-I've provided reference images. Analyze these images carefully and create a DALL-E prompt that:
-1. Incorporates the visual style, colors, composition, and mood from the reference images
-2. Describes the ${productName} product in this visual style
-3. Includes specific details about background, lighting, atmosphere from the references
-4. Maintains the aesthetic feel of the reference images
-5. Be optimized for DALL-E 3 image generation
-6. Maximum 300 words
-7. IMPORTANT: Use only safe, family-friendly language. Avoid any potentially sensitive words.
-8. Focus on product marketing, artistic style, and commercial photography terms.
+Content Brief:
+- Topic: ${contentTopic || productName}
+- Title/Headline: ${postTitleHeadline || 'Professional product photography'}
+- Content Description: ${contentDescription || productDescription || 'High-quality marketing image'}
+- Product: ${productName}
+- Style Direction: ${mood || 'Professional and modern'}
 
-Return ONLY the prompt text, nothing else.`
+I've provided a collage image. Create an enhancement prompt in English that:
+1. KEEPS the existing composition and main elements from the collage
+2. ENHANCES quality, lighting, colors, and details
+3. Incorporates the Content Description theme while maintaining the original photos
+4. Adds professional touches: better lighting, refined colors, subtle improvements
+5. Uses terms like: "enhance", "refine", "professional lighting", "high-end", "luxury feel"
+6. Maximum 250 words, family-friendly language only
+
+The result should look like a professionally enhanced version of the original collage.
+
+Return ONLY the enhancement prompt in English, nothing else.`
         },
         ...validImages.map((dataUrl: string) => ({
           type: 'image_url',
@@ -130,26 +142,26 @@ Return ONLY the prompt text, nothing else.`
         content: visionContent
       })
     } else {
-      // No reference images, use text-only prompt
+      // No reference images/collage - create basic enhancement prompt
       messages.push({
         role: 'user',
-        content: `You are an expert at creating image generation prompts for DALL-E.
+        content: `You are an expert at creating image enhancement prompts.
 
-Product Information:
-- Name: ${productName}
-- Description: ${productDescription || 'N/A'}
-- Mood/Style: ${mood || 'Professional and modern'}
+Content Brief:
+- Topic: ${contentTopic || productName}
+- Title/Headline: ${postTitleHeadline || 'Professional product photography'}
+- Content Description: ${contentDescription || productDescription || 'High-quality marketing image'}
+- Product: ${productName}
+- Style Direction: ${mood || 'Professional and modern'}
 
-Task: Create a detailed, high-quality English prompt for generating a marketing image for this product. The prompt should:
-1. Be descriptive and specific
-2. Include artistic style, lighting, composition
-3. Be optimized for DALL-E 3 image generation
+Task: Create a detailed English prompt for professional product photography that will be used for image enhancement. The prompt should:
+1. Focus on the Content Description and Title/Headline concept
+2. Include professional lighting, composition, and styling
+3. Emphasize quality, clarity, and commercial appeal
 4. Be suitable for social media marketing (Facebook, Instagram)
-5. Maximum 300 words
-6. IMPORTANT: Use only safe, family-friendly language. Avoid any potentially sensitive words.
-7. Focus on product marketing, artistic style, and commercial photography terms.
+5. Maximum 250 words, family-friendly language only
 
-Return ONLY the prompt text, nothing else.`
+Return ONLY the enhancement prompt in English, nothing else.`
       })
     }
 
@@ -157,16 +169,19 @@ Return ONLY the prompt text, nothing else.`
       model: 'gpt-4o',
       messages,
       max_tokens: 1024,
+      temperature: 0.7,
     })
 
     const prompt = completion.choices[0]?.message?.content || ''
 
+    if (!prompt) {
+      throw new Error('Empty prompt returned from GPT-4')
+    }
+
     return NextResponse.json({ prompt })
   } catch (error) {
     console.error('Error generating prompt:', error)
-    return NextResponse.json(
-      { error: 'Failed to generate prompt' },
-      { status: 500 }
-    )
+    
+   
   }
 }

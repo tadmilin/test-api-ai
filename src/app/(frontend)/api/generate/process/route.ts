@@ -52,7 +52,43 @@ export async function POST(request: NextRequest) {
       // Get base URL for internal API calls
       const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
       
-      // Step 1: Generate prompt with GPT-4
+      // Step 0: สร้าง Collage ถ้ามีรูปอ้างอิงมากกว่า 1 รูป
+      let collageUrl: string | null = null
+      const referenceUrls = job.referenceImageUrls?.map((img) => img.url).filter(Boolean) || []
+      
+      if (referenceUrls.length > 1 && job.useCollage) {
+        console.log('Creating image collage...')
+        try {
+          const collageResponse = await fetch(`${baseUrl}/api/collage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              imageUrls: referenceUrls,
+              template: job.collageTemplate || null,
+            }),
+          })
+
+          if (collageResponse.ok) {
+            const collageData = await collageResponse.json()
+            collageUrl = collageData.url
+            console.log('Collage created:', collageUrl)
+            
+            await payload.create({
+              collection: 'job-logs',
+              data: {
+                jobId: jobId,
+                level: 'info',
+                message: `Created collage with template: ${collageData.template}`,
+                timestamp: new Date().toISOString(),
+              },
+            })
+          }
+        } catch (collageError) {
+          console.error('Collage creation failed, continuing with original images:', collageError)
+        }
+      }
+      
+      // Step 1: Generate prompt with GPT-4 (ใช้ collage ถ้ามี)
       console.log('Generating prompt...')
       const promptResponse = await fetch(`${baseUrl}/api/generate/prompt`, {
         method: 'POST',
@@ -60,8 +96,11 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify({
           productName: job.productName,
           productDescription: job.productDescription,
+          contentTopic: job.contentTopic,
+          postTitleHeadline: job.postTitleHeadline,
+          contentDescription: job.contentDescription,
           mood: job.mood,
-          referenceImageUrls: job.referenceImageUrls?.map((img) => img.url).filter(Boolean) || [],
+          referenceImageUrls: collageUrl ? [collageUrl] : referenceUrls,
         }),
       })
 
@@ -94,32 +133,34 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      // Step 2: Generate image with DALL-E
-      console.log('Generating image with DALL-E...')
-      const imageResponse = await fetch(`${baseUrl}/api/generate/image`, {
+      // Step 2: Enhance image with Replicate (ใช้ collage หรือภาพแรก)
+      console.log('Enhancing image with Replicate...')
+      const enhanceResponse = await fetch(`${baseUrl}/api/generate/enhance`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          collageUrl: collageUrl || referenceUrls[0], // Use collage or first reference image
           prompt,
+          strength: job.enhancementStrength || 0.4, // Default 0.4 for balanced enhancement
           jobId,
         }),
       })
 
-      if (!imageResponse.ok) {
-        const errorText = await imageResponse.text()
-        console.error('Image generation failed:', errorText)
-        throw new Error(`Failed to generate image: ${errorText}`)
+      if (!enhanceResponse.ok) {
+        const errorText = await enhanceResponse.text()
+        console.error('Image enhancement failed:', errorText)
+        throw new Error(`Failed to enhance image: ${errorText}`)
       }
 
-      const { imageUrl } = await imageResponse.json()
-      console.log('Image generated:', imageUrl)
+      const { imageUrl } = await enhanceResponse.json()
+      console.log('Image enhanced:', imageUrl)
 
       await payload.create({
         collection: 'job-logs',
         data: {
           jobId: jobId,
           level: 'info',
-          message: 'Generated image successfully',
+          message: 'Enhanced image successfully',
           timestamp: new Date().toISOString(),
         },
       })

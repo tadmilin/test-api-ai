@@ -48,6 +48,30 @@ export const Jobs: CollectionConfig = {
               type: 'textarea',
             },
             {
+              name: 'contentTopic',
+              type: 'text',
+              label: 'Content Topic',
+              admin: {
+                description: 'Main topic from Google Sheet (Content_Topic column)',
+              },
+            },
+            {
+              name: 'postTitleHeadline',
+              type: 'text',
+              label: 'Post Title / Headline',
+              admin: {
+                description: 'Title or headline from Google Sheet (Post_Title_Headline column)',
+              },
+            },
+            {
+              name: 'contentDescription',
+              type: 'textarea',
+              label: 'Content Description',
+              admin: {
+                description: 'Full content description from Google Sheet (Content_Description column)',
+              },
+            },
+            {
               name: 'mood',
               type: 'text',
             },
@@ -86,6 +110,43 @@ export const Jobs: CollectionConfig = {
                   type: 'text',
                 },
               ],
+            },
+            {
+              name: 'useCollage',
+              type: 'checkbox',
+              label: 'Use Collage',
+              defaultValue: false,
+              admin: {
+                description: 'Combine multiple images into a collage before enhancement',
+              },
+            },
+            {
+              name: 'collageTemplate',
+              type: 'select',
+              label: 'Collage Template',
+              options: [
+                { label: 'Auto-select', value: 'auto' },
+                { label: 'Hero Grid (1 large + 3 small)', value: 'hero_grid' },
+                { label: 'Split (2 halves)', value: 'split' },
+                { label: 'Masonry (Pinterest style)', value: 'masonry' },
+                { label: 'Grid (2x2)', value: 'grid' },
+              ],
+              admin: {
+                condition: (data: any) => data.useCollage === true,
+                description: 'Layout template for collage creation',
+              },
+            },
+            {
+              name: 'enhancementStrength',
+              type: 'number',
+              label: 'Enhancement Strength',
+              defaultValue: 0.4,
+              min: 0.3,
+              max: 0.8,
+              admin: {
+                description: 'How much the AI modifies the image (0.3 = subtle, 0.8 = heavy)',
+                step: 0.05,
+              },
             },
           ],
         },

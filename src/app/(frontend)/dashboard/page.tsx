@@ -99,6 +99,11 @@ export default function DashboardPage() {
   const [mood, setMood] = useState('')
   const [platforms, setPlatforms] = useState<string[]>(['facebook', 'instagram_feed'])
   const [creating, setCreating] = useState(false)
+  
+  // Collage options
+  const [useCollage, setUseCollage] = useState(true)
+  const [collageTemplate, setCollageTemplate] = useState<string>('auto')
+  const [enhancementStrength, setEnhancementStrength] = useState(0.4) // 0.3-0.8, default 0.4
 
   // View Generated Images
   const [viewingJob, setViewingJob] = useState<Job | null>(null)
@@ -346,10 +351,16 @@ export default function DashboardPage() {
         body: JSON.stringify({
           productName: selectedSheetRow['Product Name'] || 'Untitled',
           productDescription: selectedSheetRow['Product Description'] || selectedSheetRow['Description'] || '',
+          contentTopic: selectedSheetRow['Content_Topic'] || '',
+          postTitleHeadline: selectedSheetRow['Post_Title_Headline'] || '',
+          contentDescription: selectedSheetRow['Content_Description'] || '',
           mood,
           targetPlatforms: platforms,
           referenceImageIds: selectedImages.map((img) => ({ imageId: img.id })),
           referenceImageUrls: selectedImages.map((img) => ({ url: img.url })),
+          useCollage: useCollage && selectedImages.length > 1,
+          collageTemplate: collageTemplate === 'auto' ? null : collageTemplate,
+          enhancementStrength,
           status: 'pending',
         }),
       })
@@ -367,7 +378,7 @@ export default function DashboardPage() {
       setShowCreateForm(false)
 
       // Start processing in background
-      setProcessingStatus('🤖 Generating prompt with GPT-4...')
+      setProcessingStatus('🤖 Generating enhancement prompt...')
       
       fetch('/api/generate/process', {
         method: 'POST',
@@ -393,11 +404,11 @@ export default function DashboardPage() {
           // Update status message
           if (currentJob.status === 'processing') {
             if (currentJob.generatedPrompt && !currentJob.generatedImages) {
-              setProcessingStatus('🎨 Generating image with DALL-E 3...')
+              setProcessingStatus('✨ Enhancing image with Replicate AI...')
             } else if (currentJob.generatedImages) {
               setProcessingStatus('📐 Resizing images for platforms...')
             } else {
-              setProcessingStatus('🤖 Generating prompt with GPT-4...')
+              setProcessingStatus('🤖 Generating enhancement prompt...')
             }
           } else if (currentJob.status === 'completed') {
             clearInterval(pollInterval)
@@ -721,6 +732,94 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* Collage Options */}
+              {selectedImages.length > 1 && (
+                <div className="bg-gradient-to-br from-purple-50 to-blue-50 p-6 rounded-xl border-2 border-purple-200">
+                  <h3 className="text-lg font-semibold text-black mb-4">🎨 ตัวเลือก Collage</h3>
+                  
+                  {/* Enable Collage Checkbox */}
+                  <label className="flex items-center mb-4 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useCollage}
+                      onChange={(e) => setUseCollage(e.target.checked)}
+                      className="mr-3 w-5 h-5"
+                    />
+                    <div>
+                      <span className="font-medium text-black text-base">สร้าง Collage ก่อนเจนรูป</span>
+                      <p className="text-sm text-gray-700 mt-1">
+                        รวมรูปหลายรูปเป็น 1 รูป แล้วให้ AI วิเคราะห์องค์ประกอบทั้งหมด
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* Template Selector */}
+                  {useCollage && (
+                    <div>
+                      <label className="block text-sm font-medium text-black mb-2">
+                        เลือกรูปแบบ Layout
+                      </label>
+                      <select
+                        value={collageTemplate}
+                        onChange={(e) => setCollageTemplate(e.target.value)}
+                        className="w-full border-2 border-purple-300 rounded-lg p-3 text-black font-medium bg-white"
+                      >
+                        <option value="auto">🎲 สุ่มอัตโนมัติ</option>
+                        <option value="hero_grid">🎯 Hero + Grid (1 ใหญ่ + 3 เล็ก)</option>
+                        <option value="split">➗ Split (2 รูปแบ่งครึ่ง)</option>
+                        <option value="masonry">🧱 Masonry (4-6 รูปแบบ Pinterest)</option>
+                        <option value="grid">⊞ Grid (4 รูป 2x2)</option>
+                      </select>
+                      <p className="text-xs text-gray-600 mt-2">
+                        💡 แนะนำ: Hero Grid สำหรับเน้นสินค้าหลัก, Grid สำหรับรายละเอียด
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Enhancement Strength Slider */}
+              <div className="bg-gradient-to-br from-green-50 to-teal-50 p-6 rounded-xl border-2 border-green-200">
+                <h3 className="text-lg font-semibold text-black mb-2">✨ ระดับการตกแต่งด้วย AI</h3>
+                <p className="text-sm text-gray-700 mb-4">
+                  ควบคุมว่า AI จะแต่งรูปมากน้อยแค่ไหน (ยิ่งสูงยิ่งเปลี่ยนมาก)
+                </p>
+                
+                <div className="flex items-center gap-4">
+                  <span className="text-sm font-medium text-gray-700 whitespace-nowrap">เบา</span>
+                  <div className="flex-1">
+                    <input
+                      type="range"
+                      min="0.3"
+                      max="0.8"
+                      step="0.05"
+                      value={enhancementStrength}
+                      onChange={(e) => setEnhancementStrength(parseFloat(e.target.value))}
+                      className="w-full h-2 bg-gradient-to-r from-green-200 via-yellow-200 to-orange-300 rounded-lg appearance-none cursor-pointer"
+                      style={{
+                        background: `linear-gradient(to right, #86efac 0%, #fde047 50%, #fdba74 100%)`
+                      }}
+                    />
+                  </div>
+                  <span className="text-sm font-medium text-gray-700 whitespace-nowrap">หนัก</span>
+                </div>
+                
+                <div className="mt-3 flex justify-between items-center">
+                  <div className="text-sm text-gray-600">
+                    ค่าที่เลือก: <span className="font-bold text-black">{enhancementStrength.toFixed(2)}</span>
+                  </div>
+                  <div className="text-xs text-gray-600 bg-white px-3 py-1 rounded-full">
+                    {enhancementStrength <= 0.4 ? '🟢 เบา - ใกล้เคียงต้นฉบับ' : 
+                     enhancementStrength <= 0.6 ? '🟡 ปานกลาง - สมดุล' : 
+                     '🟠 หนัก - เปลี่ยนแปลงมาก'}
+                  </div>
+                </div>
+                
+                <p className="text-xs text-gray-600 mt-3 bg-white/50 p-2 rounded">
+                  💡 แนะนำ: 0.3-0.4 สำหรับรักษารูปต้นฉบับ, 0.5-0.6 สำหรับปรับแต่งปานกลาง, 0.7-0.8 สำหรับปรับมาก
+                </p>
               </div>
 
               {/* Mood */}
