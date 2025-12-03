@@ -88,14 +88,16 @@ export async function POST(request: NextRequest) {
                   contentDescription: contentDescription,
                   mood: job.mood,
                   referenceImageUrls: [imageUrl],
+                  analysisOnly: true,
                 }),
               })
               
               if (analysisResponse.ok) {
-                const { prompt } = await analysisResponse.json()
+                const { prompt, isRelevant, photoType, reasoning } = await analysisResponse.json()
+                console.log(`  📊 Analysis: ${photoType} | Relevant: ${isRelevant} | ${reasoning}`)
                 if (prompt && prompt.trim()) {
                   enhancePrompt = prompt
-                  console.log(`  ✅ Using content-aware prompt`)
+                  console.log(`  ✅ Using ${isRelevant ? 'content-specific' : 'general'} prompt`)
                 } else {
                   console.log(`  ⚠️ Empty prompt from API, using default`)
                 }
