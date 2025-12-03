@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
               throw new Error(`Image ${i + 1} enhancement failed: ${errorText}`)
             }
 
-            const { url: enhancedUrl } = await enhanceResponse.json()
+            const { imageUrl: enhancedUrl } = await enhanceResponse.json()
             enhancedImageUrls.push(enhancedUrl)
             console.log(`    ✅ Image ${i + 1} enhanced:`, enhancedUrl)
             
@@ -190,7 +190,18 @@ export async function POST(request: NextRequest) {
       // Step 3: Update job status to completed
       console.log('✅ Job processing complete! Final image:', finalImageUrl)
       
-      // Update job with final image URL
+      // Prepare generated images object for different platforms
+      const generatedImages: Record<string, { url: string; width: number; height: number }> = {}
+      
+      if (finalImageUrl) {
+        // For now, use the final image for all platforms
+        // TODO: Add resize functionality later
+        generatedImages['facebook'] = { url: finalImageUrl, width: 1200, height: 630 }
+        generatedImages['instagram_feed'] = { url: finalImageUrl, width: 1080, height: 1080 }
+        generatedImages['instagram_story'] = { url: finalImageUrl, width: 1080, height: 1920 }
+      }
+      
+      // Update job with final image URL and generated images
       await payload.update({
         collection: 'jobs',
         id: jobId,
@@ -198,6 +209,7 @@ export async function POST(request: NextRequest) {
           generatedPrompt: 'Enhanced affordable hotel/resort photos with natural, realistic improvements',
           promptGeneratedAt: new Date().toISOString(),
           status: 'completed',
+          generatedImages: generatedImages,
         },
       })
 
