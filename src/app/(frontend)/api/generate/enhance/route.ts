@@ -62,17 +62,17 @@ export async function POST(request: NextRequest) {
     }
 
     // ใช้ SDXL img2img เพื่อ RETOUCH รูป (ไม่ใช่สร้างใหม่)
-    // เพิ่ม strength และ guidance เพื่อให้รักษารูปเดิมไว้ดีขึ้น
+    // Parameters ปรับให้เหมาะกับโรงแรม/รีสอร์ทราคาถูก-กลาง
     const output = await replicate.run(
       'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
       {
         input: {
           image: processedImageUrl,
-          prompt: `Professional photo retouching: ${prompt}. CRITICAL: Preserve exact original composition, layout, and all elements in their current positions. Only enhance lighting quality, color balance, and sharpness. No repositioning, no new elements, no layout changes.`,
-          negative_prompt: 'deformed, distorted, disfigured, bad anatomy, wrong anatomy, extra limbs, mutation, ugly, fat, missing limb, floating limbs, disconnected limbs, out of frame, long body, disgusting, poorly drawn, mutilated, mangled, old, blurry, duplicate, watermark, signature, text, logo, new objects, added elements, different layout, moved items, rearranged composition, altered structure, changed perspective, reimagined scene, synthetic, artificial, fake, unrealistic',
-          num_inference_steps: 20, // เพิ่มเป็น 20 เพื่อคุณภาพดีขึ้น
-          guidance_scale: 7.5, // เพิ่มเป็น 7.5 เพื่อทำตาม prompt มากขึ้น
-          strength: Math.min(Math.max(strength || 0.3, 0.25), 0.35), // ใช้ 0.25-0.35 (sweet spot สำหรับ retouching)
+          prompt: `Enhance this affordable hotel/resort photo with natural, realistic lighting. Improve brightness, color balance, clarity, and fine details while keeping the entire structure and layout unchanged. Maintain the authentic, welcoming, clean and comfortable atmosphere without redesigning or making it look luxurious or artificial.`,
+          negative_prompt: 'overprocessed, oversharpened, distorted, warped, unrealistic lighting, plastic texture, artificial colors, oversaturated, luxury decoration, five-star hotel, surreal, cartoonish, painting style, fake, synthetic, excessive editing, HDR artifacts, halos, glowing edges',
+          num_inference_steps: 22, // 20-24 steps (ใช้ค่ากลาง)
+          guidance_scale: 4.5, // 4.0-5.0 (ค่ากลาง)
+          strength: Math.min(Math.max(strength || 0.15, 0.12), 0.18), // 0.12-0.18 (รักษารูปเดิม 82-88%)
           scheduler: 'DPMSolverMultistep',
           num_outputs: 1,
           width: 1024,
