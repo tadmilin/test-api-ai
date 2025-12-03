@@ -95,8 +95,12 @@ export async function POST(request: NextRequest) {
 
     const imageBuffer = await imageResponse.arrayBuffer()
 
-    // Upload ไป Vercel Blob
-    const blob = await put(`jobs/${jobId}/enhanced.png`, imageBuffer, {
+    // Upload ไป Vercel Blob with unique filename
+    const timestamp = Date.now()
+    const randomSuffix = Math.random().toString(36).substring(2, 8)
+    const filename = `enhanced-${timestamp}-${randomSuffix}.png`
+    
+    const blob = await put(`jobs/${jobId}/${filename}`, imageBuffer, {
       access: 'public',
       contentType: 'image/png',
     })
