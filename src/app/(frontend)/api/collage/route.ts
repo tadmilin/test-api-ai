@@ -24,9 +24,32 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Validate each image URL before processing
+    console.log(`🔍 Validating ${imageUrls.length} image URLs...`)
+    for (let i = 0; i < imageUrls.length; i++) {
+      const url = imageUrls[i]
+      try {
+        console.log(`Checking image ${i + 1}: ${url}`)
+        const response = await fetch(url, { method: 'HEAD' })
+        if (!response.ok) {
+          throw new Error(`Image ${i + 1} is not reachable (status ${response.status})`)
+        }
+        console.log(`✅ Image ${i + 1} validated`)
+      } catch (validateError) {
+        const errorMsg = validateError instanceof Error ? validateError.message : 'Unknown error'
+        console.error(`❌ Image ${i + 1} validation failed:`, errorMsg)
+        return NextResponse.json(
+          { error: `Invalid image URL at index ${i}: ${errorMsg}` },
+          { status: 400 }
+        )
+      }
+    }
+    console.log('✅ All images validated successfully')
+
     const pythonServiceUrl = process.env.PYTHON_SERVICE_URL || 'http://localhost:8000'
 
     // เรียก Python service
+    console.log('🐍 Calling Python collage service...')
     const collageResponse = await fetch(`${pythonServiceUrl}/collage`, {
       method: 'POST',
       headers: {
@@ -40,21 +63,41 @@ export async function POST(request: NextRequest) {
     })
 
     if (!collageResponse.ok) {
+      const status = collageResponse.status
       const errorText = await collageResponse.text()
-      throw new Error(`Python service error: ${errorText}`)
+      console.error(`❌ Python service failed (${status}):`, errorText)
+      
+      // Fallback: return first image if Python service fails
+      console.log('⚠️ Falling back to first image...')
+      return NextResponse.json({
+        url: imageUrls[0],
+        template: 'fallback_single_image',
+        dimensions: { width: 0, height: 0 },
+        warning: 'Collage service unavailable, using first image',
+      })
     }
 
     const collageData = await collageResponse.json()
+    console.log('✅ Python service response received')
 
-    // แปลง base64 เป็น Buffer
-    const imageBuffer = Buffer.from(collageData.image_base64, 'base64')
+    // แปลง base64 เป็น Buffer (with safety)
+    const cleanBase64 = collageData.image_base64.replace(/^data:image\/\w+;base64,/, '')
+    const imageBuffer = Buffer.from(cleanBase64, 'base64')
+    console.log(`📦 Buffer size: ${(imageBuffer.byteLength / 1024).toFixed(2)} KB`)
+
+    // Get MIME type from Python response or default to PNG
+    const mimeType = collageData.mime || 'image/png'
+    console.log(`📄 MIME type: ${mimeType}`)
 
     // Upload ไป Vercel Blob
     const timestamp = Date.now()
-    const blob = await put(`collages/collage-${timestamp}.png`, imageBuffer, {
+    const extension = mimeType.split('/')[1] || 'png'
+    const blob = await put(`collages/collage-${timestamp}.${extension}`, imageBuffer, {
       access: 'public',
-      contentType: 'image/png',
+      contentType: mimeType,
     })
+
+    console.log('✅ Collage uploaded to Blob:', blob.url)
 
     return NextResponse.json({
       url: blob.url,

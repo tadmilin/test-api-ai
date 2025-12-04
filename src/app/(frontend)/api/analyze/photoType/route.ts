@@ -21,34 +21,29 @@ export async function POST(request: NextRequest) {
         content: [
           {
             type: 'text',
-            text: `You are classifying a hotel/resort photo into one of these types:
+            text: `You are classifying a hotel/resort photo into ONE of these exact categories:
 
-- bedroom
-- dining
-- lobby
-- pool
-- bathroom
-- other
+bedroom, bathroom, dining_room, buffet, food_closeup, lobby, entrance, building_exterior, balcony, pool, gym, spa, meeting_room, corridor, garden_nature, beach_resort, mountain_resort, jungle_resort, other
 
-Look at the image and respond in JSON ONLY:
+CRITICAL: Respond with ONLY pure JSON. No markdown, no code blocks, no extra text.
 
 {
-  "detectedType": "bedroom|dining|lobby|pool|bathroom|other",
-  "confidence": 0.0-1.0
+  "detectedType": "one_of_the_categories_above",
+  "confidence": 0.85
 }
 
-Do NOT describe the image. Just classify.`,
+Return ONLY the JSON object.`,
           },
           {
             type: 'image_url',
-            image_url: { url: imageUrl, detail: 'low' },
+            image_url: { url: imageUrl, detail: 'high' },
           },
         ],
       },
     ]
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4o',
       messages,
       max_tokens: 200,
       temperature: 0,
@@ -59,12 +54,32 @@ Do NOT describe the image. Just classify.`,
     let confidence: number | undefined
 
     try {
+      // Try direct JSON parse first
       const parsed = JSON.parse(content)
       detectedType = parsed.detectedType
       confidence = parsed.confidence
     } catch (parseError) {
-      console.error('Failed to parse GPT Vision response:', content)
-      detectedType = undefined
+      // Fallback: extract JSON using regex
+      console.warn('Direct JSON parse failed, attempting regex extraction...')
+      try {
+        const jsonMatch = content.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0])
+          detectedType = parsed.detectedType
+          confidence = parsed.confidence
+        } else {
+          console.error('No JSON object found in response:', content)
+          detectedType = undefined
+        }
+      } catch (regexError) {
+        console.error('Failed to parse GPT Vision response:', content)
+        detectedType = undefined
+      }
+    }
+
+    // Set default confidence if missing
+    if (confidence === undefined || confidence === null) {
+      confidence = 0.50
     }
 
     console.log('✅ GPT Vision result:', { detectedType, confidence })
