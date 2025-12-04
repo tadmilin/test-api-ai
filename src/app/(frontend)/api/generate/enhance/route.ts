@@ -20,12 +20,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'jobId is required' }, { status: 400 })
     }
 
-    const enhancementPrompt = prompt
+    const enhancementPrompt =
+      typeof prompt === 'string' && prompt.trim().length > 0
+        ? prompt
+        : 'Professional hotel and resort photo retouch: improve lighting, colors, depth, and clarity while preserving realism and composition.'
 
     console.log('🎨 Enhancing image with SDXL...')
     console.log('[ENHANCE] imageUrl =', imageUrl)
-    console.log('📝 Prompt:', enhancementPrompt)
-    console.log('Strength:', strength || 0.30)
+    console.log('📝 Prompt:', enhancementPrompt.substring(0, 120) + '...')
+    console.log('Strength:', strength || 0.55)
     
     // 🔍 CRITICAL: ยืนยันว่ารูปที่ยิงเข้าโมเดลคือรูปใน Drive จริง
     console.log('⚠️ VERIFY THIS URL IN BROWSER - Should show original Drive image!')
@@ -143,11 +146,11 @@ export async function POST(request: NextRequest) {
     console.log('🎨 SDXL img2img subtle retouching...')
     console.log('🚀 Sending to SDXL img2img model...')
     console.log('📸 Final image URL sent to model:', processedImageUrl)
-    console.log('📝 Prompt:', prompt.substring(0, 100) + '...')
+    console.log('📝 Prompt:', enhancementPrompt.substring(0, 120) + '...')
     
-    const finalStrength = Math.min(Math.max(strength || 0.30, 0.25), 0.40)
-    console.log('🎛️ Strength (from job config):', strength)
-    console.log('🎛️ Final Strength (after clamp):', finalStrength)
+    const finalStrength = Math.min(Math.max(strength || 0.55, 0.35), 0.70)
+    console.log('🏛️ Strength (requested):', strength)
+    console.log('🏛️ Strength (clamped):', finalStrength)
     
     const sdxlPrediction = await replicate.predictions.create({
       // SDXL img2img model (stability-ai/sdxl)

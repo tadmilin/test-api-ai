@@ -139,45 +139,47 @@ export async function POST(request: NextRequest) {
               detectedPhotoType = ((job as any).photoTypeFromSheet as PhotoType) || 'generic'
             }
             
-            // ✨ Step 1b: Generate prompt with GPT
-            console.log('📝 Generating enhancement prompt...')
+            // 📝 Step: Dynamic prompt per image
+            console.log(`📝 Generating dynamic enhancement prompt for image ${i + 1}/${referenceUrls.length}...`)
             
-            let enhancementPrompt = 'Professional photo retouch: improve lighting, colors, clarity'
+            let enhancementPrompt = 'Professional hotel photo retouch: improve lighting, colors, and clarity naturally.'
             
             try {
               const promptRes = await fetch(`${baseUrl}/api/generate/prompt`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  productName: job.productName,
-                  contentTopic: job.contentTopic || job.contentDescription,
-                  contentDescription: job.contentDescription,
+                  productName: (job as any).productName || 'Hotel / Resort',
+                  contentTopic: (job as any).contentTopic || (job as any).contentDescription,
+                  contentDescription: (job as any).contentDescription,
                   referenceImageUrls: [imageUrl],
-                  photoType: detectedPhotoType,
+                  analysisOnly: false,
                 }),
               })
 
               if (promptRes.ok) {
-                const { enhancePrompt } = await promptRes.json()
-                if (enhancePrompt) {
-                  enhancementPrompt = enhancePrompt
-                  console.log('✅ Generated prompt:', enhancementPrompt)
+                const data = await promptRes.json()
+                if (data.prompt) {
+                  enhancementPrompt = data.prompt
+                  console.log('✅ Dynamic prompt:', enhancementPrompt.substring(0, 120) + '...')
+                } else {
+                  console.warn('⚠️ Prompt API response has no prompt field, using default fallback')
                 }
               } else {
-                console.warn('⚠️ Prompt generation failed, using default')
+                console.warn('⚠️ Prompt API request failed, using default fallback')
               }
             } catch (promptError) {
               console.error('💥 Prompt generation error:', promptError)
             }
             
-            // ✨ Step 1c: Enhance with generated prompt
+            // ✨ Step: Enhance with dynamic prompt
             const enhanceResponse = await fetch(`${baseUrl}/api/generate/enhance`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 imageUrl,
                 prompt: enhancementPrompt,
-                strength: job.enhancementStrength || 0.30,
+                strength: job.enhancementStrength || 0.55,
                 jobId: jobId,
               }),
             })
@@ -214,6 +216,9 @@ export async function POST(request: NextRequest) {
         }
         
         console.log(`\n✅ Enhanced ${enhancedImageUrls.length} images`)
+        
+        // Store enhancement prompts metadata
+        const allPromptsUsed = enhancedImageUrls.map((_, idx) => `Image ${idx + 1}: Dynamic prompt generated`).join('; ')
         
         // Step 2: สร้าง Collage จากรูปที่แต่งแล้ว
         console.log('\n🧩 Step 2: Creating collage from enhanced images...')
@@ -296,32 +301,34 @@ export async function POST(request: NextRequest) {
           detectedPhotoType = ((job).photoTypeFromSheet as PhotoType) || 'generic'
         }
         
-        // ✨ Generate prompt with GPT
-        console.log('📝 Generating enhancement prompt...')
+        // 📝 Step: Dynamic prompt for single image
+        console.log('📝 Generating dynamic enhancement prompt for single image...')
         
-        let enhancementPrompt = 'Professional photo retouch: improve lighting, colors, clarity'
+        let enhancementPrompt = 'Professional hotel photo retouch: improve lighting, colors, and clarity naturally.'
         
         try {
           const promptRes = await fetch(`${baseUrl}/api/generate/prompt`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              productName: job.productName,
-              contentTopic: job.contentTopic || job.contentDescription,
-              contentDescription: job.contentDescription,
+              productName: (job as any).productName || 'Hotel / Resort',
+              contentTopic: (job as any).contentTopic || (job as any).contentDescription,
+              contentDescription: (job as any).contentDescription,
               referenceImageUrls: [singleImageUrl],
-              photoType: detectedPhotoType,
+              analysisOnly: false,
             }),
           })
 
           if (promptRes.ok) {
-            const { enhancePrompt } = await promptRes.json()
-            if (enhancePrompt) {
-              enhancementPrompt = enhancePrompt
-              console.log('✅ Generated prompt:', enhancementPrompt)
+            const data = await promptRes.json()
+            if (data.prompt) {
+              enhancementPrompt = data.prompt
+              console.log('✅ Dynamic prompt:', enhancementPrompt.substring(0, 120) + '...')
+            } else {
+              console.warn('⚠️ Prompt API response has no prompt field, using default fallback')
             }
           } else {
-            console.warn('⚠️ Prompt generation failed, using default')
+            console.warn('⚠️ Prompt API request failed, using default fallback')
           }
         } catch (promptError) {
           console.error('💥 Prompt generation error:', promptError)
@@ -333,7 +340,7 @@ export async function POST(request: NextRequest) {
           body: JSON.stringify({
             imageUrl: singleImageUrl,
             prompt: enhancementPrompt,
-            strength: job.enhancementStrength || 0.30,
+            strength: job.enhancementStrength || 0.55,
             jobId: jobId,
           }),
         })
@@ -367,7 +374,7 @@ export async function POST(request: NextRequest) {
         collection: 'jobs',
         id: jobId,
         data: {
-          generatedPrompt: 'Enhanced affordable hotel/resort photos with natural, realistic improvements',
+          generatedPrompt: `Dynamic prompts generated for ${referenceUrls.length} image(s) using GPT-4 Vision analysis`,
           promptGeneratedAt: new Date().toISOString(),
           status: 'completed',
           generatedImages: generatedImages,

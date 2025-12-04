@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
       contentTopic,
       contentDescription,
       referenceImageUrls,
-      photoType, // bedroom, dining, lobby, pool, bathroom, generic
+      analysisOnly, // true = return JSON analysis, false = return prompt only
     } = await request.json()
 
     if (!productName) {
@@ -119,37 +119,62 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // Dynamic prompt based on photoType
-      let promptInstruction = ''
-      
-      switch (photoType) {
-        case 'bedroom':
-          promptInstruction = 'Create a SHORT retouching prompt for a hotel bedroom photo. Focus: warm lighting, cozy ambiance, clean bedding, natural brightness. Max 12 words.'
-          break
-        case 'dining':
-          promptInstruction = 'Create a SHORT retouching prompt for a restaurant/dining photo. Focus: appetizing food colors, warm lighting, inviting atmosphere. Max 12 words.'
-          break
-        case 'lobby':
-          promptInstruction = 'Create a SHORT retouching prompt for a hotel lobby photo. Focus: welcoming lighting, architectural clarity, elegant atmosphere. Max 12 words.'
-          break
-        case 'pool':
-          promptInstruction = 'Create a SHORT retouching prompt for a pool/outdoor photo. Focus: vibrant water, bright natural light, tropical feel. Max 12 words.'
-          break
-        case 'bathroom':
-          promptInstruction = 'Create a SHORT retouching prompt for a bathroom photo. Focus: clean bright lighting, crisp details, spa-like quality. Max 12 words.'
-          break
-        default:
-          promptInstruction = 'Create a SHORT retouching prompt for a hotel photo. Focus: lighting, color balance, clarity. Max 12 words.'
-      }
-      
-      const visionContent: VisionContent = [
+      // Create vision content based on analysisOnly flag
+      const visionContent: VisionContent = analysisOnly ? [
         {
           type: 'text',
-          text: `${promptInstruction}
+          text: `You are analyzing a hotel or resort related photo.
+
+Your job is to analyze the image and prepare a dynamic enhancement plan.
+
+Extract and return ONLY JSON with the following structure:
+{
+  "photoType": "one of: bedroom, bathroom, lobby, entrance, building_exterior, dining_room, buffet, food_closeup, pool, gym, spa, meeting_room, corridor, balcony, nature_garden, beach_resort, mountain_resort, jungle_resort, other",
+  "issues": ["list of visual issues, e.g. flat lighting, washed out colors, empty room, noisy, low contrast"],
+  "enhanceIdeas": ["what to improve to make it premium and inviting"],
+  "propsToAdd": ["optional subtle props or ambience, e.g. vases, table linens, plants, candles, menu signs"],
+  "finalPrompt": "an 80-150 word English prompt describing how to enhance THIS specific photo only, preserving layout and realism"
+}
+
+Rules for finalPrompt:
+- Preserve the existing composition and camera angle
+- Focus on realistic lighting, color grading, clarity, and ambience
+- You may suggest subtle additions like table decor, plants, soft lighting, reflections
+- Do NOT mention 'create a new image', 'generate new', or 'redesign'
+- Keep it natural, suitable for high-end hotel/resort photography.`
+        },
+        ...validImages.map((dataUrl: string) => ({
+          type: 'image_url' as const,
+          image_url: { url: dataUrl, detail: 'high' as const }
+        }))
+      ] : [
+        {
+          type: 'text',
+          text: `You are a professional photo retouching and enhancement specialist for hotels and resorts.
+
+You will receive one or more images of:
+- bedrooms, bathrooms, lobby, entrance, building exteriors,
+- dining rooms, buffet lines, food close-ups,
+- pools, gyms, spas, meeting rooms,
+- nature and resort exteriors (beach, mountain, jungle, garden).
+
+Your task:
+1. Analyze the image(s)
+2. Decide what to improve to make them look premium and inviting
+3. Create ONE final English enhancement prompt, 80-150 words, that:
+   - PRESERVES the existing layout and camera angles
+   - ENHANCES lighting (soft, warm, hotel-style if appropriate)
+   - IMPROVES colors, clarity, depth, and texture
+   - MAKES food look more appetizing (if food is present)
+   - CAN suggest subtle additions like table decor, plants, menu signs, candles, soft reflections, but must remain realistic.
+
+Forbidden:
+- Do NOT say 'create a new image', 'generate new', 'redesign', 'replace the scene'
+- Do NOT change the fundamental structure of the room.
 
 Content: ${contentTopic || contentDescription || productName}
 
-Return ONLY the prompt. Use words: enhance, retouch, improve, brighten. NO collage, layout, composition, arrangement, design.`
+Return ONLY the final prompt (plain text).`
         },
         ...validImages.map((dataUrl: string) => ({
           type: 'image_url' as const,
@@ -162,40 +187,23 @@ Return ONLY the prompt. Use words: enhance, retouch, improve, brighten. NO colla
         content: visionContent
       })
     } else {
-      // No reference images - create dynamic prompt based on photoType
-      let promptInstruction = ''
-      
-      switch (photoType) {
-        case 'bedroom':
-          promptInstruction = 'Create SHORT retouching prompt for hotel bedroom: warm lighting, cozy feel, clean. Max 12 words.'
-          break
-        case 'dining':
-          promptInstruction = 'Create SHORT retouching prompt for restaurant: appetizing colors, warm light. Max 12 words.'
-          break
-        case 'lobby':
-          promptInstruction = 'Create SHORT retouching prompt for hotel lobby: welcoming light, clarity. Max 12 words.'
-          break
-        case 'pool':
-          promptInstruction = 'Create SHORT retouching prompt for pool area: vibrant water, bright light. Max 12 words.'
-          break
-        case 'bathroom':
-          promptInstruction = 'Create SHORT retouching prompt for bathroom: bright clean lighting. Max 12 words.'
-          break
-        default:
-          promptInstruction = 'Create SHORT retouching prompt: lighting, color, clarity. Max 12 words.'
-      }
+      // No reference images - create basic prompt
+      const promptText = analysisOnly 
+        ? `Analyze a hotel/resort photo and return JSON with: photoType, issues, enhanceIdeas, propsToAdd, finalPrompt (80-150 words).`
+        : `Create a professional hotel photo enhancement prompt (80-150 words) for: ${contentTopic || productName}. Focus on realistic lighting, color, clarity improvements. Preserve existing composition.`
       
       messages.push({
         role: 'user',
-        content: `${promptInstruction}\n\nContent: ${contentTopic || productName}\n\nReturn ONLY the prompt. Use: enhance, retouch, improve, brighten.`
+        content: promptText
       })
     }
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages,
-      max_tokens: 150,
+      max_tokens: analysisOnly ? 1024 : 300,
       temperature: 0.7,
+      response_format: analysisOnly ? { type: 'json_object' } : undefined,
     })
 
     const responseText = completion.choices[0]?.message?.content || ''
@@ -204,7 +212,32 @@ Return ONLY the prompt. Use words: enhance, retouch, improve, brighten. NO colla
       throw new Error('Empty response from GPT-4')
     }
 
-    return NextResponse.json({ enhancePrompt: responseText.trim() })
+    // If analysisOnly, parse JSON and return structured data
+    if (analysisOnly) {
+      try {
+        const analysis = JSON.parse(responseText)
+        return NextResponse.json({
+          prompt: analysis.finalPrompt || '',
+          photoType: analysis.photoType || 'other',
+          issues: analysis.issues || [],
+          enhanceIdeas: analysis.enhanceIdeas || [],
+          propsToAdd: analysis.propsToAdd || [],
+        })
+      } catch (parseError) {
+        console.error('Failed to parse analysis response:', parseError)
+        // Fallback
+        return NextResponse.json({
+          prompt: 'Enhance this hotel photo with natural, realistic lighting. Improve brightness, color balance, clarity, and fine details.',
+          photoType: 'other',
+          issues: [],
+          enhanceIdeas: [],
+          propsToAdd: [],
+        })
+      }
+    }
+
+    // Normal mode - return prompt only
+    return NextResponse.json({ prompt: responseText.trim() })
   } catch (error) {
     console.error('Error generating prompt:', error)
     
