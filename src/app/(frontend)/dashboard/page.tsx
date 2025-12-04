@@ -95,14 +95,7 @@ export default function DashboardPage() {
   const [driveFolderId, setDriveFolderId] = useState<string>('')
   const [driveImages, setDriveImages] = useState<DriveImage[]>([])
   const [selectedImages, setSelectedImages] = useState<DriveImage[]>([])
-  const [mood, setMood] = useState('')
-  const [platforms, setPlatforms] = useState<string[]>(['facebook', 'instagram_feed'])
   const [creating, setCreating] = useState(false)
-  
-  // Collage options
-  const [useCollage, setUseCollage] = useState(true) // เปิดการใช้ collage เป็น default (สำหรับโรงแรม)
-  const [collageTemplate, setCollageTemplate] = useState<string>('auto')
-  const [enhancementStrength, setEnhancementStrength] = useState(0.15) // เริ่มที่ 0.15 (SDXL + Refiner)
 
   // View Generated Images
   const [viewingJob, setViewingJob] = useState<Job | null>(null)
@@ -353,13 +346,9 @@ export default function DashboardPage() {
           contentTopic: selectedSheetRow['Content_Topic'] || '',
           postTitleHeadline: selectedSheetRow['Post_Title_Headline'] || '',
           contentDescription: selectedSheetRow['Content_Description'] || '',
-          mood,
-          targetPlatforms: platforms,
+          photoTypeFromSheet: selectedSheetRow['Photo_Type'] || undefined,
           referenceImageIds: selectedImages.map((img) => ({ imageId: img.id })),
           referenceImageUrls: selectedImages.map((img) => ({ url: img.url })),
-          useCollage: useCollage && selectedImages.length > 1,
-          collageTemplate: collageTemplate === 'auto' ? null : collageTemplate,
-          enhancementStrength,
           status: 'pending',
         }),
       })
@@ -750,134 +739,14 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              {/* Collage Options */}
-              {selectedImages.length > 1 && (
-                <div className="bg-gradient-to-br from-purple-50 to-blue-50 p-6 rounded-xl border-2 border-purple-200">
-                  <h3 className="text-lg font-semibold text-black mb-4">🎨 ตัวเลือก Collage</h3>
-                  
-                  {/* Enable Collage Checkbox */}
-                  <label className="flex items-center mb-4 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={useCollage}
-                      onChange={(e) => setUseCollage(e.target.checked)}
-                      className="mr-3 w-5 h-5"
-                    />
-                    <div>
-                      <span className="font-medium text-black text-base">สร้าง Collage ก่อนเจนรูป</span>
-                      <p className="text-sm text-gray-700 mt-1">
-                        รวมรูปหลายรูปเป็น 1 รูป แล้วให้ AI วิเคราะห์องค์ประกอบทั้งหมด
-                      </p>
-                    </div>
-                  </label>
-
-                  {/* Template Selector */}
-                  {useCollage && (
-                    <div>
-                      <label className="block text-sm font-medium text-black mb-2">
-                        เลือกรูปแบบ Layout
-                      </label>
-                      <select
-                        value={collageTemplate}
-                        onChange={(e) => setCollageTemplate(e.target.value)}
-                        className="w-full border-2 border-purple-300 rounded-lg p-3 text-black font-medium bg-white"
-                      >
-                        <option value="auto">🎲 สุ่มอัตโนมัติ</option>
-                        <option value="hero_grid">🎯 Hero + Grid (1 ใหญ่ + 3 เล็ก)</option>
-                        <option value="split">➗ Split (2 รูปแบ่งครึ่ง)</option>
-                        <option value="masonry">🧱 Masonry (4-6 รูปแบบ Pinterest)</option>
-                        <option value="grid">⊞ Grid (4 รูป 2x2)</option>
-                      </select>
-                      <p className="text-xs text-gray-600 mt-2">
-                        💡 แนะนำ: Hero Grid สำหรับเน้นสินค้าหลัก, Grid สำหรับรายละเอียด
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Enhancement Strength Slider */}
-              <div className="bg-gradient-to-br from-green-50 to-teal-50 p-6 rounded-xl border-2 border-green-200">
-                <h3 className="text-lg font-semibold text-black mb-2">✨ ระดับการตกแต่งด้วย AI</h3>
-                <p className="text-sm text-gray-700 mb-4">
-                  ควบคุมว่า AI จะแต่งรูปมากน้อยแค่ไหน (ยิ่งสูงยิ่งเปลี่ยนมาก)
-                </p>
-                
-                <div className="flex items-center gap-4">
-                  <span className="text-sm font-medium text-gray-700 whitespace-nowrap">เบา</span>
-                  <div className="flex-1">
-                    <input
-                      type="range"
-                      min="0.1"
-                      max="0.5"
-                      step="0.05"
-                      value={enhancementStrength}
-                      onChange={(e) => setEnhancementStrength(parseFloat(e.target.value))}
-                      className="w-full h-2 bg-gradient-to-r from-green-200 via-yellow-200 to-orange-300 rounded-lg appearance-none cursor-pointer"
-                      style={{
-                        background: `linear-gradient(to right, #86efac 0%, #fde047 50%, #fdba74 100%)`
-                      }}
-                    />
-                  </div>
-                  <span className="text-sm font-medium text-gray-700 whitespace-nowrap">หนัก</span>
-                </div>
-                
-                <div className="mt-3 flex justify-between items-center">
-                  <div className="text-sm text-gray-600">
-                    ค่าที่เลือก: <span className="font-bold text-black">{enhancementStrength.toFixed(2)}</span>
-                  </div>
-                  <div className="text-xs text-gray-600 bg-white px-3 py-1 rounded-full">
-                    {enhancementStrength <= 0.2 ? '🟢 เบามาก - เกือบเหมือนต้นฉบับ 100%' : 
-                     enhancementStrength <= 0.35 ? '🟡 เบา-ปานกลาง - ปรับนิดหน่อย' : 
-                     '🟠 ปานกลาง - เปลี่ยนแปลงพอสมควร'}
-                  </div>
-                </div>
-                
-                <p className="text-xs text-gray-600 mt-3 bg-white/50 p-2 rounded">
-                  💡 แนะนำ: 0.1-0.15 สำหรับ retouching เบาที่สุด (แค่ปรับแสง/สี), 0.2-0.3 สำหรับปรับแต่งเล็กน้อย, 0.4-0.5 สำหรับปรับปานกลาง
-                </p>
-              </div>
-
-              {/* Mood */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  อารมณ์ / สไตล์
-                </label>
-                <input
-                  type="text"
-                  value={mood}
-                  onChange={(e) => setMood(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg p-2 text-gray-900"
-                  placeholder="เช่น มืออาชีพ ทันสมัย สดใส"
-                />
-              </div>
-
-              {/* Platforms */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  แพลตฟอร์มเป้าหมาย (เลือกขนาดรูปที่ต้องการสร้าง)
-                </label>
-                <div className="space-y-2">
-                  {Object.entries(IMAGE_SIZES).map(([key, size]) => (
-                    <label key={key} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={platforms.includes(key)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setPlatforms([...platforms, key])
-                          } else {
-                            setPlatforms(platforms.filter((p) => p !== key))
-                          }
-                        }}
-                        className="mr-2"
-                      />
-                      <span className="font-medium text-black">{size.label}</span>
-                      <span className="text-black text-sm ml-2">
-                        ({size.width}x{size.height}px)
-                      </span>
-                    </label>
-                  ))}
+              {/* Info: Automatic Processing */}
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl border-2 border-blue-200">
+                <h3 className="text-lg font-semibold text-blue-900 mb-2">✨ ระบบประมวลผลอัตโนมัติ</h3>
+                <div className="space-y-2 text-sm text-gray-700">
+                  <p>🎯 <strong>Gemini Vision</strong> - วิเคราะห์ประเภทภาพอัตโนมัติ (ห้องพัก, อาหาร, สระว่ายน้ำ...)</p>
+                  <p>🎨 <strong>Nano-Banana AI</strong> - ปรับปรุงภาพให้สวยงามแบบมืออาชีพ</p>
+                  <p>🖼️ <strong>Graphic Designer</strong> - สร้างเลย์เอาต์สวยงามพร้อมกรอบและสีที่เข้ากัน</p>
+                  <p>📐 <strong>รองรับทุกแพลตฟอร์ม</strong> - Facebook (1200×630), Instagram Feed (1080×1080), Instagram Story (1080×1920)</p>
                 </div>
               </div>
 
@@ -1104,25 +973,9 @@ export default function DashboardPage() {
                               onClick={() => setViewingJob(job)}
                               className="text-purple-600 hover:text-purple-900 font-medium"
                             >
-                              🖼️ ดู
+                              🖼️ ดูรูป
                             </button>
                           )}
-                        {job.status === 'completed' && (
-                          <>
-                            <button
-                              onClick={() => handleApproveReject(job.id, 'approve')}
-                              className="text-green-600 hover:text-green-900"
-                            >
-                              ✓ อนุมัติ
-                            </button>
-                            <button
-                              onClick={() => handleApproveReject(job.id, 'reject')}
-                              className="text-red-600 hover:text-red-900"
-                            >
-                              ✗ ปฏิเสธ
-                            </button>
-                          </>
-                        )}
                         <button
                           onClick={async () => {
                             if (confirm('ลบงานนี้?')) {

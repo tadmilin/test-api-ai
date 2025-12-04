@@ -58,17 +58,16 @@ export async function POST(request: NextRequest) {
       
       console.log(`📊 Processing ${referenceUrls.length} images`)
       
-      // NEW WORKFLOW: Enhance แต่ละรูปก่อน แล้วค่อยรวมเป็น Collage ทีหลัง
+      // NEW WORKFLOW: Enhance แต่ละรูปก่อน แล้วค่อยสร้าง Graphic Design
       let finalImageUrl: string | null = null
       
-      if (referenceUrls.length > 1) {
-        console.log('🎨 Step 1: Enhancing each image individually with hybrid photo type detection...')
-        
-        const enhancedImageUrls: string[] = []
-        let resolvedType: PhotoType | null = null
-        
-        // Enhance ทีละรูป
-        for (let i = 0; i < referenceUrls.length; i++) {
+      console.log('🎨 Creating professional graphic design with auto layout...')
+      
+      const enhancedImageUrls: string[] = []
+      let resolvedType: PhotoType | null = null
+      
+      // Enhance ทีละรูป
+      for (let i = 0; i < referenceUrls.length; i++) {
           const imageUrl = referenceUrls[i]
           console.log(`\n🖼️ Processing image ${i + 1}/${referenceUrls.length}...`)
           
@@ -76,7 +75,7 @@ export async function POST(request: NextRequest) {
             // 📝 Get template prompt (Gemini will detect photoType inside prompt API)
             console.log(`📝 Getting enhancement prompt for image ${i + 1}/${referenceUrls.length}...`)
             
-            let enhancementPrompt = 'ปรับปรุงภาพนี้ให้ดูดีขึ้น หรูหราขึ้นแบบโรงแรมดี แต่สมจริง ยึดองค์ประกอบเดิมทั้งหมด'
+            let enhancementPrompt = 'ปรับปรุงภาพนี้ให้ดูดีขึ้น หรูหราขึ้นแบบโรงแรม"รีสอร์ทสมัยใหม่" (สไตล์หัวหิน, ภูเก็ต, สมุย)Modern Tropical 3-4ดาว แต่สมจริงไม่เวอร์เกินไป ทำให้ดูดีขึ้นหรูหราขึ้นจากภาพเดิมเห็นความแตกต่างโดยยึดองค์ประกอบเดิมจากภาพเดิมทั้งหมด'
             let promptPhotoType: PhotoType = 'generic'
             
             // Get photoType from Sheet if available
@@ -182,16 +181,12 @@ export async function POST(request: NextRequest) {
         
         console.log(`\n✅ Enhanced ${enhancedImageUrls.length} images`)
         
-        // Store enhancement prompts metadata
-        const allPromptsUsed = enhancedImageUrls.map((_, idx) => `Image ${idx + 1}: Dynamic prompt generated`).join('; ')
+        // Step 2: สร้าง Professional Graphic Design (ทั้งรูปเดียวและหลายรูป)
+        console.log('\n🎨 Step 2: Creating professional graphic design...')
         
-        // Step 2: สร้าง Collage จากรูปที่แต่งแล้ว
-        console.log('\n🧩 Step 2: Creating collage from enhanced images...')
-        
-        const collageTemplate = job.collageTemplate || 'hero_grid'
         const socialMediaFormat = typeof job.socialMediaFormat === 'string' ? job.socialMediaFormat : 'facebook_post'
         
-        console.log(`📐 Template: ${collageTemplate}, Format: ${socialMediaFormat}`)
+        console.log(`📐 Format: ${socialMediaFormat}, Images: ${enhancedImageUrls.length}`)
         
         try {
           const collageResponse = await fetch(`${baseUrl}/api/collage`, {
@@ -199,123 +194,36 @@ export async function POST(request: NextRequest) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               imageUrls: enhancedImageUrls,
-              template: collageTemplate,
               socialMediaFormat: socialMediaFormat,
+              use_graphic_design: true,  // เปิด Graphic Design เสมอ
             }),
           })
 
           if (collageResponse.ok) {
             const collageData = await collageResponse.json()
             finalImageUrl = collageData.url
-            console.log('✅ Collage created:', finalImageUrl)
+            console.log('✅ Graphic design created:', finalImageUrl)
             
             await payload.create({
               collection: 'job-logs',
               data: {
                 jobId: jobId,
                 level: 'info',
-                message: `Created collage from ${enhancedImageUrls.length} enhanced images, template: ${collageData.template}`,
+                message: `Created professional graphic design from ${enhancedImageUrls.length} enhanced image(s)`,
                 timestamp: new Date().toISOString(),
               },
             })
           } else {
             const errorText = await collageResponse.text()
-            console.error('❌ Collage creation failed:', errorText)
-            // ถ้าสร้าง collage ไม่สำเร็จ ใช้รูปแรกที่แต่งแล้ว
+            console.error('❌ Graphic design creation failed:', errorText)
+            // ถ้าสร้างไม่สำเร็จ ใช้รูปแรกที่แต่งแล้ว
             finalImageUrl = enhancedImageUrls[0]
           }
         } catch (collageError) {
-          console.error('💥 Collage process failed:', collageError)
+          console.error('💥 Graphic design process failed:', collageError)
           // ถ้า error ใช้รูปแรกที่แต่งแล้ว
           finalImageUrl = enhancedImageUrls[0]
         }
-      } else {
-        // ถ้ามีรูปเดียว ปรับตรงๆ ไม่ต้อง collage
-        console.log('📸 Single image - enhancing directly...')
-        
-        const singleImageUrl = referenceUrls[0]
-        
-        // 📝 Step: Get enhancement prompt for single image
-        // 📝 Get enhancement prompt for single image
-        console.log('📝 Getting enhancement prompt for single image...')
-        
-        let enhancementPrompt = 'ปรับปรุงภาพนี้ให้ดูดีขึ้น หรูหราขึ้นแบบโรงแรมดี แต่สมจริง ยึดองค์ประกอบเดิมทั้งหมด'
-        let promptPhotoType: PhotoType = 'generic'
-        
-        // Get photoType from Sheet if available
-        const photoTypeFromSheet = typeof job.photoTypeFromSheet === 'string' 
-          ? job.photoTypeFromSheet 
-          : undefined
-        
-        try {
-          // Call prompt API (Gemini Vision + template selection)
-          const promptRes = await fetch(`${baseUrl}/api/generate/prompt`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              productName: typeof job.productName === 'string' ? job.productName : 'Hotel / Resort',
-              contentTopic: typeof job.contentTopic === 'string' ? job.contentTopic : undefined,
-              contentDescription: typeof job.contentDescription === 'string' ? job.contentDescription : undefined,
-              referenceImageUrls: [singleImageUrl],
-              photoTypeFromSheet,
-            }),
-          })
-
-          if (promptRes.ok) {
-            const data = await promptRes.json()
-            if (data.prompt && typeof data.prompt === 'string') {
-              enhancementPrompt = data.prompt
-              promptPhotoType = (data.photoType as PhotoType) || 'generic'
-              
-              await payload.update({
-                collection: 'jobs',
-                id: jobId,
-                data: { resolvedPhotoType: promptPhotoType },
-              })
-              
-              console.log(`✅ Detected photoType: ${promptPhotoType}`)
-              console.log('✅ Template prompt:', enhancementPrompt.substring(0, 80) + '...')
-            } else {
-              console.warn('⚠️ No prompt in response, using fallback')
-            }
-          } else {
-            console.warn('⚠️ Prompt API failed, using fallback')
-          }
-        } catch (promptError) {
-          console.error('💥 Prompt error:', promptError)
-        }
-        
-        // Log the prompt selection
-        await payload.create({
-          collection: 'job-logs',
-          data: {
-            jobId: jobId,
-            level: 'info',
-            message: `[Single Image] PhotoType: ${promptPhotoType} | Template selected`,
-            timestamp: new Date().toISOString(),
-          },
-        })
-        
-        const enhanceResponse = await fetch(`${baseUrl}/api/generate/enhance`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            imageUrl: singleImageUrl,
-            prompt: enhancementPrompt,
-            photoType: promptPhotoType,
-            jobId: jobId,
-          }),
-        })
-        
-        if (!enhanceResponse.ok) {
-          const errorText = await enhanceResponse.text()
-          throw new Error(`Single image enhancement failed: ${errorText}`)
-        }
-        
-        const { imageUrl: enhancedUrl } = await enhanceResponse.json()
-        finalImageUrl = enhancedUrl
-        console.log('✅ Single image enhanced:', finalImageUrl)
-      }
       
       // Step 4: Update job status to completed
       console.log('✅ Job processing complete! Final image:', finalImageUrl)
