@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Replicate from 'replicate'
 import { put } from '@vercel/blob'
 import { google } from 'googleapis'
-import { buildRetouchPrompt, NEGATIVE_PROMPT } from '@/utilities/promptTemplates'
-import type { PhotoType } from '@/utilities/photoTypeClassifier'
+import { NEGATIVE_PROMPT } from '@/utilities/promptTemplates'
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,12 +12,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'imageUrl is required' }, { status: 400 })
     }
 
+    if (!prompt) {
+      return NextResponse.json({ error: 'prompt is required' }, { status: 400 })
+    }
+
     if (!jobId) {
       return NextResponse.json({ error: 'jobId is required' }, { status: 400 })
     }
 
-    // Use provided prompt or fallback to default
-    const enhancementPrompt = prompt || 'Professional photo retouch: improve lighting, colors, and clarity naturally'
+    const enhancementPrompt = prompt
 
     console.log('🎨 Enhancing image with SDXL...')
     console.log('[ENHANCE] imageUrl =', imageUrl)

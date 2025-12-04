@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
                   contentTopic: job.contentTopic || job.contentDescription,
                   contentDescription: job.contentDescription,
                   referenceImageUrls: [imageUrl],
-                  analysisOnly: false,
+                  photoType: detectedPhotoType,
                 }),
               })
 
@@ -161,7 +161,7 @@ export async function POST(request: NextRequest) {
                 const { enhancePrompt } = await promptRes.json()
                 if (enhancePrompt) {
                   enhancementPrompt = enhancePrompt
-                  console.log('✅ Generated prompt:', enhancementPrompt.substring(0, 100) + '...')
+                  console.log('✅ Generated prompt:', enhancementPrompt)
                 }
               } else {
                 console.warn('⚠️ Prompt generation failed, using default')
@@ -310,7 +310,7 @@ export async function POST(request: NextRequest) {
               contentTopic: job.contentTopic || job.contentDescription,
               contentDescription: job.contentDescription,
               referenceImageUrls: [singleImageUrl],
-              analysisOnly: false,
+              photoType: detectedPhotoType,
             }),
           })
 
@@ -318,7 +318,7 @@ export async function POST(request: NextRequest) {
             const { enhancePrompt } = await promptRes.json()
             if (enhancePrompt) {
               enhancementPrompt = enhancePrompt
-              console.log('✅ Generated prompt:', enhancementPrompt.substring(0, 100) + '...')
+              console.log('✅ Generated prompt:', enhancementPrompt)
             }
           } else {
             console.warn('⚠️ Prompt generation failed, using default')

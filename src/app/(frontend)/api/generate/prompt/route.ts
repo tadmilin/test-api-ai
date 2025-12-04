@@ -6,13 +6,10 @@ export async function POST(request: NextRequest) {
   try {
     const { 
       productName, 
-      productDescription, 
-      mood, 
-      referenceImageUrls,
       contentTopic,
-      postTitleHeadline,
       contentDescription,
-      analysisOnly // NEW: ถ้าเป็น true = แค่วิเคราะห์รูป ไม่ต้อง full prompt
+      referenceImageUrls,
+      photoType, // bedroom, dining, lobby, pool, bathroom, generic
     } = await request.json()
 
     if (!productName) {
@@ -122,75 +119,37 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // Use GPT-4 Vision to analyze reference images
-      const visionContent: VisionContent = analysisOnly ? [
+      // Dynamic prompt based on photoType
+      let promptInstruction = ''
+      
+      switch (photoType) {
+        case 'bedroom':
+          promptInstruction = 'Create a SHORT retouching prompt for a hotel bedroom photo. Focus: warm lighting, cozy ambiance, clean bedding, natural brightness. Max 12 words.'
+          break
+        case 'dining':
+          promptInstruction = 'Create a SHORT retouching prompt for a restaurant/dining photo. Focus: appetizing food colors, warm lighting, inviting atmosphere. Max 12 words.'
+          break
+        case 'lobby':
+          promptInstruction = 'Create a SHORT retouching prompt for a hotel lobby photo. Focus: welcoming lighting, architectural clarity, elegant atmosphere. Max 12 words.'
+          break
+        case 'pool':
+          promptInstruction = 'Create a SHORT retouching prompt for a pool/outdoor photo. Focus: vibrant water, bright natural light, tropical feel. Max 12 words.'
+          break
+        case 'bathroom':
+          promptInstruction = 'Create a SHORT retouching prompt for a bathroom photo. Focus: clean bright lighting, crisp details, spa-like quality. Max 12 words.'
+          break
+        default:
+          promptInstruction = 'Create a SHORT retouching prompt for a hotel photo. Focus: lighting, color balance, clarity. Max 12 words.'
+      }
+      
+      const visionContent: VisionContent = [
         {
           type: 'text',
-          text: `You are analyzing a hotel/resort photo to determine if it matches the content topic.
+          text: `${promptInstruction}
 
-Content Topic: "${contentDescription || contentTopic || productName}"
+Content: ${contentTopic || contentDescription || productName}
 
-Analyze this photo and answer:
-1. What is in this photo? (room type, area, features)
-2. Does this photo match the content topic?
-
-If the content is about FOOD/RESTAURANT/BREAKFAST but the photo shows a BEDROOM/ENTRANCE/POOL → NOT relevant
-If the content is about ROOMS but the photo shows DINING AREA → NOT relevant
-If they match → IS relevant
-
-Response format:
-{
-  "isRelevant": true/false,
-  "photoType": "bedroom/dining/pool/entrance/etc",
-  "reasoning": "brief explanation",
-  "enhancePrompt": "prompt for enhancement"
-}
-
-If relevant → Create MINIMAL content-specific prompt (e.g., "Retouch: enhance food colors and lighting", "Retouch: brighten room, improve clarity")
-If NOT relevant → Use minimal general prompt (e.g., "Retouch: improve lighting and sharpness")
-
-KEEP PROMPT UNDER 15 WORDS. Focus on: lighting, color, clarity ONLY.`
-        },
-        ...validImages.map((dataUrl: string) => ({
-          type: 'image_url' as const,
-          image_url: { url: dataUrl, detail: 'high' as const }
-        }))
-      ] : [
-        {
-          type: 'text',
-          text: `You are a professional photo retouching specialist for luxury hotels and resorts.
-
-CRITICAL: This is PHOTO EDITING ONLY - PRESERVE THE ORIGINAL IMAGES EXACTLY.
-
-The input is a collage/layout of hotel photos. Your job is to create a prompt for subtle enhancement that:
-
-✓ MUST PRESERVE:
-- Exact same layout and composition
-- All original elements in their positions
-- Same camera angles and perspectives
-- Original structure of each photo
-- The collage arrangement
-
-✓ ENHANCE ONLY:
-- Lighting quality (warm, inviting, professional)
-- Color grading (rich, luxurious tones)
-- Sharpness and clarity
-- Remove minor imperfections/noise
-- Professional photo finishing
-
-Content: ${contentTopic || productName}
-Description: ${contentDescription || productDescription || 'Luxury hotel property'}
-Style: ${mood || 'High-end hospitality photography'}
-
-Create a brief prompt (max 150 words) using ONLY these phrases:
-- "Enhance the existing photos"
-- "Professional photo retouching"
-- "Preserve original composition"
-- "Improve lighting and colors"
-- "High-end hotel photography finish"
-
-FORBIDDEN words: create, generate, new, add, design, reimagine, transform
-Return ONLY the enhancement prompt in English.`
+Return ONLY the prompt. Use words: enhance, retouch, improve, brighten. NO collage, layout, composition, arrangement, design.`
         },
         ...validImages.map((dataUrl: string) => ({
           type: 'image_url' as const,
@@ -203,34 +162,40 @@ Return ONLY the enhancement prompt in English.`
         content: visionContent
       })
     } else {
-      // No reference images/collage - create basic enhancement prompt
+      // No reference images - create dynamic prompt based on photoType
+      let promptInstruction = ''
+      
+      switch (photoType) {
+        case 'bedroom':
+          promptInstruction = 'Create SHORT retouching prompt for hotel bedroom: warm lighting, cozy feel, clean. Max 12 words.'
+          break
+        case 'dining':
+          promptInstruction = 'Create SHORT retouching prompt for restaurant: appetizing colors, warm light. Max 12 words.'
+          break
+        case 'lobby':
+          promptInstruction = 'Create SHORT retouching prompt for hotel lobby: welcoming light, clarity. Max 12 words.'
+          break
+        case 'pool':
+          promptInstruction = 'Create SHORT retouching prompt for pool area: vibrant water, bright light. Max 12 words.'
+          break
+        case 'bathroom':
+          promptInstruction = 'Create SHORT retouching prompt for bathroom: bright clean lighting. Max 12 words.'
+          break
+        default:
+          promptInstruction = 'Create SHORT retouching prompt: lighting, color, clarity. Max 12 words.'
+      }
+      
       messages.push({
         role: 'user',
-        content: `You are a professional photo retouching specialist.
-
-Content: ${contentTopic || productName}
-Description: ${contentDescription || productDescription || 'Professional photography'}
-Style: ${mood || 'High-end professional'}
-
-Create a brief photo enhancement prompt (max 100 words) that:
-- Enhances lighting and color balance
-- Improves sharpness and clarity
-- Maintains natural look
-- Professional hospitality/commercial quality
-
-Use only: "enhance", "retouch", "improve", "refine"
-Avoid: "create", "generate", "new", "add"
-
-Return ONLY the prompt in English.`
+        content: `${promptInstruction}\n\nContent: ${contentTopic || productName}\n\nReturn ONLY the prompt. Use: enhance, retouch, improve, brighten.`
       })
     }
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages,
-      max_tokens: 1024,
+      max_tokens: 150,
       temperature: 0.7,
-      response_format: analysisOnly ? { type: 'json_object' } : undefined,
     })
 
     const responseText = completion.choices[0]?.message?.content || ''
@@ -239,29 +204,7 @@ Return ONLY the prompt in English.`
       throw new Error('Empty response from GPT-4')
     }
 
-    // If analysisOnly, parse JSON response
-    if (analysisOnly) {
-      try {
-        const analysis = JSON.parse(responseText)
-        return NextResponse.json({
-          prompt: analysis.enhancePrompt || '',
-          isRelevant: analysis.isRelevant || false,
-          photoType: analysis.photoType || 'unknown',
-          reasoning: analysis.reasoning || '',
-        })
-      } catch (parseError) {
-        console.error('Failed to parse analysis response:', parseError)
-        // Fallback to general prompt
-        return NextResponse.json({
-          prompt: 'Enhance this affordable hotel/resort photo with natural, realistic lighting. Improve brightness, color balance, clarity, and fine details.',
-          isRelevant: false,
-          photoType: 'unknown',
-          reasoning: 'Failed to parse analysis',
-        })
-      }
-    }
-
-    return NextResponse.json({ prompt: responseText })
+    return NextResponse.json({ enhancePrompt: responseText.trim() })
   } catch (error) {
     console.error('Error generating prompt:', error)
     
