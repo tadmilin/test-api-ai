@@ -181,62 +181,120 @@ export async function POST(request: NextRequest) {
         
         console.log(`\n✅ Enhanced ${enhancedImageUrls.length} images`)
         
-        // Step 2: สร้าง Professional Graphic Design (ทั้งรูปเดียวและหลายรูป)
-        console.log('\n🎨 Step 2: Creating professional graphic design...')
+        // Step 2: สร้าง Professional Design ด้วย Satori
+        console.log('\n🎨 Step 2: Creating professional design with Satori...')
         
         // เช็คว่าใช้ Overlay Design หรือ Graphic Design
-        const useOverlayDesign = job.useOverlayDesign === true
+        const useOverlayDesign = job.useOverlayDesign === true && enhancedImageUrls.length > 1
         const overlayAspectRatio = typeof job.overlayAspectRatio === 'string' ? job.overlayAspectRatio : '3:1'
         const heroImageIndex = typeof job.heroImageIndex === 'number' ? job.heroImageIndex : 0
+        const overlayTheme = typeof job.overlayTheme === 'string' ? job.overlayTheme : 'modern'
+        const graphicTheme = typeof job.graphicTheme === 'string' ? job.graphicTheme : 'modern'
         const socialMediaFormat = typeof job.socialMediaFormat === 'string' ? job.socialMediaFormat : 'facebook_post'
         
         if (useOverlayDesign) {
-          console.log(`📐 Mode: OVERLAY DESIGN`)
+          console.log(`📐 Mode: OVERLAY DESIGN (Satori)`)
           console.log(`📐 Aspect Ratio: ${overlayAspectRatio}`)
           console.log(`⭐ Hero Image Index: ${heroImageIndex}`)
         } else {
-          console.log(`📐 Mode: GRAPHIC DESIGN`)
+          console.log(`📐 Mode: GRAPHIC DESIGN (Satori)`)
           console.log(`📐 Format: ${socialMediaFormat}`)
         }
         console.log(`🖼️ Images: ${enhancedImageUrls.length}`)
         
         try {
-          const collageResponse = await fetch(`${baseUrl}/api/collage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              imageUrls: enhancedImageUrls,
-              use_overlay_design: useOverlayDesign,
-              aspect_ratio: useOverlayDesign ? overlayAspectRatio : undefined,
-              hero_image_index: useOverlayDesign ? heroImageIndex : undefined,
-              socialMediaFormat: !useOverlayDesign ? socialMediaFormat : undefined,
-              use_graphic_design: !useOverlayDesign,  // เปิด Graphic Design ถ้าไม่ใช่ Overlay
-            }),
-          })
-
-          if (collageResponse.ok) {
-            const collageData = await collageResponse.json()
-            finalImageUrl = collageData.url
-            console.log('✅ Graphic design created:', finalImageUrl)
+          if (useOverlayDesign) {
+            // ใช้ Satori สำหรับ Overlay Design
+            const params = new URLSearchParams()
+            enhancedImageUrls.forEach(url => params.append('image', url))
+            params.append('aspectRatio', overlayAspectRatio)
+            params.append('heroIndex', heroImageIndex.toString())
+            params.append('style', overlayTheme)  // ใช้ธีมที่เลือก
             
-            await payload.create({
-              collection: 'job-logs',
-              data: {
-                jobId: jobId,
-                level: 'info',
-                message: `Created professional graphic design from ${enhancedImageUrls.length} enhanced image(s)`,
-                timestamp: new Date().toISOString(),
-              },
-            })
+            const overlayUrl = `${baseUrl}/api/generate-overlay?${params.toString()}`
+            
+            console.log('🎨 Generating overlay design with Satori...')
+            const overlayResponse = await fetch(overlayUrl)
+            
+            if (overlayResponse.ok) {
+              // Satori returns image directly, we need to upload it
+              const imageBuffer = await overlayResponse.arrayBuffer()
+              const imageBlob = new Blob([imageBuffer], { type: 'image/png' })
+              
+              // Upload to Media collection
+              const formData = new FormData()
+              formData.append('file', imageBlob, `overlay-${jobId}.png`)
+              
+              const uploadResponse = await fetch(`${baseUrl}/api/media`, {
+                method: 'POST',
+                body: formData,
+              })
+              
+              if (uploadResponse.ok) {
+                const uploadData = await uploadResponse.json()
+                finalImageUrl = uploadData.doc.url
+                console.log('✅ Overlay design created:', finalImageUrl)
+                
+                await payload.create({
+                  collection: 'job-logs',
+                  data: {
+                    jobId: jobId,
+                    level: 'info',
+                    message: `Created overlay design from ${enhancedImageUrls.length} enhanced images`,
+                    timestamp: new Date().toISOString(),
+                  },
+                })
+              } else {
+                console.error('❌ Failed to upload overlay image')
+                finalImageUrl = enhancedImageUrls[0]
+              }
+            } else {
+              console.error('❌ Overlay generation failed')
+              finalImageUrl = enhancedImageUrls[0]
+            }
           } else {
-            const errorText = await collageResponse.text()
-            console.error('❌ Graphic design creation failed:', errorText)
-            // ถ้าสร้างไม่สำเร็จ ใช้รูปแรกที่แต่งแล้ว
-            finalImageUrl = enhancedImageUrls[0]
+            // ใช้ Satori สำหรับ Graphic Design (รูปเดียว หรือ ไม่เปิด Overlay)
+            const params = new URLSearchParams()
+            enhancedImageUrls.forEach(url => params.append('image', url))
+            params.append('format', socialMediaFormat)
+            params.append('style', graphicTheme)  // ใช้ธีมที่เลือก
+            
+            const graphicUrl = `${baseUrl}/api/generate-graphic?${params.toString()}`
+            
+            console.log('🎨 Generating graphic design with Satori...')
+            const graphicResponse = await fetch(graphicUrl)
+
+            if (graphicResponse.ok) {
+              // Upload image to Blob storage
+              const imageBuffer = await graphicResponse.arrayBuffer()
+              const timestamp = Date.now()
+              
+              const { put } = await import('@vercel/blob')
+              const blob = await put(`graphics/graphic-${timestamp}.png`, imageBuffer, {
+                access: 'public',
+                contentType: 'image/png',
+              })
+              
+              finalImageUrl = blob.url
+              console.log('✅ Graphic design created:', finalImageUrl)
+              
+              await payload.create({
+                collection: 'job-logs',
+                data: {
+                  jobId: jobId,
+                  level: 'info',
+                  message: `Created professional graphic design from ${enhancedImageUrls.length} enhanced image(s)`,
+                  timestamp: new Date().toISOString(),
+                },
+              })
+            } else {
+              const errorText = await graphicResponse.text()
+              console.error('❌ Graphic design creation failed:', errorText)
+              finalImageUrl = enhancedImageUrls[0]
+            }
           }
-        } catch (collageError) {
-          console.error('💥 Graphic design process failed:', collageError)
-          // ถ้า error ใช้รูปแรกที่แต่งแล้ว
+        } catch (designError) {
+          console.error('💥 Design process failed:', designError)
           finalImageUrl = enhancedImageUrls[0]
         }
       

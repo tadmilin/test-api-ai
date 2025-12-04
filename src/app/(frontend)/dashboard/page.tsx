@@ -101,6 +101,10 @@ export default function DashboardPage() {
   const [useOverlayDesign, setUseOverlayDesign] = useState(false)
   const [overlayAspectRatio, setOverlayAspectRatio] = useState<'3:1' | '2:1'>('3:1')
   const [heroImageIndex, setHeroImageIndex] = useState(0)
+  const [overlayTheme, setOverlayTheme] = useState<'modern' | 'luxury' | 'resort'>('modern')
+  
+  // Graphic Design Options
+  const [graphicTheme, setGraphicTheme] = useState<'modern' | 'luxury' | 'minimal'>('modern')
 
   // View Generated Images
   const [viewingJob, setViewingJob] = useState<Job | null>(null)
@@ -362,6 +366,8 @@ export default function DashboardPage() {
           useOverlayDesign: useOverlayDesign && selectedImages.length > 1,  // Overlay ต้องมีมากกว่า 1 รูป
           overlayAspectRatio: useOverlayDesign && selectedImages.length > 1 ? overlayAspectRatio : undefined,
           heroImageIndex: useOverlayDesign && selectedImages.length > 1 ? heroImageIndex : undefined,
+          overlayTheme: useOverlayDesign && selectedImages.length > 1 ? overlayTheme : undefined,  // ส่งธีมสำหรับ Overlay
+          graphicTheme: !useOverlayDesign || selectedImages.length === 1 ? graphicTheme : undefined,  // ส่งธีมสำหรับ Graphic Design
           socialMediaFormat: !useOverlayDesign || selectedImages.length === 1 ? 'facebook_post' : undefined,  // ใช้ social format สำหรับรูปเดี่ยว
           status: 'pending',
         }),
@@ -771,6 +777,51 @@ export default function DashboardPage() {
                   
                   {useOverlayDesign && (
                   <div className="space-y-4 mt-4">
+                    {/* Theme Selector */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        🎨 เลือกธีม (Theme)
+                      </label>
+                      <div className="grid grid-cols-3 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setOverlayTheme('modern')}
+                          className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
+                            overlayTheme === 'modern'
+                              ? 'bg-purple-600 text-white border-purple-600'
+                              : 'bg-white text-gray-700 border-gray-300 hover:border-purple-400'
+                          }`}
+                        >
+                          <div className="font-bold">Modern</div>
+                          <div className="text-xs mt-1 opacity-80">สมัยใหม่</div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setOverlayTheme('luxury')}
+                          className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
+                            overlayTheme === 'luxury'
+                              ? 'bg-purple-600 text-white border-purple-600'
+                              : 'bg-white text-gray-700 border-gray-300 hover:border-purple-400'
+                          }`}
+                        >
+                          <div className="font-bold">Luxury</div>
+                          <div className="text-xs mt-1 opacity-80">หรูหรา</div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setOverlayTheme('resort')}
+                          className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
+                            overlayTheme === 'resort'
+                              ? 'bg-purple-600 text-white border-purple-600'
+                              : 'bg-white text-gray-700 border-gray-300 hover:border-purple-400'
+                          }`}
+                        >
+                          <div className="font-bold">Resort</div>
+                          <div className="text-xs mt-1 opacity-80">รีสอร์ท</div>
+                        </button>
+                      </div>
+                    </div>
+                    
                     {/* Aspect Ratio Selector */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -865,9 +916,74 @@ export default function DashboardPage() {
                 </div>
               )}
               
+              {/* Graphic Design Options (แสดงเมื่อไม่ใช้ Overlay หรือรูปเดียว) */}
+              {(!useOverlayDesign || selectedImages.length === 1) && (
+                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 p-6 rounded-xl border-2 border-blue-200">
+                  <h3 className="text-lg font-semibold text-blue-900 mb-4">🖼️ Graphic Design</h3>
+                  
+                  {/* Theme Selector for Graphic Design */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      🎨 เลือกธีม (Theme)
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setGraphicTheme('modern')}
+                        className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
+                          graphicTheme === 'modern'
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
+                        }`}
+                      >
+                        <div className="font-bold">Modern</div>
+                        <div className="text-xs mt-1 opacity-80">สมัยใหม่</div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setGraphicTheme('luxury')}
+                        className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
+                          graphicTheme === 'luxury'
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
+                        }`}
+                      >
+                        <div className="font-bold">Luxury</div>
+                        <div className="text-xs mt-1 opacity-80">หรูหรา</div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setGraphicTheme('minimal')}
+                        className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
+                          graphicTheme === 'minimal'
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
+                        }`}
+                      >
+                        <div className="font-bold">Minimal</div>
+                        <div className="text-xs mt-1 opacity-80">มินิมอล</div>
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {/* Info Box */}
+                  <div className="bg-blue-100 p-3 rounded-lg">
+                    <p className="text-sm text-blue-900">
+                      <strong>✨ ระบบ Graphic Design:</strong>
+                    </p>
+                    <ul className="text-xs text-blue-800 mt-2 space-y-1 ml-4 list-disc">
+                      <li>รูปเดียว: กรอบสวยงามพร้อมพื้นหลัง</li>
+                      <li>สองรูป: แบ่งครึ่งจอแนวตั้ง</li>
+                      <li>สามรูปขึ้นไป: Hero Grid (1 ใหญ่ + อื่นๆ เล็ก)</li>
+                      <li>รองรับ Facebook, Instagram Feed & Story</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
+              
               {/* Info: Automatic Processing */}
               {!useOverlayDesign && (
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl border-2 border-blue-200">
+                <div className="bg-gradient-to-br from-green-50 to-teal-50 p-6 rounded-xl border-2 border-green-200">
                   <h3 className="text-lg font-semibold text-blue-900 mb-2">✨ ระบบประมวลผลอัตโนมัติ</h3>
                   <div className="space-y-2 text-sm text-gray-700">
                     <p>🎯 <strong>Gemini Vision</strong> - วิเคราะห์ประเภทภาพอัตโนมัติ (ห้องพัก, อาหาร, สระว่ายน้ำ...)</p>

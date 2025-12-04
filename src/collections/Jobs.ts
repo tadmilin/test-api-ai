@@ -162,31 +162,6 @@ export const Jobs: CollectionConfig = {
               ],
             },
             {
-              name: 'useCollage',
-              type: 'checkbox',
-              label: 'Use Collage',
-              defaultValue: false,
-              admin: {
-                description: 'Combine multiple images into a collage before enhancement',
-              },
-            },
-            {
-              name: 'collageTemplate',
-              type: 'select',
-              label: 'Collage Template',
-              options: [
-                { label: 'Auto-select', value: 'auto' },
-                { label: 'Hero Grid (1 large + 3 small)', value: 'hero_grid' },
-                { label: 'Split (2 halves)', value: 'split' },
-                { label: 'Masonry (Pinterest style)', value: 'masonry' },
-                { label: 'Grid (2x2)', value: 'grid' },
-              ],
-              admin: {
-                condition: (data: { useCollage?: boolean }) => data.useCollage === true,
-                description: 'Layout template for collage creation',
-              },
-            },
-            {
               name: 'socialMediaFormat',
               type: 'select',
               label: 'Output Format',
@@ -235,6 +210,36 @@ export const Jobs: CollectionConfig = {
               admin: {
                 description: 'Which image to use as the main background (0 = first image, 1 = second, etc.)',
                 condition: (data: any) => data.useOverlayDesign === true,
+              },
+            },
+            {
+              name: 'overlayTheme',
+              type: 'select',
+              label: 'Overlay Theme',
+              defaultValue: 'modern',
+              options: [
+                { label: 'Modern', value: 'modern' },
+                { label: 'Luxury', value: 'luxury' },
+                { label: 'Resort', value: 'resort' },
+              ],
+              admin: {
+                description: 'Theme style for overlay design',
+                condition: (data: any) => data.useOverlayDesign === true,
+              },
+            },
+            {
+              name: 'graphicTheme',
+              type: 'select',
+              label: 'Graphic Theme',
+              defaultValue: 'modern',
+              options: [
+                { label: 'Modern', value: 'modern' },
+                { label: 'Luxury', value: 'luxury' },
+                { label: 'Minimal', value: 'minimal' },
+              ],
+              admin: {
+                description: 'Theme style for graphic design',
+                condition: (data: any) => !data.useOverlayDesign,
               },
             },
             {
