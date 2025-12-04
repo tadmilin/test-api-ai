@@ -152,11 +152,11 @@ export async function POST(request: NextRequest) {
         image: processedImageUrl,
         prompt,
         negative_prompt: NEGATIVE_PROMPT,
-        num_inference_steps: 25,
-        guidance_scale: 4.0, // 3-5 range for img2img
-        prompt_strength: Math.min(Math.max(strength || 0.10, 0.05), 0.15), // img2img ใช้ prompt_strength แทน strength
+        num_inference_steps: 30,
+        guidance_scale: 7.5, // เพิ่มขึ้นเพื่อให้ AI ปรับมากขึ้น
+        prompt_strength: Math.min(Math.max(strength || 0.30, 0.25), 0.40), // เพิ่มเป็น 0.25-0.40 สำหรับ retouch ที่เห็นผล
         scheduler: 'DPMSolverMultistep',
-        refine: 'no_refiner', // ไม่ต้อง refine เพื่อความเร็ว
+        refine: 'no_refiner',
       },
     })
 
@@ -168,8 +168,34 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ SDXL retouching complete:', sdxlImageUrl)
 
+    // ✨ ESRGAN Post-Enhance - เพิ่มความคมชัดและ upscale
+    console.log('🔍 Step 3: ESRGAN post-enhance for sharpness...')
+    
+    let finalEnhancedUrl = sdxlImageUrl
+    
+    try {
+      const esrganPrediction = await replicate.predictions.create({
+        version: 'f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa',
+        input: {
+          image: sdxlImageUrl,
+          scale: 2, // upscale 2x
+          face_enhance: false,
+        },
+      })
+      
+      const esrganResult = await replicate.wait(esrganPrediction)
+      finalEnhancedUrl = Array.isArray(esrganResult.output)
+        ? esrganResult.output[0]
+        : esrganResult.output as string
+      
+      console.log('✅ ESRGAN post-enhance complete:', finalEnhancedUrl)
+    } catch (esrganError) {
+      console.error('⚠️ ESRGAN failed, using SDXL output:', esrganError)
+      // ถ้า ESRGAN fail ใช้ SDXL output ตรงๆ
+    }
+
     // ดาวน์โหลดรูปสุดท้าย
-    const finalImageResponse = await fetch(sdxlImageUrl)
+    const finalImageResponse = await fetch(finalEnhancedUrl)
     if (!finalImageResponse.ok) {
       throw new Error('Failed to download final enhanced image')
     }

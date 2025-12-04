@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
               body: JSON.stringify({
                 imageUrl,
                 photoType: detectedPhotoType,
-                strength: job.enhancementStrength || 0.10,
+                strength: job.enhancementStrength || 0.30,
                 jobId: jobId,
               }),
             })
