@@ -190,7 +190,7 @@ export async function POST(request: NextRequest) {
               body: JSON.stringify({
                 imageUrl,
                 prompt: enhancementPrompt,
-                strength: job.enhancementStrength || 0.70,
+                strength: job.enhancementStrength || 0.55,
                 photoType: detectedPhotoType,
                 jobId: jobId,
               }),
@@ -363,7 +363,7 @@ export async function POST(request: NextRequest) {
           body: JSON.stringify({
             imageUrl: singleImageUrl,
             prompt: enhancementPrompt,
-            strength: job.enhancementStrength || 0.70,
+            strength: job.enhancementStrength || 0.55,
             photoType: detectedPhotoType,
             jobId: jobId,
           }),

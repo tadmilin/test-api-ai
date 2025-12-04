@@ -3,10 +3,11 @@ import Replicate from 'replicate'
 import { put } from '@vercel/blob'
 import { google } from 'googleapis'
 import { NEGATIVE_PROMPT } from '@/utilities/promptTemplates'
+import { getFullNegativePrompt } from '@/utilities/promptRules'
 
 export async function POST(request: NextRequest) {
   try {
-    const { imageUrl, prompt, strength, jobId } = await request.json()
+    const { imageUrl, prompt, strength, jobId, photoType } = await request.json()
 
     if (!imageUrl) {
       return NextResponse.json({ error: 'imageUrl is required' }, { status: 400 })
@@ -20,10 +21,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'jobId is required' }, { status: 400 })
     }
 
-    const enhancementPrompt =
-      typeof prompt === 'string' && prompt.trim().length > 0
-        ? prompt
-        : 'Professional hotel and resort photo retouch: improve lighting, colors, depth, and clarity while preserving realism and composition.'
+    // STRICT: Use prompt exactly as provided, no fallback
+    const enhancementPrompt = prompt
 
     console.log('🎨 Enhancing image with SDXL...')
     console.log('[ENHANCE] imageUrl =', imageUrl)
@@ -148,9 +147,14 @@ export async function POST(request: NextRequest) {
     console.log('📸 Final image URL sent to model:', processedImageUrl)
     console.log('📝 Prompt:', enhancementPrompt.substring(0, 120) + '...')
     
-    const finalStrength = Math.min(Math.max(strength || 0.70, 0.55), 0.85)
+    // Tuned strength range: 0.48-0.62 (balanced enhancement without distortion)
+    const finalStrength = Math.min(Math.max(strength || 0.55, 0.48), 0.62)
     console.log('🏛️ Strength (requested):', strength)
     console.log('🏛️ Strength (clamped):', finalStrength)
+    
+    // Comprehensive negative prompt to prevent distortion
+    const fullNegativePrompt = getFullNegativePrompt(NEGATIVE_PROMPT)
+    console.log('⛔ Negative prompt length:', fullNegativePrompt.length)
     
     const sdxlPrediction = await replicate.predictions.create({
       // SDXL img2img model (stability-ai/sdxl)
@@ -158,9 +162,9 @@ export async function POST(request: NextRequest) {
       input: {
         image: processedImageUrl,
         prompt: enhancementPrompt,
-        negative_prompt: NEGATIVE_PROMPT,
-        num_inference_steps: 50,
-        guidance_scale: 8.5,
+        negative_prompt: fullNegativePrompt,
+        num_inference_steps: 45,
+        guidance_scale: 8.0,
         prompt_strength: finalStrength,
         scheduler: 'DPMSolverMultistep',
         refine: 'no_refiner',

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import { google } from 'googleapis'
+import { buildConstraintsText, getAmbienceInstruction } from '@/utilities/promptRules'
 
 export async function POST(request: NextRequest) {
   try {
@@ -157,29 +158,37 @@ Rules for finalPrompt:
           type: 'text',
           text: `You are a professional photo retouching and enhancement specialist for hotels and resorts.
 
-You will receive one or more images of:
-- bedrooms, bathrooms, lobby, entrance, building exteriors,
-- dining rooms, buffet lines, food close-ups,
-- pools, gyms, spas, meeting rooms,
-- nature and resort exteriors (beach, mountain, jungle, garden).
+You will receive ONE image of: bedrooms, bathrooms, lobby, entrance, building exteriors, dining rooms, buffet lines, food close-ups, pools, gyms, spas, meeting rooms, nature and resort exteriors.
 
-Your task:
-1. Analyze the image(s)
-2. Decide what to improve to make them look premium and inviting
-3. Create ONE final English enhancement prompt, 80-150 words, that:
-   - PRESERVES the existing layout and camera angles
-   - ENHANCES lighting (soft, warm, hotel-style if appropriate)
-   - IMPROVES colors, clarity, depth, and texture
-   - MAKES food look more appetizing (if food is present)
-   - CAN suggest subtle additions like table decor, plants, menu signs, candles, soft reflections, but must remain realistic.
+${buildConstraintsText()}
 
-Forbidden:
+DYNAMIC AMBIENCE RULES - You must decide based on the scene:
+- If scene looks empty → add subtle props (candles, small vases, glasses) naturally
+- If modern/minimal → add only soft lighting, avoid clutter
+- If buffet scene → allow small ambient props, but do NOT modify dishes
+- If dining hall → enhance table setup but preserve layout
+- If lobby/room → add soft shadows + décor only if stylistically consistent
+
+YOUR TASK:
+1. Analyze THIS specific image carefully
+2. Identify what makes it look less premium
+3. Create ONE final English enhancement prompt, 100-150 words, that:
+   - PRESERVES original scene geometry, reflections, and physical properties
+   - ENHANCES lighting naturally with soft warm hotel tones
+   - IMPROVES depth, clarity, contrast realistically
+   - MAKES food more appetizing WITHOUT changing food identity
+   - CAN suggest subtle ambient props ONLY if scene is empty/sparse
+   - MUST avoid plastic-like shine or unrealistic smoothing
+
+FORBIDDEN:
 - Do NOT say 'create a new image', 'generate new', 'redesign', 'replace the scene'
-- Do NOT change the fundamental structure of the room.
+- Do NOT alter pot size, table curves, buffet layout, or structural elements
+- Do NOT hallucinate new dishes or change food types
+- Do NOT add excessive props that clutter the scene
 
-Content: ${contentTopic || contentDescription || productName}
+Content Context: ${contentTopic || contentDescription || productName}
 
-Return ONLY the final prompt (plain text).`
+FINAL FORMAT: Return ONLY the enhancement prompt (100-150 words), detailed, realistic, specific to THIS image.`
         },
         ...imagesForGPT.map((dataUrl: string) => ({
           type: 'image_url' as const,
