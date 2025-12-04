@@ -2,12 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import Replicate from 'replicate'
 import { put } from '@vercel/blob'
 import { google } from 'googleapis'
-import { NEGATIVE_PROMPT } from '@/utilities/promptTemplates'
-import { getFullNegativePrompt } from '@/utilities/promptRules'
 
 export async function POST(request: NextRequest) {
   try {
-    const { imageUrl, prompt, strength, jobId, photoType } = await request.json()
+    const { imageUrl, prompt, jobId, photoType } = await request.json()
 
     if (!imageUrl) {
       return NextResponse.json({ error: 'imageUrl is required' }, { status: 400 })
@@ -21,13 +19,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'jobId is required' }, { status: 400 })
     }
 
-    // STRICT: Use prompt exactly as provided, no fallback
-    const enhancementPrompt = prompt
-
-    console.log('🎨 Enhancing image with SDXL...')
+    console.log('✨ Enhancing image with Nano-Banana...')
     console.log('[ENHANCE] imageUrl =', imageUrl)
-    console.log('📝 Prompt:', enhancementPrompt.substring(0, 120) + '...')
-    console.log('Strength:', strength || 0.55)
+    console.log('📝 Prompt:', prompt.substring(0, 120) + '...')
+    console.log('📸 PhotoType:', photoType || 'not specified')
     
     // 🔍 CRITICAL: ยืนยันว่ารูปที่ยิงเข้าโมเดลคือรูปใน Drive จริง
     console.log('⚠️ VERIFY THIS URL IN BROWSER - Should show original Drive image!')
@@ -141,55 +136,40 @@ export async function POST(request: NextRequest) {
       console.log('✅ Image downloaded successfully')
     }
 
-    // SDXL img2img retouching - แต่งรูปเดิมเท่านั้น
-    console.log('🎨 SDXL img2img subtle retouching...')
-    console.log('🚀 Sending to SDXL img2img model...')
+    // Nano-Banana enhancement - conversational image editing
+    console.log('✨ Sending to Nano-Banana (Gemini 2.5 Flash Image)...')
     console.log('📸 Final image URL sent to model:', processedImageUrl)
-    console.log('📝 Prompt:', enhancementPrompt.substring(0, 120) + '...')
+    console.log('📝 Prompt:', prompt)
     
-    // Tuned strength range: 0.48-0.62 (balanced enhancement without distortion)
-    const finalStrength = Math.min(Math.max(strength || 0.55, 0.48), 0.62)
-    console.log('🏛️ Strength (requested):', strength)
-    console.log('🏛️ Strength (clamped):', finalStrength)
-    
-    // Comprehensive negative prompt to prevent distortion
-    const fullNegativePrompt = getFullNegativePrompt(NEGATIVE_PROMPT)
-    console.log('⛔ Negative prompt length:', fullNegativePrompt.length)
-    
-    const sdxlPrediction = await replicate.predictions.create({
-      // SDXL img2img model (stability-ai/sdxl)
-      version: '7762fd07cf82c948538e41f63f77d685e02b063e37e496e96eefd46c929f9bdc',
+    const nanoBananaPrediction = await replicate.predictions.create({
+      model: 'google/nano-banana',
       input: {
         image: processedImageUrl,
-        prompt: enhancementPrompt,
-        negative_prompt: fullNegativePrompt,
-        num_inference_steps: 45,
-        guidance_scale: 8.0,
-        prompt_strength: finalStrength,
-        scheduler: 'DPMSolverMultistep',
-        refine: 'no_refiner',
+        prompt: prompt,
+        // Nano-Banana uses simple conversational prompts
+        // No strength, negative_prompt, steps, or guidance parameters
       },
     })
 
     // Wait for completion
-    const sdxlResult = await replicate.wait(sdxlPrediction)
-    const sdxlImageUrl = Array.isArray(sdxlResult.output)
-      ? sdxlResult.output[0]
-      : sdxlResult.output as string
+    const nanoBananaResult = await replicate.wait(nanoBananaPrediction)
+    const enhancedImageUrl = Array.isArray(nanoBananaResult.output)
+      ? nanoBananaResult.output[0]
+      : nanoBananaResult.output as string
 
-    console.log('✅ SDXL retouching complete:', sdxlImageUrl)
+    console.log('✅ Nano-Banana enhancement complete:', enhancedImageUrl)
 
     // ✨ ESRGAN Post-Enhance - เพิ่มความคมชัดและ upscale
     // Only apply ESRGAN for food photos to avoid oversharpening rooms/buildings
     console.log('🔍 Step 3: Checking if ESRGAN upscaling needed...')
     
-    let finalEnhancedUrl = sdxlImageUrl
+    let finalEnhancedUrl = enhancedImageUrl
     
-    // Extract photoType from prompt if possible (look for keywords)
-    const promptLower = enhancementPrompt.toLowerCase()
-    const isFoodPhoto = promptLower.includes('food') || promptLower.includes('buffet') || 
-                        promptLower.includes('dining') || promptLower.includes('appetizing') ||
-                        promptLower.includes('dish') || promptLower.includes('meal')
+    // Check photoType or prompt for food indicators
+    const promptLower = prompt.toLowerCase()
+    const isFoodPhoto = photoType === 'food_closeup' || photoType === 'buffet' ||
+                        promptLower.includes('food') || promptLower.includes('อาหาร') ||
+                        promptLower.includes('buffet') || promptLower.includes('บุฟเฟ่')
     
     if (isFoodPhoto) {
       console.log('🍴 Food photo detected - applying ESRGAN for sharpness...')
@@ -197,7 +177,7 @@ export async function POST(request: NextRequest) {
         const esrganPrediction = await replicate.predictions.create({
           version: 'f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa',
           input: {
-            image: sdxlImageUrl,
+            image: enhancedImageUrl,
             scale: 2, // upscale 2x
             face_enhance: false,
           },
@@ -238,7 +218,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       imageUrl: blob.url,
-      prompt: enhancementPrompt,
+      prompt: prompt,
     })
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to enhance image'

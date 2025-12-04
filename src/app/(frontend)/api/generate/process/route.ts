@@ -73,132 +73,78 @@ export async function POST(request: NextRequest) {
           console.log(`\n🖼️ Processing image ${i + 1}/${referenceUrls.length}...`)
           
           try {
-            // ✨ Step 1a: Analyze photo type with GPT Vision + Validation
-            console.log('🔍 Analyzing photo type and validating against sheet data...')
+            // 📝 Get template prompt (Gemini will detect photoType inside prompt API)
+            console.log(`📝 Getting enhancement prompt for image ${i + 1}/${referenceUrls.length}...`)
             
-            let detectedPhotoType: PhotoType = 'generic'
-            let isRelevant = true
-            let validationWarning: string | null = null
+            let enhancementPrompt = 'ปรับปรุงภาพนี้ให้ดูดีขึ้น หรูหราขึ้นแบบโรงแรมดี แต่สมจริง ยึดองค์ประกอบเดิมทั้งหมด'
+            let promptPhotoType: PhotoType = 'generic'
             
-            try {
-              const analyzeRes = await fetch(`${baseUrl}/api/analyze/photoType`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  imageUrl,
-                  sheetType: (job as any).photoTypeFromSheet,
-                }),
-              })
-
-              if (analyzeRes.ok) {
-                const { sheetType, detectedType, confidence } = await analyzeRes.json()
-                detectedPhotoType = resolvePhotoType(sheetType, detectedType)
-                
-                // 🔍 Validation: Check if detected type matches sheet type
-                if (sheetType && detectedType && sheetType !== 'generic' && detectedType !== 'other') {
-                  if (sheetType !== detectedType) {
-                    isRelevant = false
-                    validationWarning = `⚠️ Mismatch: Sheet says "${sheetType}" but image looks like "${detectedType}" (confidence: ${confidence || 'N/A'})`
-                    console.warn(validationWarning)
-                    
-                    // Log warning to job logs
-                    await payload.create({
-                      collection: 'job-logs',
-                      data: {
-                        jobId: jobId,
-                        level: 'warning',
-                        message: `Image ${i + 1}: ${validationWarning}`,
-                        timestamp: new Date().toISOString(),
-                      },
-                    })
-                  } else {
-                    console.log(`✅ Validation passed: Image matches "${detectedType}"`)
-                  }
-                }
-                
-                console.log(`📋 Sheet type: ${sheetType || 'none'}, GPT detected: ${detectedType || 'none'} → Resolved: ${detectedPhotoType}`)
-                
-                // เซฟ resolvedPhotoType ครั้งแรก
-                if (i === 0 && !resolvedType) {
-                  resolvedType = detectedPhotoType
-                  await payload.update({
-                    collection: 'jobs',
-                    id: jobId,
-                    data: { 
-                      resolvedPhotoType: detectedPhotoType,
-                      ...(validationWarning && { errorMessage: validationWarning })
-                    } as any,
-                  })
-                }
-              } else {
-                console.warn('⚠️ Photo type analysis failed, using fallback')
-                detectedPhotoType = ((job as any).photoTypeFromSheet as PhotoType) || 'generic'
-              }
-            } catch (analyzeError) {
-              console.error('💥 Photo type analysis error:', analyzeError)
-              detectedPhotoType = ((job as any).photoTypeFromSheet as PhotoType) || 'generic'
-            }
-            
-            // 📝 Step: Two-Phase Prompting per image
-            console.log(`📝 Phase A: Analyzing image ${i + 1}/${referenceUrls.length}...`)
-            
-            let enhancementPrompt = 'Professional hotel photo retouch: improve lighting, colors, and clarity naturally.'
-            let analysisData: any = {}
+            // Get photoType from Sheet if available
+            const photoTypeFromSheet = typeof job.photoTypeFromSheet === 'string' 
+              ? job.photoTypeFromSheet 
+              : undefined
             
             try {
-              // Phase A: Analysis with analysisOnly:true
+              // Call prompt API (Gemini Vision will detect photoType and return template)
               const promptRes = await fetch(`${baseUrl}/api/generate/prompt`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  productName: (job as any).productName || 'Hotel / Resort',
-                  contentTopic: (job as any).contentTopic || (job as any).contentDescription,
-                  contentDescription: (job as any).contentDescription,
+                  productName: typeof job.productName === 'string' ? job.productName : 'Hotel / Resort',
+                  contentTopic: typeof job.contentTopic === 'string' ? job.contentTopic : undefined,
+                  contentDescription: typeof job.contentDescription === 'string' ? job.contentDescription : undefined,
                   referenceImageUrls: [imageUrl],
-                  analysisOnly: true, // Phase A: Extract insights
+                  photoTypeFromSheet,
                 }),
               })
 
               if (promptRes.ok) {
-                analysisData = await promptRes.json()
-                if (analysisData.prompt) {
-                  enhancementPrompt = analysisData.prompt // finalPrompt from analysis
-                  console.log(`✅ Phase A Analysis complete:`, {
-                    photoType: analysisData.photoType,
-                    issues: analysisData.issues?.slice(0, 3),
-                    enhanceIdeas: analysisData.enhanceIdeas?.slice(0, 3),
-                  })
-                  console.log('✅ Phase B: Using finalPrompt:', enhancementPrompt.substring(0, 120) + '...')
+                const data = await promptRes.json()
+                if (data.prompt && typeof data.prompt === 'string') {
+                  enhancementPrompt = data.prompt
+                  promptPhotoType = (data.photoType as PhotoType) || 'generic'
+                  
+                  // Store photoType from first image
+                  if (i === 0 && !resolvedType) {
+                    resolvedType = promptPhotoType
+                    await payload.update({
+                      collection: 'jobs',
+                      id: jobId,
+                      data: { resolvedPhotoType: promptPhotoType },
+                    })
+                  }
+                  
+                  console.log(`✅ Detected photoType: ${promptPhotoType}`)
+                  console.log('✅ Template prompt:', enhancementPrompt.substring(0, 80) + '...')
                 } else {
-                  console.warn('⚠️ Phase A: No prompt in response, using fallback')
+                  console.warn('⚠️ No prompt in response, using fallback')
                 }
               } else {
-                console.warn('⚠️ Phase A: Request failed, using fallback')
+                console.warn('⚠️ Prompt API failed, using fallback')
               }
             } catch (promptError) {
-              console.error('💥 Phase A error:', promptError)
+              console.error('💥 Prompt error:', promptError)
             }
             
-            // Log the analysis and prompt
+            // Log the prompt selection
             await payload.create({
               collection: 'job-logs',
               data: {
                 jobId: jobId,
                 level: 'info',
-                message: `[Image ${i + 1}] Phase A: ${analysisData.photoType || 'unknown'} | Issues: ${analysisData.issues?.join(', ') || 'none'} | Enhancement: ${enhancementPrompt}`,
+                message: `[Image ${i + 1}] PhotoType: ${promptPhotoType} | Template selected`,
                 timestamp: new Date().toISOString(),
               },
             })
             
-            // ✨ Step: Enhance with dynamic prompt
+            // ✨ Step: Enhance with Nano-Banana
             const enhanceResponse = await fetch(`${baseUrl}/api/generate/enhance`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 imageUrl,
                 prompt: enhancementPrompt,
-                strength: job.enhancementStrength || 0.55,
-                photoType: detectedPhotoType,
+                photoType: promptPhotoType,
                 jobId: jobId,
               }),
             })
@@ -243,7 +189,10 @@ export async function POST(request: NextRequest) {
         console.log('\n🧩 Step 2: Creating collage from enhanced images...')
         
         const collageTemplate = job.collageTemplate || 'hero_grid'
-        console.log(`📐 Using template: ${collageTemplate}`)
+        const aspectRatio = typeof job.aspectRatio === 'string' ? job.aspectRatio : '16:9'
+        const canvasSize = typeof job.canvasSize === 'string' ? job.canvasSize : 'MD'
+        
+        console.log(`📐 Template: ${collageTemplate}, AspectRatio: ${aspectRatio}, Size: ${canvasSize}`)
         
         try {
           const collageResponse = await fetch(`${baseUrl}/api/collage`, {
@@ -252,6 +201,8 @@ export async function POST(request: NextRequest) {
             body: JSON.stringify({
               imageUrls: enhancedImageUrls,
               template: collageTemplate,
+              aspectRatio: aspectRatio,
+              size: canvasSize,
             }),
           })
 
@@ -282,92 +233,67 @@ export async function POST(request: NextRequest) {
         }
       } else {
         // ถ้ามีรูปเดียว ปรับตรงๆ ไม่ต้อง collage
-        console.log('📸 Single image - enhancing with hybrid photo type detection...')
+        console.log('📸 Single image - enhancing directly...')
         
         const singleImageUrl = referenceUrls[0]
         
-        // ✨ Analyze photo type with GPT Vision
-        console.log('🔍 Analyzing photo type...')
+        // 📝 Step: Get enhancement prompt for single image
+        // 📝 Get enhancement prompt for single image
+        console.log('📝 Getting enhancement prompt for single image...')
         
-        let detectedPhotoType: PhotoType = 'generic'
+        let enhancementPrompt = 'ปรับปรุงภาพนี้ให้ดูดีขึ้น หรูหราขึ้นแบบโรงแรมดี แต่สมจริง ยึดองค์ประกอบเดิมทั้งหมด'
+        let promptPhotoType: PhotoType = 'generic'
         
-        try {
-          const analyzeRes = await fetch(`${baseUrl}/api/analyze/photoType`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              imageUrl: singleImageUrl,
-              sheetType: (job as any).photoTypeFromSheet,
-            }),
-          })
-
-          if (analyzeRes.ok) {
-            const { sheetType, detectedType } = await analyzeRes.json()
-            detectedPhotoType = resolvePhotoType(sheetType, detectedType)
-            console.log(`📋 Sheet type: ${sheetType || 'none'}, GPT detected: ${detectedType || 'none'} → Resolved: ${detectedPhotoType}`)
-            
-            await payload.update({
-              collection: 'jobs',
-              id: jobId,
-              data: { resolvedPhotoType: detectedPhotoType },
-            })
-          } else {
-            console.warn('⚠️ Photo type analysis failed, using fallback')
-            detectedPhotoType = ((job).photoTypeFromSheet as PhotoType) || 'generic'
-          }
-        } catch (analyzeError) {
-          console.error('💥 Photo type analysis error:', analyzeError)
-          detectedPhotoType = ((job).photoTypeFromSheet as PhotoType) || 'generic'
-        }
-        
-        // 📝 Step: Dynamic prompt for single image
-        console.log('📝 Generating dynamic enhancement prompt for single image...')
-        
-        let enhancementPrompt = 'Professional hotel photo retouch: improve lighting, colors, and clarity naturally.'
-        let analysisData: any = {}
+        // Get photoType from Sheet if available
+        const photoTypeFromSheet = typeof job.photoTypeFromSheet === 'string' 
+          ? job.photoTypeFromSheet 
+          : undefined
         
         try {
-          // Phase A: Analysis with analysisOnly:true
-          console.log('📝 Phase A: Analyzing single image...')
+          // Call prompt API (Gemini Vision + template selection)
           const promptRes = await fetch(`${baseUrl}/api/generate/prompt`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              productName: (job as any).productName || 'Hotel / Resort',
-              contentTopic: (job as any).contentTopic || (job as any).contentDescription,
-              contentDescription: (job as any).contentDescription,
+              productName: typeof job.productName === 'string' ? job.productName : 'Hotel / Resort',
+              contentTopic: typeof job.contentTopic === 'string' ? job.contentTopic : undefined,
+              contentDescription: typeof job.contentDescription === 'string' ? job.contentDescription : undefined,
               referenceImageUrls: [singleImageUrl],
-              analysisOnly: true, // Phase A: Extract insights
+              photoTypeFromSheet,
             }),
           })
 
           if (promptRes.ok) {
-            analysisData = await promptRes.json()
-            if (analysisData.prompt) {
-              enhancementPrompt = analysisData.prompt // finalPrompt from analysis
-              console.log(`✅ Phase A Analysis complete:`, {
-                photoType: analysisData.photoType,
-                issues: analysisData.issues?.slice(0, 3),
-                enhanceIdeas: analysisData.enhanceIdeas?.slice(0, 3),
+            const data = await promptRes.json()
+            if (data.prompt && typeof data.prompt === 'string') {
+              enhancementPrompt = data.prompt
+              promptPhotoType = (data.photoType as PhotoType) || 'generic'
+              
+              await payload.update({
+                collection: 'jobs',
+                id: jobId,
+                data: { resolvedPhotoType: promptPhotoType },
               })
-              console.log('✅ Phase B: Using finalPrompt:', enhancementPrompt.substring(0, 120) + '...')
+              
+              console.log(`✅ Detected photoType: ${promptPhotoType}`)
+              console.log('✅ Template prompt:', enhancementPrompt.substring(0, 80) + '...')
             } else {
-              console.warn('⚠️ Phase A: No prompt in response, using fallback')
+              console.warn('⚠️ No prompt in response, using fallback')
             }
           } else {
-            console.warn('⚠️ Phase A: Request failed, using fallback')
+            console.warn('⚠️ Prompt API failed, using fallback')
           }
         } catch (promptError) {
-          console.error('💥 Phase A error:', promptError)
+          console.error('💥 Prompt error:', promptError)
         }
         
-        // Log the analysis and prompt
+        // Log the prompt selection
         await payload.create({
           collection: 'job-logs',
           data: {
             jobId: jobId,
             level: 'info',
-            message: `[Single Image] Phase A: ${analysisData.photoType || 'unknown'} | Issues: ${analysisData.issues?.join(', ') || 'none'} | Enhancement: ${enhancementPrompt}`,
+            message: `[Single Image] PhotoType: ${promptPhotoType} | Template selected`,
             timestamp: new Date().toISOString(),
           },
         })
@@ -378,8 +304,7 @@ export async function POST(request: NextRequest) {
           body: JSON.stringify({
             imageUrl: singleImageUrl,
             prompt: enhancementPrompt,
-            strength: job.enhancementStrength || 0.55,
-            photoType: detectedPhotoType,
+            photoType: promptPhotoType,
             jobId: jobId,
           }),
         })
@@ -413,7 +338,7 @@ export async function POST(request: NextRequest) {
         collection: 'jobs',
         id: jobId,
         data: {
-          generatedPrompt: `Dynamic prompts generated for ${referenceUrls.length} image(s) using GPT-4 Vision analysis`,
+          generatedPrompt: `Template prompts generated for ${referenceUrls.length} image(s) using Gemini Vision + Nano-Banana`,
           promptGeneratedAt: new Date().toISOString(),
           status: 'completed',
           generatedImages: generatedImages,

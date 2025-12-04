@@ -4,11 +4,13 @@ import { put } from '@vercel/blob'
 interface CollageRequest {
   imageUrls: string[]
   template?: string
+  aspectRatio?: string  // "3:1", "2:2", "1:1", "16:9", "4:3", "21:9"
+  size?: string  // "SM" (800), "MD" (1024), "LG" (1920), "XL" (2560)
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { imageUrls, template } = await request.json() as CollageRequest
+    const { imageUrls, template, aspectRatio, size } = await request.json() as CollageRequest
 
     if (!imageUrls || imageUrls.length === 0) {
       return NextResponse.json(
@@ -50,6 +52,7 @@ export async function POST(request: NextRequest) {
 
     // เรียก Python service
     console.log('🐍 Calling Python collage service...')
+    console.log(`📐 Template: ${template || 'auto'}, AspectRatio: ${aspectRatio || '16:9'}, Size: ${size || 'MD'}`)
     const collageResponse = await fetch(`${pythonServiceUrl}/collage`, {
       method: 'POST',
       headers: {
@@ -58,7 +61,8 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         image_urls: imageUrls,
         template: template || null,
-        canvas_size: [1024, 585], // ลดขนาดให้เหมาะกับ SDXL และเข้า memory ได้
+        aspect_ratio: aspectRatio || null,
+        size: size || 'MD',
       }),
     })
 

@@ -1,0 +1,105 @@
+/**
+ * Nano-Banana Simple Template Prompts
+ * Based on successful test: "เหมือนต้นฉบับแต่ดีกว่ามาก"
+ */
+
+export type PhotoType = 
+  | 'buffet'
+  | 'food_closeup'
+  | 'bedroom'
+  | 'bathroom'
+  | 'lobby'
+  | 'entrance'
+  | 'building_exterior'
+  | 'dining_room'
+  | 'pool'
+  | 'gym'
+  | 'spa'
+  | 'meeting_room'
+  | 'corridor'
+  | 'balcony'
+  | 'nature_garden'
+  | 'beach_resort'
+  | 'mountain_resort'
+  | 'jungle_resort'
+  | 'generic'
+
+/**
+ * Simple template prompts optimized for Nano-Banana
+ * คำสั่งแบบสนทนาธรรมชาติ ไม่ใช่ technical diffusion prompts
+ */
+export const NANO_BANANA_PROMPTS: Record<PhotoType, string> = {
+  buffet: `ตกแต่งให้ภาพบุฟเฟ่นี้ดูดีขึ้น ปรับเปลี่ยนให้ดูหรูหราขึ้น ดูเป็นบุฟเฟ่โรงแรมราคาสูงแบบสไตล์โรงแรมไทย 3-4 ดาว แต่ว่าสมจริง ดูดีจากภาพเดิมไม่เหมือนว่าเป็นภาพใหม่ ยึดองค์ประกอบเดิมทั้งหมด เน้นความสะอาด แสงสว่างธรรมชาติ และบรรยากาศอบอุ่น`,
+
+  food_closeup: `ปรับแต่งภาพอาหารนี้ให้ดูน่ารับประทานมากขึ้น เพิ่มความสดใหม่และสีสันที่สดใส แต่เป็นธรรมชาติ เก็บรูปแบบอาหารเดิมทุกอย่าง ไม่เพิ่มเมนูใหม่ ไม่เปลี่ยนส่วนผสม ยึดจานและการจัดวางเดิม เน้นให้ดูเป็นอาหารไทยคุณภาพสูง`,
+
+  dining_room: `แต่งภาพห้องอาหารนี้ให้ดูหรูหรา อบอุ่น และเชิญชวน แบบห้องอาหารโรงแรมไทยดี เพิ่มความสว่างและบรรยากาศที่น่าประทับใจ แต่ยึดตำแหน่งโต๊ะ เก้าอี้ และของตกแต่งเดิมทั้งหมด ให้ดูสมจริงและเป็นธรรมชาติ`,
+
+  bedroom: `แต่งภาพห้องนอนนี้ให้ดูอบอุ่น สะอาด หรูหรา แบบโรงแรมไทย 3-4 ดาวราคาสูง ปรับแสงให้สบายตา เพิ่มความนุ่มนวลของผ้าปูที่นอน แต่ยึดตำแหน่งเฟอร์นิเจอร์เดิมทุกอย่าง ไม่เปลี่ยนโครงสร้างห้อง ให้ดูพักผ่อนและเป็นธรรมชาติ`,
+
+  bathroom: `ปรับปรุงภาพห้องน้ำนี้ให้ดูสะอาด สดใส และทันสมัย แบบโรงแรมดี เพิ่มความเงางามของกระจกและเซรามิก แต่เก็บตำแหน่งสุขภัณฑ์และอุปกรณ์เดิม ไม่เปลี่ยนโครงสร้าง ให้ดูสะอาดและน่าใช้งาน`,
+
+  lobby: `แต่งภาพล็อบบี้นี้ให้ดูโปร่ง สว่าง สะอาด และเป็นมิตร แบบล็อบบี้โรงแรมไทยคุณภาพดี เพิ่มบรรยากาศต้อนรับ แต่ยึดตำแหน่งเฟอร์นิเจอร์และของตกแต่งเดิม ไม่เปลี่ยนโครงสร้าง ให้ดูเป็นธรรมชาติ`,
+
+  entrance: `ปรับภาพทางเข้านี้ให้ดูน่าประทับใจ สะอาด และเชิญชวน แบบทางเข้าโรงแรมดี เพิ่มความสว่างและบรรยากาศต้อนรับ แต่เก็บโครงสร้างและการออกแบบเดิมทั้งหมด ให้ดูเป็นธรรมชาติ`,
+
+  building_exterior: `แต่งภาพภายนอกอาคารนี้ให้ดูน่าประทับใจ สะอาด และหรูหรา แบบโรงแรมหรือรีสอร์ทไทยคุณภาดี ปรับแสงและสีให้สวยงาม แต่ยึดสถาปัตยกรรมและโครงสร้างเดิมทั้งหมด ให้ดูเป็นธรรมชาติ`,
+
+  pool: `ปรับปรุงภาพสระว่ายน้ำนี้ให้ดูใส สะอาด เย็นสบาย และเชิญชวน แบบสระว่ายน้ำรีสอร์ทไทยดี เพิ่มความสดใสของน้ำและบรรยากาศพักผ่อน แต่เก็บรูปทรงสระและของตกแต่งเดิม ให้ดูเป็นธรรมชาติ`,
+
+  gym: `แต่งภาพฟิตเนสนี้ให้ดูสะอาด ทันสมัย และพร้อมใช้งาน แบบฟิตเนสโรงแรมดี เพิ่มความสว่างและบรรยากาศกระปรี้กระเปร่า แต่เก็บตำแหน่งเครื่องออกกำลังกายและอุปกรณ์เดิม ไม่เปลี่ยนโครงสร้าง`,
+
+  spa: `ปรับแต่งภาพสปานี้ให้ดูผ่อนคลาย สงบ และหรูหรา แบบสปาโรงแรมไทยคุณภาพดี เพิ่มบรรยากาศสบายและอบอุ่น แต่ยึดตำแหน่งเฟอร์นิเจอร์และของตกแต่งเดิม ให้ดูเป็นธรรมชาติและเชิญชวน`,
+
+  meeting_room: `แต่งภาพห้องประชุมนี้ให้ดูทันสมัย เป็นมืออาชีพ และพร้อมใช้งาน แบบห้องประชุมโรงแรมดี เพิ่มความสว่างและบรรยากาศมั่นใจ แต่เก็บตำแหน่งโต๊ะ เก้าอี้ และอุปกรณ์เดิม ไม่เปลี่ยนโครงสร้าง`,
+
+  corridor: `ปรับปรุงภาพทางเดินนี้ให้ดูสะอาด สว่าง และเป็นระเบียบ แบบทางเดินโรงแรมดี เพิ่มความสว่างธรรมชาติและบรรยากาศอบอุ่น แต่เก็บโครงสร้างและของตกแต่งเดิมทั้งหมด ให้ดูเป็นธรรมชาติ`,
+
+  balcony: `แต่งภาพระเบียงนี้ให้ดูน่าพักผ่อน สบาย และมีวิวสวยงาม แบบระเบียงโรงแรมหรือรีสอร์ทไทยดี เพิ่มบรรยากาศผ่อนคลาย แต่ยึดตำแหน่งเฟอร์นิเจอร์และมุมมองเดิม ไม่เปลี่ยนโครงสร้าง`,
+
+  nature_garden: `ปรับแต่งภาพสวนหรือธรรมชาตินี้ให้ดูสดชื่น เขียวขจี และเชิญชวน แบบสวนรีสอร์ทไทยคุณภาพดี เพิ่มความสดใสของต้นไม้และบรรยากาศธรรมชาติ แต่เก็บการจัดสวนและโครงสร้างเดิม ให้ดูเป็นธรรมชาติ`,
+
+  beach_resort: `แต่งภาพชายหาดหรือรีสอร์ทริมทะเลนี้ให้ดูสดใส เย็นสบาย และเชิญชวน แบบรีสอร์ทชายหาดไทยคุณภาพดี เพิ่มความสวยงามของท้องฟ้าและทะเล แต่เก็บโครงสร้างและมุมมองเดิม ให้ดูเป็นธรรมชาติ`,
+
+  mountain_resort: `ปรับปรุงภาพรีสอร์ทภูเขานี้ให้ดูสดชื่น เย็นสบาย และน่าพักผ่อน แบบรีสอร์ทภูเขาไทยคุณภาพดี เพิ่มบรรยากาศธรรมชาติและความสงบ แต่ยึดโครงสร้างและมุมมองเดิม ให้ดูเป็นธรรมชาติ`,
+
+  jungle_resort: `แต่งภาพรีสอร์ทในป่าหรือธรรมชาตินี้ให้ดูเขียวขจี สงบ และน่าพักผ่อน แบบรีสอร์ทในป่าไทยคุณภาพดี เพิ่มความสดชื่นของธรรมชาติและบรรยากาศผ่อนคลาย แต่เก็บโครงสร้างและมุมมองเดิม ให้ดูเป็นธรรมชาติ`,
+
+  generic: `ปรับปรุงภาพนี้ให้ดูดีขึ้น หรูหราขึ้นแบบโรงแรมหรือรีสอร์ทไทยคุณภาพดี เพิ่มความสว่างและสีสันที่สวยงาม แต่สมจริง ยึดองค์ประกอบเดิมทั้งหมด ไม่เปลี่ยนโครงสร้าง ให้ดูเป็นธรรมชาติและน่าประทับใจ`,
+}
+
+/**
+ * Get Nano-Banana prompt template for photo type
+ */
+export function getNanoBananaPrompt(photoType: string): string {
+  const normalizedType = photoType.toLowerCase().trim() as PhotoType
+  return NANO_BANANA_PROMPTS[normalizedType] || NANO_BANANA_PROMPTS.generic
+}
+
+/**
+ * Detect photo type from simple text analysis (fallback if no Sheet data)
+ */
+export function detectPhotoTypeSimple(filename: string = '', description: string = ''): PhotoType {
+  const text = (filename + ' ' + description).toLowerCase()
+  
+  if (text.includes('buffet') || text.includes('บุฟเฟ่') || text.includes('บุฟเฟต์')) return 'buffet'
+  if (text.includes('food') || text.includes('อาหาร') || text.includes('เมนู')) return 'food_closeup'
+  if (text.includes('dining') || text.includes('ห้องอาหาร') || text.includes('ร้านอาหาร')) return 'dining_room'
+  if (text.includes('bedroom') || text.includes('ห้องนอน')) return 'bedroom'
+  if (text.includes('bathroom') || text.includes('ห้องน้ำ')) return 'bathroom'
+  if (text.includes('lobby') || text.includes('ล็อบบี้') || text.includes('ล็อบบี')) return 'lobby'
+  if (text.includes('entrance') || text.includes('ทางเข้า')) return 'entrance'
+  if (text.includes('exterior') || text.includes('ภายนอก') || text.includes('อาคาร')) return 'building_exterior'
+  if (text.includes('pool') || text.includes('สระ')) return 'pool'
+  if (text.includes('gym') || text.includes('ฟิตเนส')) return 'gym'
+  if (text.includes('spa') || text.includes('สปา')) return 'spa'
+  if (text.includes('meeting') || text.includes('ห้องประชุม')) return 'meeting_room'
+  if (text.includes('corridor') || text.includes('ทางเดิน')) return 'corridor'
+  if (text.includes('balcony') || text.includes('ระเบียง')) return 'balcony'
+  if (text.includes('garden') || text.includes('สวน')) return 'nature_garden'
+  if (text.includes('beach') || text.includes('ชายหาด') || text.includes('ทะเล')) return 'beach_resort'
+  if (text.includes('mountain') || text.includes('ภูเขา')) return 'mountain_resort'
+  if (text.includes('jungle') || text.includes('ป่า')) return 'jungle_resort'
+  
+  return 'generic'
+}

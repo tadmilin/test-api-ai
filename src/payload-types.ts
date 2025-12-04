@@ -846,7 +846,15 @@ export interface Job {
    */
   collageTemplate?: ('auto' | 'hero_grid' | 'split' | 'masonry' | 'grid') | null;
   /**
-   * How much the AI modifies the image (0.05 = very subtle, 0.10 = recommended, 0.15 = noticeable)
+   * Aspect ratio for the collage output
+   */
+  aspectRatio?: ('3:1' | '21:9' | '16:9' | '4:3' | '2:2' | '1:1') | null;
+  /**
+   * Width of the canvas. Height calculated from aspect ratio.
+   */
+  canvasSize?: ('SM' | 'MD' | 'LG' | 'XL') | null;
+  /**
+   * How much the AI modifies the image (0.25 = subtle, 0.30 = recommended, 0.40 = noticeable)
    */
   enhancementStrength?: number | null;
   generatedPrompt?: string | null;
@@ -1543,6 +1551,8 @@ export interface JobsSelect<T extends boolean = true> {
       };
   useCollage?: T;
   collageTemplate?: T;
+  aspectRatio?: T;
+  canvasSize?: T;
   enhancementStrength?: T;
   generatedPrompt?: T;
   promptGeneratedAt?: T;

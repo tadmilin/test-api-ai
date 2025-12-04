@@ -187,6 +187,40 @@ export const Jobs: CollectionConfig = {
               },
             },
             {
+              name: 'aspectRatio',
+              type: 'select',
+              label: 'Aspect Ratio',
+              defaultValue: '16:9',
+              options: [
+                { label: '3:1 (Ultra Wide)', value: '3:1' },
+                { label: '21:9 (Cinema)', value: '21:9' },
+                { label: '16:9 (Standard)', value: '16:9' },
+                { label: '4:3 (Classic)', value: '4:3' },
+                { label: '2:2 (Square-ish)', value: '2:2' },
+                { label: '1:1 (Square)', value: '1:1' },
+              ],
+              admin: {
+                condition: (data: { useCollage?: boolean }) => data.useCollage === true,
+                description: 'Aspect ratio for the collage output',
+              },
+            },
+            {
+              name: 'canvasSize',
+              type: 'select',
+              label: 'Canvas Size',
+              defaultValue: 'MD',
+              options: [
+                { label: 'SM (800px width)', value: 'SM' },
+                { label: 'MD (1024px width)', value: 'MD' },
+                { label: 'LG (1920px width)', value: 'LG' },
+                { label: 'XL (2560px width)', value: 'XL' },
+              ],
+              admin: {
+                condition: (data: { useCollage?: boolean }) => data.useCollage === true,
+                description: 'Width of the canvas. Height calculated from aspect ratio.',
+              },
+            },
+            {
               name: 'enhancementStrength',
               type: 'number',
               label: 'Enhancement Strength',

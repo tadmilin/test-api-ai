@@ -21,7 +21,9 @@ app.add_middleware(
 class CollageRequest(BaseModel):
     image_urls: List[str]
     template: Optional[str] = None
-    canvas_size: Optional[List[int]] = [1792, 1024]
+    canvas_size: Optional[List[int]] = None  # Legacy support
+    aspect_ratio: Optional[str] = None  # "3:1", "2:2", "1:1", "16:9", "4:3"
+    size: Optional[str] = "MD"  # "SM" (800), "MD" (1024), "LG" (1920), "XL" (2560)
 
 class CollageResponse(BaseModel):
     image_base64: str
@@ -44,8 +46,33 @@ async def create_collage(request: CollageRequest):
         if len(request.image_urls) > 6:
             raise HTTPException(status_code=400, detail="Maximum 6 images allowed")
         
+        # Calculate canvas size from aspect_ratio and size
+        if request.canvas_size:
+            # Legacy: use provided canvas_size
+            canvas_size_tuple = tuple(request.canvas_size)
+        else:
+            # New: calculate from aspect_ratio + size
+            size_map = {
+                "SM": 800,
+                "MD": 1024,
+                "LG": 1920,
+                "XL": 2560
+            }
+            aspect_ratio_map = {
+                "3:1": (3, 1),
+                "2:2": (2, 2),
+                "1:1": (1, 1),
+                "16:9": (16, 9),
+                "4:3": (4, 3),
+                "21:9": (21, 9)
+            }
+            
+            width = size_map.get(request.size or "MD", 1024)
+            aspect_w, aspect_h = aspect_ratio_map.get(request.aspect_ratio or "16:9", (16, 9))
+            height = int(width * aspect_h / aspect_w)
+            canvas_size_tuple = (width, height)
+        
         # สร้าง collage generator
-        canvas_size_tuple = tuple(request.canvas_size) if request.canvas_size else (1792, 1024)
         generator = CollageGenerator(canvas_size=canvas_size_tuple)
         
         # สร้าง collage
