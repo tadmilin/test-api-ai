@@ -172,6 +172,17 @@ export async function POST(request: NextRequest) {
               console.error('💥 Prompt generation error:', promptError)
             }
             
+            // Log the actual prompt being used
+            await payload.create({
+              collection: 'job-logs',
+              data: {
+                jobId: jobId,
+                level: 'info',
+                message: `Prompt used for image ${i + 1}: ${enhancementPrompt}`,
+                timestamp: new Date().toISOString(),
+              },
+            })
+            
             // ✨ Step: Enhance with dynamic prompt
             const enhanceResponse = await fetch(`${baseUrl}/api/generate/enhance`, {
               method: 'POST',
@@ -179,7 +190,8 @@ export async function POST(request: NextRequest) {
               body: JSON.stringify({
                 imageUrl,
                 prompt: enhancementPrompt,
-                strength: job.enhancementStrength || 0.55,
+                strength: job.enhancementStrength || 0.70,
+                photoType: detectedPhotoType,
                 jobId: jobId,
               }),
             })
@@ -334,13 +346,25 @@ export async function POST(request: NextRequest) {
           console.error('💥 Prompt generation error:', promptError)
         }
         
+        // Log the actual prompt being used
+        await payload.create({
+          collection: 'job-logs',
+          data: {
+            jobId: jobId,
+            level: 'info',
+            message: `Prompt used for single image: ${enhancementPrompt}`,
+            timestamp: new Date().toISOString(),
+          },
+        })
+        
         const enhanceResponse = await fetch(`${baseUrl}/api/generate/enhance`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             imageUrl: singleImageUrl,
             prompt: enhancementPrompt,
-            strength: job.enhancementStrength || 0.55,
+            strength: job.enhancementStrength || 0.70,
+            photoType: detectedPhotoType,
             jobId: jobId,
           }),
         })

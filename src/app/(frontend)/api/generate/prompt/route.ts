@@ -119,6 +119,11 @@ export async function POST(request: NextRequest) {
         )
       }
 
+      // CRITICAL: Always analyze ONLY the first image per request
+      // This ensures dynamic, image-specific prompts instead of generic multi-image analysis
+      const imagesForGPT = [validImages[0]]
+      console.log(`🔍 Analyzing first image only (out of ${validImages.length} provided) for focused analysis`)
+
       // Create vision content based on analysisOnly flag
       const visionContent: VisionContent = analysisOnly ? [
         {
@@ -143,7 +148,7 @@ Rules for finalPrompt:
 - Do NOT mention 'create a new image', 'generate new', or 'redesign'
 - Keep it natural, suitable for high-end hotel/resort photography.`
         },
-        ...validImages.map((dataUrl: string) => ({
+        ...imagesForGPT.map((dataUrl: string) => ({
           type: 'image_url' as const,
           image_url: { url: dataUrl, detail: 'high' as const }
         }))
@@ -176,7 +181,7 @@ Content: ${contentTopic || contentDescription || productName}
 
 Return ONLY the final prompt (plain text).`
         },
-        ...validImages.map((dataUrl: string) => ({
+        ...imagesForGPT.map((dataUrl: string) => ({
           type: 'image_url' as const,
           image_url: { url: dataUrl, detail: 'high' as const }
         }))
@@ -201,7 +206,7 @@ Return ONLY the final prompt (plain text).`
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages,
-      max_tokens: analysisOnly ? 1024 : 300,
+      max_tokens: analysisOnly ? 1024 : 512,
       temperature: 0.7,
       response_format: analysisOnly ? { type: 'json_object' } : undefined,
     })

@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     console.log('🎨 Enhancing image with SDXL...')
     console.log('[ENHANCE] imageUrl =', imageUrl)
     console.log('📝 Prompt:', enhancementPrompt.substring(0, 120) + '...')
-    console.log('Strength:', strength || 0.55)
+    console.log('Strength:', strength || 0.70)
     
     // 🔍 CRITICAL: ยืนยันว่ารูปที่ยิงเข้าโมเดลคือรูปใน Drive จริง
     console.log('⚠️ VERIFY THIS URL IN BROWSER - Should show original Drive image!')
@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
     console.log('📸 Final image URL sent to model:', processedImageUrl)
     console.log('📝 Prompt:', enhancementPrompt.substring(0, 120) + '...')
     
-    const finalStrength = Math.min(Math.max(strength || 0.55, 0.35), 0.70)
+    const finalStrength = Math.min(Math.max(strength || 0.70, 0.55), 0.85)
     console.log('🏛️ Strength (requested):', strength)
     console.log('🏛️ Strength (clamped):', finalStrength)
     
@@ -159,8 +159,8 @@ export async function POST(request: NextRequest) {
         image: processedImageUrl,
         prompt: enhancementPrompt,
         negative_prompt: NEGATIVE_PROMPT,
-        num_inference_steps: 30,
-        guidance_scale: 7.5,
+        num_inference_steps: 50,
+        guidance_scale: 8.5,
         prompt_strength: finalStrength,
         scheduler: 'DPMSolverMultistep',
         refine: 'no_refiner',
@@ -176,29 +176,42 @@ export async function POST(request: NextRequest) {
     console.log('✅ SDXL retouching complete:', sdxlImageUrl)
 
     // ✨ ESRGAN Post-Enhance - เพิ่มความคมชัดและ upscale
-    console.log('🔍 Step 3: ESRGAN post-enhance for sharpness...')
+    // Only apply ESRGAN for food photos to avoid oversharpening rooms/buildings
+    console.log('🔍 Step 3: Checking if ESRGAN upscaling needed...')
     
     let finalEnhancedUrl = sdxlImageUrl
     
-    try {
-      const esrganPrediction = await replicate.predictions.create({
-        version: 'f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa',
-        input: {
-          image: sdxlImageUrl,
-          scale: 2, // upscale 2x
-          face_enhance: false,
-        },
-      })
-      
-      const esrganResult = await replicate.wait(esrganPrediction)
-      finalEnhancedUrl = Array.isArray(esrganResult.output)
-        ? esrganResult.output[0]
-        : esrganResult.output as string
-      
-      console.log('✅ ESRGAN post-enhance complete:', finalEnhancedUrl)
-    } catch (esrganError) {
-      console.error('⚠️ ESRGAN failed, using SDXL output:', esrganError)
-      // ถ้า ESRGAN fail ใช้ SDXL output ตรงๆ
+    // Extract photoType from prompt if possible (look for keywords)
+    const promptLower = enhancementPrompt.toLowerCase()
+    const isFoodPhoto = promptLower.includes('food') || promptLower.includes('buffet') || 
+                        promptLower.includes('dining') || promptLower.includes('appetizing') ||
+                        promptLower.includes('dish') || promptLower.includes('meal')
+    
+    if (isFoodPhoto) {
+      console.log('🍴 Food photo detected - applying ESRGAN for sharpness...')
+      try {
+        const esrganPrediction = await replicate.predictions.create({
+          version: 'f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa',
+          input: {
+            image: sdxlImageUrl,
+            scale: 2, // upscale 2x
+            face_enhance: false,
+          },
+        })
+        
+        const esrganResult = await replicate.wait(esrganPrediction)
+        finalEnhancedUrl = Array.isArray(esrganResult.output)
+          ? esrganResult.output[0]
+          : esrganResult.output as string
+        
+        console.log('✅ ESRGAN post-enhance complete:', finalEnhancedUrl)
+      } catch (esrganError) {
+        console.error('⚠️ ESRGAN failed, using SDXL output:', esrganError)
+        // ถ้า ESRGAN fail ใช้ SDXL output ตรงๆ
+      }
+    } else {
+      console.log('🏨 Non-food photo - skipping ESRGAN to avoid oversharpening rooms/buildings')
+      console.log('✅ Using SDXL output directly')
     }
 
     // ดาวน์โหลดรูปสุดท้าย
