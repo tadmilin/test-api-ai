@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import { google } from 'googleapis'
-import { buildConstraintsText, getAmbienceInstruction } from '@/utilities/promptRules'
+import { GEOMETRY_RULES, FOOD_RULES, REALISM_RULES, getAmbienceInstruction } from '@/utilities/promptRules'
 
 export async function POST(request: NextRequest) {
   try {
@@ -160,29 +160,30 @@ Rules for finalPrompt:
 
 You will receive ONE image of: bedrooms, bathrooms, lobby, entrance, building exteriors, dining rooms, buffet lines, food close-ups, pools, gyms, spas, meeting rooms, nature and resort exteriors.
 
-${buildConstraintsText()}
+STRICT ENHANCEMENT CONSTRAINTS:
+${GEOMETRY_RULES.trim()}
 
-DYNAMIC AMBIENCE RULES - You must decide based on the scene:
-- If scene looks empty → add subtle props (candles, small vases, glasses) naturally
-- If modern/minimal → add only soft lighting, avoid clutter
-- If buffet scene → allow small ambient props, but do NOT modify dishes
-- If dining hall → enhance table setup but preserve layout
-- If lobby/room → add soft shadows + décor only if stylistically consistent
+${REALISM_RULES.trim()}
+
+AMBIENCE GUIDELINE:
+${getAmbienceInstruction('room')}
 
 YOUR TASK:
-1. Analyze THIS specific image carefully
-2. Identify what makes it look less premium
-3. Create ONE final English enhancement prompt, 100-150 words, that:
+1. First, identify the photo type (buffet, dining, bedroom, lobby, pool, etc.)
+2. Analyze THIS specific image carefully
+3. Identify what makes it look less premium
+4. Create ONE final English enhancement prompt, 100-150 words, that:
    - PRESERVES original scene geometry, reflections, and physical properties
    - ENHANCES lighting naturally with soft warm hotel tones
    - IMPROVES depth, clarity, contrast realistically
-   - MAKES food more appetizing WITHOUT changing food identity
+   - If food photo: ${FOOD_RULES.trim()}
    - CAN suggest subtle ambient props ONLY if scene is empty/sparse
    - MUST avoid plastic-like shine or unrealistic smoothing
 
-FORBIDDEN:
-- Do NOT say 'create a new image', 'generate new', 'redesign', 'replace the scene'
-- Do NOT alter pot size, table curves, buffet layout, or structural elements
+CRITICAL RULES:
+- Do NOT change layout, geometry, reflections, or food identity
+- Do NOT say 'create a new image', 'generate new', 'redesign'
+- Do NOT alter pot size, table curves, buffet layout
 - Do NOT hallucinate new dishes or change food types
 - Do NOT add excessive props that clutter the scene
 

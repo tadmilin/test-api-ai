@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     console.log('🎨 Enhancing image with SDXL...')
     console.log('[ENHANCE] imageUrl =', imageUrl)
     console.log('📝 Prompt:', enhancementPrompt.substring(0, 120) + '...')
-    console.log('Strength:', strength || 0.70)
+    console.log('Strength:', strength || 0.55)
     
     // 🔍 CRITICAL: ยืนยันว่ารูปที่ยิงเข้าโมเดลคือรูปใน Drive จริง
     console.log('⚠️ VERIFY THIS URL IN BROWSER - Should show original Drive image!')

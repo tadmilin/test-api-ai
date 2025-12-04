@@ -139,12 +139,14 @@ export async function POST(request: NextRequest) {
               detectedPhotoType = ((job as any).photoTypeFromSheet as PhotoType) || 'generic'
             }
             
-            // 📝 Step: Dynamic prompt per image
-            console.log(`📝 Generating dynamic enhancement prompt for image ${i + 1}/${referenceUrls.length}...`)
+            // 📝 Step: Two-Phase Prompting per image
+            console.log(`📝 Phase A: Analyzing image ${i + 1}/${referenceUrls.length}...`)
             
             let enhancementPrompt = 'Professional hotel photo retouch: improve lighting, colors, and clarity naturally.'
+            let analysisData: any = {}
             
             try {
+              // Phase A: Analysis with analysisOnly:true
               const promptRes = await fetch(`${baseUrl}/api/generate/prompt`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -153,32 +155,37 @@ export async function POST(request: NextRequest) {
                   contentTopic: (job as any).contentTopic || (job as any).contentDescription,
                   contentDescription: (job as any).contentDescription,
                   referenceImageUrls: [imageUrl],
-                  analysisOnly: false,
+                  analysisOnly: true, // Phase A: Extract insights
                 }),
               })
 
               if (promptRes.ok) {
-                const data = await promptRes.json()
-                if (data.prompt) {
-                  enhancementPrompt = data.prompt
-                  console.log('✅ Dynamic prompt:', enhancementPrompt.substring(0, 120) + '...')
+                analysisData = await promptRes.json()
+                if (analysisData.prompt) {
+                  enhancementPrompt = analysisData.prompt // finalPrompt from analysis
+                  console.log(`✅ Phase A Analysis complete:`, {
+                    photoType: analysisData.photoType,
+                    issues: analysisData.issues?.slice(0, 3),
+                    enhanceIdeas: analysisData.enhanceIdeas?.slice(0, 3),
+                  })
+                  console.log('✅ Phase B: Using finalPrompt:', enhancementPrompt.substring(0, 120) + '...')
                 } else {
-                  console.warn('⚠️ Prompt API response has no prompt field, using default fallback')
+                  console.warn('⚠️ Phase A: No prompt in response, using fallback')
                 }
               } else {
-                console.warn('⚠️ Prompt API request failed, using default fallback')
+                console.warn('⚠️ Phase A: Request failed, using fallback')
               }
             } catch (promptError) {
-              console.error('💥 Prompt generation error:', promptError)
+              console.error('💥 Phase A error:', promptError)
             }
             
-            // Log the actual prompt being used
+            // Log the analysis and prompt
             await payload.create({
               collection: 'job-logs',
               data: {
                 jobId: jobId,
                 level: 'info',
-                message: `Prompt used for image ${i + 1}: ${enhancementPrompt}`,
+                message: `[Image ${i + 1}] Phase A: ${analysisData.photoType || 'unknown'} | Issues: ${analysisData.issues?.join(', ') || 'none'} | Enhancement: ${enhancementPrompt}`,
                 timestamp: new Date().toISOString(),
               },
             })
@@ -317,8 +324,11 @@ export async function POST(request: NextRequest) {
         console.log('📝 Generating dynamic enhancement prompt for single image...')
         
         let enhancementPrompt = 'Professional hotel photo retouch: improve lighting, colors, and clarity naturally.'
+        let analysisData: any = {}
         
         try {
+          // Phase A: Analysis with analysisOnly:true
+          console.log('📝 Phase A: Analyzing single image...')
           const promptRes = await fetch(`${baseUrl}/api/generate/prompt`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -327,32 +337,37 @@ export async function POST(request: NextRequest) {
               contentTopic: (job as any).contentTopic || (job as any).contentDescription,
               contentDescription: (job as any).contentDescription,
               referenceImageUrls: [singleImageUrl],
-              analysisOnly: false,
+              analysisOnly: true, // Phase A: Extract insights
             }),
           })
 
           if (promptRes.ok) {
-            const data = await promptRes.json()
-            if (data.prompt) {
-              enhancementPrompt = data.prompt
-              console.log('✅ Dynamic prompt:', enhancementPrompt.substring(0, 120) + '...')
+            analysisData = await promptRes.json()
+            if (analysisData.prompt) {
+              enhancementPrompt = analysisData.prompt // finalPrompt from analysis
+              console.log(`✅ Phase A Analysis complete:`, {
+                photoType: analysisData.photoType,
+                issues: analysisData.issues?.slice(0, 3),
+                enhanceIdeas: analysisData.enhanceIdeas?.slice(0, 3),
+              })
+              console.log('✅ Phase B: Using finalPrompt:', enhancementPrompt.substring(0, 120) + '...')
             } else {
-              console.warn('⚠️ Prompt API response has no prompt field, using default fallback')
+              console.warn('⚠️ Phase A: No prompt in response, using fallback')
             }
           } else {
-            console.warn('⚠️ Prompt API request failed, using default fallback')
+            console.warn('⚠️ Phase A: Request failed, using fallback')
           }
         } catch (promptError) {
-          console.error('💥 Prompt generation error:', promptError)
+          console.error('💥 Phase A error:', promptError)
         }
         
-        // Log the actual prompt being used
+        // Log the analysis and prompt
         await payload.create({
           collection: 'job-logs',
           data: {
             jobId: jobId,
             level: 'info',
-            message: `Prompt used for single image: ${enhancementPrompt}`,
+            message: `[Single Image] Phase A: ${analysisData.photoType || 'unknown'} | Issues: ${analysisData.issues?.join(', ') || 'none'} | Enhancement: ${enhancementPrompt}`,
             timestamp: new Date().toISOString(),
           },
         })

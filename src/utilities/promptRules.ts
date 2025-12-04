@@ -3,89 +3,52 @@
  * Production-ready rules to prevent distortion and hallucination
  */
 
-export const GEOMETRY_RULES = [
-  'preserve original scene geometry',
-  'preserve stainless steel reflections and physical lighting',
-  'preserve all serving equipment shapes',
-  'avoid altering pot size, table curves, or buffet layout',
-  'maintain original camera angle and perspective',
-  'keep all structural elements unchanged',
-]
+// 1) GEOMETRY_RULES - ป้องกัน AI ทำให้โต๊ะ, ถาดอาหาร, หม้อ, reflection เพี้ยน
+export const GEOMETRY_RULES = `
+Preserve all geometric structures: buffet tables, serving trays, chafing dishes,
+metal reflections, lighting angles, furniture edges, walls, and room perspective.
+Do not bend, warp, melt, stretch, or reshape any objects.
+Do not alter reflections or metallic surfaces.
+`
 
-export const FOOD_RULES = [
-  'preserve original food shapes and textures',
-  'avoid hallucinating new dishes or changing food type',
-  'subtly enhance appetizing appearance without changing food identity',
-  'maintain authentic food colors and natural presentation',
-  'avoid plastic-like shine or unrealistic smoothing on food',
-  'do not add, remove, or modify dishes',
-]
+// 2) FOOD_RULES - ป้องกันอาหารเพี้ยน, สีเปลี่ยน, เพิ่มเมนูใหม่
+export const FOOD_RULES = `
+Preserve food identity, ingredients, arrangement, shapes, texture, color tone.
+Do not invent new dishes. Do not replace curry or soup color.
+Do not modify food geometry. Do not change portion size.
+Enhance only clarity, vibrancy, appetizing appeal.
+`
 
-export const AMBIENT_RULES = {
-  empty_scene: 'add subtle props (candles, small vases, glasses) to fill empty spaces naturally',
-  modern_minimal: 'add only soft lighting, avoid clutter, keep minimalist aesthetic',
-  buffet_scene: 'allow small ambient props, but do not modify dishes or serving equipment',
-  dining_hall: 'enhance table setup but preserve original layout and furniture placement',
-  lobby_room: 'add soft shadows and décor only if stylistically consistent with existing design',
+// 3) REALISM_RULES - ตกแต่งแบบธรรมชาติ ห้ามเกินจริง
+export const REALISM_RULES = `
+Maintain natural realism. No fantasy lighting.
+No artificial glow. No repainting of materials.
+Retain all real-world textures and physical accuracy.
+`
+
+// 4) AMBIENT_RULES + Helper Function - เลือก ambience ตามภาพนั้น
+export const AMBIENT_RULES: Record<string, string> = {
+  buffet: "Subtle dining ambience. Add mild reflections, warm light, NO food changes.",
+  dining: "Slight table decor allowed: small vase, napkins, subtle lighting.",
+  empty: "Add soft ambience only. No major props.",
+  room: "Enhance window light, fabric, wood tone. No layout changes.",
 }
 
-export const REALISM_RULES = [
-  'enhance lighting naturally with soft warm hotel tones',
-  'improve depth, clarity, contrast, and reflections realistically',
-  'avoid over-saturation or excessive post-processing effects',
-  'maintain natural material properties (metal, wood, fabric, glass)',
-  'ensure all shadows and reflections are physically accurate',
-]
+export function getAmbienceInstruction(type: string): string {
+  return AMBIENT_RULES[type] || ""
+}
 
-export const NEGATIVE_ENHANCEMENT = [
-  'distorted geometry',
-  'warped metal',
-  'melted shapes',
-  'AI artifacts',
-  'fake reflections',
-  'invented objects',
-  'unrealistic lighting',
-  'over-saturation',
-  'excessive gloss',
-  'over-sharpening',
-  'wrong food textures',
-  'changed dishes',
-  'hallucinated props',
-  'plastic-looking surfaces',
-  'impossible reflections',
-  'morphed furniture',
-].join(', ')
+// 5) NEGATIVE_ENHANCEMENT - ลดความเสี่ยงภาพเละโดยเฉพาะอาหาร + โลหะ
+export const NEGATIVE_ENHANCEMENT = `
+distorted geometry, warped metal, melted reflections, fake dishes,
+invented objects, low-resolution texture, blurry edges, AI artifacts,
+plastic-looking food, unnatural shine, incorrect shadows,
+incorrect perspective, duplicated items, floating objects
+`
 
-/**
- * Build dynamic ambience instruction based on scene analysis
- */
-export function getAmbienceInstruction(
-  photoType: string,
-  issues: string[],
-  sceneEmpty?: boolean
-): string {
-  // Determine scene context
-  if (sceneEmpty || issues.some(i => i.toLowerCase().includes('empty'))) {
-    return AMBIENT_RULES.empty_scene
-  }
-  
-  if (photoType.includes('buffet') || photoType.includes('food_closeup')) {
-    return AMBIENT_RULES.buffet_scene
-  }
-  
-  if (photoType.includes('dining')) {
-    return AMBIENT_RULES.dining_hall
-  }
-  
-  if (photoType.includes('lobby') || photoType.includes('bedroom')) {
-    return AMBIENT_RULES.lobby_room
-  }
-  
-  if (photoType.includes('modern') || issues.some(i => i.toLowerCase().includes('minimal'))) {
-    return AMBIENT_RULES.modern_minimal
-  }
-  
-  return AMBIENT_RULES.lobby_room // default
+// 6) ฟังก์ชันรวม Negative Prompt
+export function getFullNegativePrompt(base: string): string {
+  return `${base}, ${NEGATIVE_ENHANCEMENT}`
 }
 
 /**
@@ -94,19 +57,12 @@ export function getAmbienceInstruction(
 export function buildConstraintsText(): string {
   return `
 CRITICAL CONSTRAINTS to prevent distortion:
-${GEOMETRY_RULES.map(r => `- ${r}`).join('\n')}
+${GEOMETRY_RULES.trim()}
 
 FOOD PRESERVATION RULES:
-${FOOD_RULES.map(r => `- ${r}`).join('\n')}
+${FOOD_RULES.trim()}
 
 REALISM RULES:
-${REALISM_RULES.map(r => `- ${r}`).join('\n')}
+${REALISM_RULES.trim()}
 `.trim()
-}
-
-/**
- * Get full negative prompt for SDXL
- */
-export function getFullNegativePrompt(baseNegative: string): string {
-  return `${baseNegative}, ${NEGATIVE_ENHANCEMENT}`
 }
