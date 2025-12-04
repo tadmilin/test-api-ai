@@ -1,6 +1,21 @@
-# Image Collage Service
+# AI Graphic Design Service 🎨
 
-Python service สำหรับสร้าง image collage จากรูปหลายรูป
+Professional graphic design service for social media posts
+
+## Features ✨
+
+- **5 Professional Styles**: Auto-selected randomly
+  - Modern Minimal, Gradient Luxury, Resort Mountain, Eco Nature, Modern Entrance
+- **Smart Color Extraction**: Extracts dominant colors from images
+- **Social Media Formats**: Facebook (1200×630), Instagram (1080×1080, 1080×1920)
+- **1-6 Images**: Automatic layout optimization
+
+## Architecture
+
+```
+main.py              → FastAPI server
+graphic_designer.py  → Complete design system (download + styles)
+```
 
 ## Installation
 
@@ -14,42 +29,24 @@ pip install -r requirements.txt
 python main.py
 ```
 
-หรือ
-
-```bash
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
-
 ## API Endpoints
 
 ### POST /collage
 
-สร้าง collage จากรูปหลายรูป
-
-**Request Body:**
+**Request:**
 ```json
 {
-  "image_urls": ["url1", "url2", "url3"],
-  "template": "hero_grid",
-  "canvas_size": [1792, 1024]
+  "image_urls": ["url1", "url2"],
+  "social_media_format": "facebook_post"
 }
 ```
-
-**Templates Available:**
-- `hero_grid` - 1 รูปใหญ่ซ้าย + 3 รูปเล็กขวา
-- `split` - 2 รูปแบ่งครึ่ง
-- `masonry` - 4-6 รูปแบบ Pinterest
-- `grid` - 4 รูป 2x2
 
 **Response:**
 ```json
 {
-  "image_base64": "base64_string...",
-  "template_used": "hero_grid",
-  "dimensions": {
-    "width": 1792,
-    "height": 1024
-  }
+  "image_base64": "iVBORw0KGgo...",
+  "template_used": "graphic_design_professional_auto",
+  "dimensions": {"width": 1200, "height": 630}
 }
 ```
 
@@ -57,17 +54,16 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 Health check endpoint
 
+## Deploy to Railway
+
+Railway auto-detects Python and runs the service.
+Port: Auto from `$PORT` env variable
+
 ## Development
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Run in development mode
-uvicorn main:app --reload
-
-# Test
+# Test locally
 curl -X POST http://localhost:8000/collage \
   -H "Content-Type: application/json" \
-  -d '{"image_urls": ["url1", "url2"]}'
+  -d '{"image_urls": ["https://example.com/img.jpg"], "social_media_format": "instagram_feed"}'
 ```

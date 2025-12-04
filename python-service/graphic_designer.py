@@ -7,6 +7,8 @@ from PIL import Image, ImageDraw, ImageFilter
 from typing import List, Tuple, Dict
 import random
 from collections import Counter
+import requests
+from io import BytesIO
 
 class GraphicDesigner:
     """
@@ -21,6 +23,19 @@ class GraphicDesigner:
         self.margin = 40  # ระยะห่างรอบนอก
         self.frame_width = 15  # ความหนากรอบ
         self.corner_radius = 20  # มุมโค้ง
+    
+    def download_image(self, url: str) -> Image.Image:
+        """
+        ดาวน์โหลดรูปจาก URL
+        """
+        try:
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+            response = requests.get(url, headers=headers, timeout=30)
+            response.raise_for_status()
+            img = Image.open(BytesIO(response.content))
+            return img.convert('RGB')
+        except Exception as e:
+            raise Exception(f"Failed to download image from {url}: {str(e)}")
         
     def extract_dominant_colors(self, image: Image.Image, num_colors: int = 3) -> List[Tuple[int, int, int]]:
         """
@@ -391,3 +406,32 @@ class GraphicDesigner:
         
         selected_style = random.choice(styles)
         return selected_style(images)
+    
+    def process(self, image_urls: List[str]) -> Image.Image:
+        """
+        ฟังก์ชันหลักที่เรียกใช้จากภายนอก
+        รับ URLs → ดาวน์โหลด → สุ่มสไตล์ → คืนรูปที่สร้างเสร็จ
+        """
+        print(f"📥 Downloading {len(image_urls)} images...")
+        images = []
+        
+        for i, url in enumerate(image_urls):
+            try:
+                print(f"  [{i+1}/{len(image_urls)}] {url[:60]}...")
+                img = self.download_image(url)
+                images.append(img)
+            except Exception as e:
+                print(f"  ⚠️ Warning: Failed to download image {i+1}: {e}")
+                continue
+        
+        if not images:
+            raise Exception("❌ No valid images downloaded!")
+        
+        print(f"✅ Successfully loaded {len(images)} images")
+        print(f"🎨 Selecting random design style...")
+        
+        # สร้างงานกราฟิก
+        result = self.select_random_style(images)
+        
+        print(f"✅ Graphic design created: {result.size}")
+        return result
