@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
     const nanoBananaPrediction = await replicate.predictions.create({
       model: 'google/nano-banana',
       input: {
-        image: processedImageUrl,
+        image_input: processedImageUrl,  // Correct parameter name!
         prompt: prompt,
         // Nano-Banana uses simple conversational prompts
         // No strength, negative_prompt, steps, or guidance parameters
