@@ -23,8 +23,12 @@ export async function POST(request: NextRequest) {
 
     console.log('🎨 Enhancing image with SDXL...')
     console.log('Photo Type:', resolvedPhotoType)
-    console.log('Image URL:', imageUrl)
+    console.log('[ENHANCE] imageUrl =', imageUrl)
     console.log('Strength:', strength || 0.10)
+    
+    // 🔍 CRITICAL: ยืนยันว่ารูปที่ยิงเข้าโมเดลคือรูปใน Drive จริง
+    console.log('⚠️ VERIFY THIS URL IN BROWSER - Should show original Drive image!')
+    console.log('👉 Open this URL:', imageUrl)
 
     const apiToken = process.env.REPLICATE_API_TOKEN
 
@@ -117,21 +121,29 @@ export async function POST(request: NextRequest) {
       
       processedImageUrl = sourceBlob.url
       console.log('✅ Uploaded to Blob:', processedImageUrl)
+      console.log('🔍 VERIFY Blob URL - Should contain Drive image content!')
+      console.log('👉 Open this Blob URL:', processedImageUrl)
     } else {
       // ถ้าเป็น URL ปกติ (เช่น Blob URL) ดาวน์โหลดและตรวจสอบขนาด
       console.log('📥 Downloading image from URL...')
       const checkImageResponse = await fetch(imageUrl)
       if (!checkImageResponse.ok) {
+        console.error('❌ FAILED to fetch image from:', imageUrl)
         throw new Error('Failed to fetch image')
       }
       
       const checkImageBuffer = await checkImageResponse.arrayBuffer()
       const imageSizeKB = checkImageBuffer.byteLength / 1024
       console.log(`Image size: ${imageSizeKB.toFixed(2)} KB`)
+      console.log('✅ Image downloaded successfully')
     }
 
     // SDXL img2img retouching - แต่งรูปเดิมเท่านั้น
     console.log('🎨 SDXL img2img subtle retouching...')
+    console.log('🚀 Sending to SDXL model...')
+    console.log('📸 Final image URL sent to model:', processedImageUrl)
+    console.log('📝 Prompt:', prompt.substring(0, 100) + '...')
+    console.log('🎛️ Strength:', Math.min(Math.max(strength || 0.10, 0.05), 0.15))
     
     const sdxlPrediction = await replicate.predictions.create({
       version: '39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
