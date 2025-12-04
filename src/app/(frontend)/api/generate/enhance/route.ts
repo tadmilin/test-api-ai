@@ -2,52 +2,42 @@ import { NextRequest, NextResponse } from 'next/server'
 import Replicate from 'replicate'
 import { put } from '@vercel/blob'
 import { google } from 'googleapis'
+import { buildRetouchPrompt, NEGATIVE_PROMPT } from '@/utilities/promptTemplates'
+import type { PhotoType } from '@/utilities/photoTypeClassifier'
 
 export async function POST(request: NextRequest) {
   try {
-    const { collageUrl, prompt, strength, jobId } = await request.json()
+    const { imageUrl, photoType, strength, jobId } = await request.json()
 
-    if (!collageUrl) {
-      return NextResponse.json(
-        { error: 'collageUrl is required' },
-        { status: 400 }
-      )
-    }
-
-    if (!prompt) {
-      return NextResponse.json(
-        { error: 'prompt is required' },
-        { status: 400 }
-      )
+    if (!imageUrl) {
+      return NextResponse.json({ error: 'imageUrl is required' }, { status: 400 })
     }
 
     if (!jobId) {
-      return NextResponse.json(
-        { error: 'jobId is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'jobId is required' }, { status: 400 })
     }
+
+    // Build prompt based on photo type
+    const resolvedPhotoType: PhotoType = photoType || 'generic'
+    const prompt = buildRetouchPrompt(resolvedPhotoType)
+
+    console.log('🎨 Enhancing image with SDXL...')
+    console.log('Photo Type:', resolvedPhotoType)
+    console.log('Image URL:', imageUrl)
+    console.log('Strength:', strength || 0.10)
 
     const apiToken = process.env.REPLICATE_API_TOKEN
 
     if (!apiToken) {
-      return NextResponse.json(
-        { error: 'Replicate API token not configured' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Replicate API token not configured' }, { status: 500 })
     }
 
     const replicate = new Replicate({ auth: apiToken })
 
-    console.log('Enhancing image with Replicate SDXL...')
-    console.log('Input URL:', collageUrl)
-    console.log('Prompt:', prompt.substring(0, 100) + '...')
-    console.log('Strength:', strength || 0.10)
-
     // ตรวจสอบว่าเป็น Google Drive URL หรือไม่
-    let processedImageUrl = collageUrl
+    let processedImageUrl = imageUrl
     
-    if (collageUrl.includes('drive.google.com')) {
+    if (imageUrl.includes('drive.google.com')) {
       console.log('🔄 Detected Google Drive URL, downloading and uploading to Blob...')
       
       // Extract file ID from various Google Drive URL formats
@@ -56,11 +46,11 @@ export async function POST(request: NextRequest) {
       // Format 1: /uc?export=view&id=FILE_ID
       // Format 2: /open?id=FILE_ID
       // Format 3: /file/d/FILE_ID/view
-      if (collageUrl.includes('id=')) {
-        const match = collageUrl.match(/[?&]id=([^&]+)/)
+      if (imageUrl.includes('id=')) {
+        const match = imageUrl.match(/[?&]id=([^&]+)/)
         fileId = match ? match[1] : null
-      } else if (collageUrl.includes('/file/d/')) {
-        const match = collageUrl.match(/\/file\/d\/([^/]+)/)
+      } else if (imageUrl.includes('/file/d/')) {
+        const match = imageUrl.match(/\/file\/d\/([^/]+)/)
         fileId = match ? match[1] : null
       }
       
@@ -130,7 +120,7 @@ export async function POST(request: NextRequest) {
     } else {
       // ถ้าเป็น URL ปกติ (เช่น Blob URL) ดาวน์โหลดและตรวจสอบขนาด
       console.log('📥 Downloading image from URL...')
-      const checkImageResponse = await fetch(collageUrl)
+      const checkImageResponse = await fetch(imageUrl)
       if (!checkImageResponse.ok) {
         throw new Error('Failed to fetch image')
       }
@@ -140,38 +130,18 @@ export async function POST(request: NextRequest) {
       console.log(`Image size: ${imageSizeKB.toFixed(2)} KB`)
     }
 
-    // ขั้นตอนที่ 1: ESRGAN Pre-Enhance (ทำให้รูปคมก่อน)
-    console.log('🔍 Step 1: ESRGAN pre-enhance for clarity...')
-    
-    const preEnhancePrediction = await replicate.predictions.create({
-      version: 'f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa',
-      input: {
-        image: processedImageUrl,
-        scale: 1,
-        face_enhance: false,
-      },
-    })
-    
-    // Wait for completion
-    const preEnhanceResult = await replicate.wait(preEnhancePrediction)
-    const preEnhanceOutput = Array.isArray(preEnhanceResult.output) 
-      ? preEnhanceResult.output[0] 
-      : preEnhanceResult.output as string
-
-    console.log('✅ Pre-enhance complete:', preEnhanceOutput)
-
-    // ขั้นตอนที่ 2: SDXL img2img retouching (ปรับแสง สี ตามรูปแบบ)
-    console.log('🎨 Step 2: SDXL img2img retouching...')
+    // SDXL img2img retouching - แต่งรูปเดิมเท่านั้น
+    console.log('🎨 SDXL img2img subtle retouching...')
     
     const sdxlPrediction = await replicate.predictions.create({
       version: '39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
       input: {
-        image: preEnhanceOutput,
-        prompt: prompt || 'Professional photo enhancement: improve lighting, colors, and clarity. Natural and realistic style. Keep all subjects and layout unchanged.',
-        negative_prompt: 'blurry, low quality, distorted, warped, unrealistic, artificial, overprocessed, oversharpened, luxury hotel, five-star, fake-looking, cartoon, anime, painting, sketch, illustration, CG, 3D render, added objects, removed objects, changed layout',
+        image: processedImageUrl,
+        prompt,
+        negative_prompt: NEGATIVE_PROMPT,
         num_inference_steps: 25,
-        guidance_scale: 7.5,
-        strength: Math.min(Math.max(strength || 0.3, 0.25), 0.35),
+        guidance_scale: Math.min(Math.max(3.0, 4.0), 5.0), // 3-5 range, default 4
+        strength: Math.min(Math.max(strength || 0.10, 0.05), 0.15), // 0.05-0.15 range
         scheduler: 'DPMSolverMultistep',
       },
     })
@@ -184,28 +154,8 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ SDXL retouching complete:', sdxlImageUrl)
 
-    // ขั้นตอนที่ 3: ESRGAN Post-Enhance (ขยายและเพิ่มความคม)
-    console.log('✨ Step 3: ESRGAN post-enhance for final quality...')
-    
-    const postEnhancePrediction = await replicate.predictions.create({
-      version: 'f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa',
-      input: {
-        image: sdxlImageUrl,
-        scale: 2,
-        face_enhance: false,
-      },
-    })
-    
-    // Wait for completion
-    const postEnhanceResult = await replicate.wait(postEnhancePrediction)
-    const finalEnhancedUrl = Array.isArray(postEnhanceResult.output)
-      ? postEnhanceResult.output[0]
-      : postEnhanceResult.output as string
-
-    console.log('✅ Post-enhance complete:', finalEnhancedUrl)
-
     // ดาวน์โหลดรูปสุดท้าย
-    const finalImageResponse = await fetch(finalEnhancedUrl)
+    const finalImageResponse = await fetch(sdxlImageUrl)
     if (!finalImageResponse.ok) {
       throw new Error('Failed to download final enhanced image')
     }
@@ -224,7 +174,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       imageUrl: blob.url,
-      originalPrompt: prompt,
+      photoType: resolvedPhotoType,
     })
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to enhance image'

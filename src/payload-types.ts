@@ -807,6 +807,22 @@ export interface Job {
    * Full content description from Google Sheet (Content_Description column)
    */
   contentDescription?: string | null;
+  /**
+   * Hashtags from Google Sheet
+   */
+  hashtags?: string | null;
+  /**
+   * Additional notes from Google Sheet
+   */
+  notes?: string | null;
+  /**
+   * Photo type classified from sheet content (auto-detected)
+   */
+  photoTypeFromSheet?: ('bedroom' | 'dining' | 'lobby' | 'pool' | 'bathroom' | 'generic') | null;
+  /**
+   * Final photo type after hybrid detection (sheet + GPT Vision)
+   */
+  resolvedPhotoType?: ('bedroom' | 'dining' | 'lobby' | 'pool' | 'bathroom' | 'generic') | null;
   mood?: string | null;
   targetPlatforms?: ('facebook' | 'instagram_feed' | 'instagram_story')[] | null;
   referenceImageIds?:
@@ -830,7 +846,7 @@ export interface Job {
    */
   collageTemplate?: ('auto' | 'hero_grid' | 'split' | 'masonry' | 'grid') | null;
   /**
-   * How much the AI modifies the image (0.3 = subtle, 0.8 = heavy)
+   * How much the AI modifies the image (0.05 = very subtle, 0.10 = recommended, 0.15 = noticeable)
    */
   enhancementStrength?: number | null;
   generatedPrompt?: string | null;
@@ -1507,6 +1523,10 @@ export interface JobsSelect<T extends boolean = true> {
   contentTopic?: T;
   postTitleHeadline?: T;
   contentDescription?: T;
+  hashtags?: T;
+  notes?: T;
+  photoTypeFromSheet?: T;
+  resolvedPhotoType?: T;
   mood?: T;
   targetPlatforms?: T;
   referenceImageIds?:

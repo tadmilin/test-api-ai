@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPayload } from 'payload'
 import config from '@payload-config'
+import { resolvePhotoType } from '@/utilities/photoTypeClassifier'
+import type { PhotoType } from '@/utilities/photoTypeClassifier'
 
 export async function POST(request: NextRequest) {
   try {
@@ -56,13 +58,107 @@ export async function POST(request: NextRequest) {
       
       console.log(`📊 Processing ${referenceUrls.length} images`)
       
-      // NEW WORKFLOW: สร้าง Collage ก่อน แล้วค่อย Enhance ทีเดียว
+      // NEW WORKFLOW: Enhance แต่ละรูปก่อน แล้วค่อยรวมเป็น Collage ทีหลัง
       let finalImageUrl: string | null = null
       
       if (referenceUrls.length > 1) {
-        console.log('🖼️ Step 1: Creating collage from original images...')
+        console.log('🎨 Step 1: Enhancing each image individually with hybrid photo type detection...')
         
-        // Default template ถ้าไม่ได้เลือก
+        const enhancedImageUrls: string[] = []
+        let resolvedType: PhotoType | null = null
+        
+        // Enhance ทีละรูป
+        for (let i = 0; i < referenceUrls.length; i++) {
+          const imageUrl = referenceUrls[i]
+          console.log(`\n🖼️ Processing image ${i + 1}/${referenceUrls.length}...`)
+          
+          try {
+            // ✨ Step 1a: Analyze photo type with GPT Vision
+            console.log('🔍 Analyzing photo type...')
+            
+            let detectedPhotoType: PhotoType = 'generic'
+            
+            try {
+              const analyzeRes = await fetch(`${baseUrl}/api/analyze/photoType`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  imageUrl,
+                  sheetType: (job as any).photoTypeFromSheet,
+                }),
+              })
+
+              if (analyzeRes.ok) {
+                const { sheetType, detectedType } = await analyzeRes.json()
+                detectedPhotoType = resolvePhotoType(sheetType, detectedType)
+                console.log(`📋 Sheet type: ${sheetType || 'none'}, GPT detected: ${detectedType || 'none'} → Resolved: ${detectedPhotoType}`)
+                
+                // เซฟ resolvedPhotoType ครั้งแรก
+                if (i === 0 && !resolvedType) {
+                  resolvedType = detectedPhotoType
+                  await payload.update({
+                    collection: 'jobs',
+                    id: jobId,
+                    data: { resolvedPhotoType: detectedPhotoType } as any,
+                  })
+                }
+              } else {
+                console.warn('⚠️ Photo type analysis failed, using fallback')
+                detectedPhotoType = ((job as any).photoTypeFromSheet as PhotoType) || 'generic'
+              }
+            } catch (analyzeError) {
+              console.error('💥 Photo type analysis error:', analyzeError)
+              detectedPhotoType = ((job as any).photoTypeFromSheet as PhotoType) || 'generic'
+            }
+            
+            // ✨ Step 1b: Enhance with detected photo type
+            const enhanceResponse = await fetch(`${baseUrl}/api/generate/enhance`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                imageUrl,
+                photoType: detectedPhotoType,
+                strength: job.enhancementStrength || 0.10,
+                jobId: jobId,
+              }),
+            })
+            
+            if (!enhanceResponse.ok) {
+              const errorText = await enhanceResponse.text()
+              console.error(`⚠️ Enhancement failed for image ${i + 1}:`, errorText)
+              // ถ้าแต่งไม่สำเร็จ ใช้รูปต้นฉบับแทน
+              if (typeof imageUrl === 'string' && imageUrl) {
+                enhancedImageUrls.push(imageUrl)
+              }
+            } else {
+              const { imageUrl: enhancedUrl } = await enhanceResponse.json()
+              enhancedImageUrls.push(enhancedUrl)
+              console.log(`✅ Image ${i + 1} enhanced:`, enhancedUrl)
+              
+              await payload.create({
+                collection: 'job-logs',
+                data: {
+                  jobId: jobId,
+                  level: 'info',
+                  message: `Enhanced image ${i + 1}/${referenceUrls.length}`,
+                  timestamp: new Date().toISOString(),
+                },
+              })
+            }
+          } catch (error) {
+            console.error(`💥 Error enhancing image ${i + 1}:`, error)
+            // ถ้า error ใช้รูปต้นฉบับแทน
+            if (typeof imageUrl === 'string' && imageUrl) {
+              enhancedImageUrls.push(imageUrl)
+            }
+          }
+        }
+        
+        console.log(`\n✅ Enhanced ${enhancedImageUrls.length} images`)
+        
+        // Step 2: สร้าง Collage จากรูปที่แต่งแล้ว
+        console.log('\n🧩 Step 2: Creating collage from enhanced images...')
+        
         const collageTemplate = job.collageTemplate || 'hero_grid'
         console.log(`📐 Using template: ${collageTemplate}`)
         
@@ -71,130 +167,83 @@ export async function POST(request: NextRequest) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              imageUrls: referenceUrls,
+              imageUrls: enhancedImageUrls,
               template: collageTemplate,
             }),
           })
 
           if (collageResponse.ok) {
             const collageData = await collageResponse.json()
-            const collageUrl = collageData.url
-            console.log('✅ Collage created:', collageUrl)
+            finalImageUrl = collageData.url
+            console.log('✅ Collage created:', finalImageUrl)
             
             await payload.create({
               collection: 'job-logs',
               data: {
                 jobId: jobId,
                 level: 'info',
-                message: `Created collage with ${referenceUrls.length} original images, template: ${collageData.template}`,
+                message: `Created collage from ${enhancedImageUrls.length} enhanced images, template: ${collageData.template}`,
                 timestamp: new Date().toISOString(),
               },
             })
-            
-            // Step 2: Enhance the collage with SDXL
-            console.log('🎨 Step 2: Enhancing collage with SDXL...')
-            
-            const contentDescription = job.contentDescription || job.contentTopic || job.productName || ''
-            const simplePrompt = contentDescription 
-              ? `Professional hotel photo enhancement: improve lighting and colors for ${contentDescription}. Keep composition unchanged.`
-              : 'Professional hotel photo: enhance lighting, improve colors, sharpen details. Preserve layout.'
-            
-            console.log('Using prompt:', simplePrompt)
-            
-            const enhanceResponse = await fetch(`${baseUrl}/api/generate/enhance`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                collageUrl: collageUrl,
-                prompt: simplePrompt,
-                strength: job.enhancementStrength || 0.3,
-                jobId: jobId,
-              }),
-            })
-            
-            if (!enhanceResponse.ok) {
-              const errorText = await enhanceResponse.text()
-              console.error('Enhancement failed:', errorText)
-              throw new Error(`Collage enhancement failed: ${errorText}`)
-            }
-            
-            const { imageUrl: enhancedCollageUrl } = await enhanceResponse.json()
-            finalImageUrl = enhancedCollageUrl
-            console.log('✅ Enhanced collage:', finalImageUrl)
-            
-            await payload.create({
-              collection: 'job-logs',
-              data: {
-                jobId: jobId,
-                level: 'info',
-                message: 'Enhanced collage successfully',
-                timestamp: new Date().toISOString(),
-              },
-            })
-            
-            // Optional: ESRGAN Final Polish (only for final output)
-            console.log('✨ Step 3: ESRGAN final polish...')
-            try {
-              const replicate = new (await import('replicate')).default({ 
-                auth: process.env.REPLICATE_API_TOKEN 
-              })
-              
-              const polishPrediction = await replicate.predictions.create({
-                version: 'f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa',
-                input: {
-                  image: finalImageUrl,
-                  scale: 1,
-                  face_enhance: false,
-                },
-              })
-              
-              // Wait for completion
-              const polishResult = await replicate.wait(polishPrediction)
-              const polishedOutput = Array.isArray(polishResult.output)
-                ? polishResult.output[0]
-                : polishResult.output as string
-              
-              console.log('✅ Final polish complete:', polishedOutput)
-              finalImageUrl = polishedOutput
-              
-              await payload.create({
-                collection: 'job-logs',
-                data: {
-                  jobId: jobId,
-                  level: 'info',
-                  message: 'Applied ESRGAN final polish to collage',
-                  timestamp: new Date().toISOString(),
-                },
-              })
-            } catch (polishError) {
-              console.error('⚠️ Final polish failed, using unpolished collage:', polishError)
-            }
           } else {
             const errorText = await collageResponse.text()
             console.error('❌ Collage creation failed:', errorText)
-            throw new Error(`Collage creation failed: ${errorText}`)
+            // ถ้าสร้าง collage ไม่สำเร็จ ใช้รูปแรกที่แต่งแล้ว
+            finalImageUrl = enhancedImageUrls[0]
           }
         } catch (collageError) {
           console.error('💥 Collage process failed:', collageError)
-          throw collageError
+          // ถ้า error ใช้รูปแรกที่แต่งแล้ว
+          finalImageUrl = enhancedImageUrls[0]
         }
       } else {
         // ถ้ามีรูปเดียว ปรับตรงๆ ไม่ต้อง collage
-        console.log('📸 Single image - enhancing directly without collage...')
+        console.log('📸 Single image - enhancing with hybrid photo type detection...')
         
         const singleImageUrl = referenceUrls[0]
-        const contentDescription = job.contentDescription || job.contentTopic || job.productName || ''
-        const simplePrompt = contentDescription 
-          ? `Professional hotel photo enhancement: improve lighting and colors for ${contentDescription}. Keep composition unchanged.`
-          : 'Professional hotel photo: enhance lighting, improve colors, sharpen details.'
+        
+        // ✨ Analyze photo type with GPT Vision
+        console.log('🔍 Analyzing photo type...')
+        
+        let detectedPhotoType: PhotoType = 'generic'
+        
+        try {
+          const analyzeRes = await fetch(`${baseUrl}/api/analyze/photoType`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              imageUrl: singleImageUrl,
+              sheetType: (job as any).photoTypeFromSheet,
+            }),
+          })
+
+          if (analyzeRes.ok) {
+            const { sheetType, detectedType } = await analyzeRes.json()
+            detectedPhotoType = resolvePhotoType(sheetType, detectedType)
+            console.log(`📋 Sheet type: ${sheetType || 'none'}, GPT detected: ${detectedType || 'none'} → Resolved: ${detectedPhotoType}`)
+            
+            await payload.update({
+              collection: 'jobs',
+              id: jobId,
+              data: { resolvedPhotoType: detectedPhotoType },
+            })
+          } else {
+            console.warn('⚠️ Photo type analysis failed, using fallback')
+            detectedPhotoType = ((job).photoTypeFromSheet as PhotoType) || 'generic'
+          }
+        } catch (analyzeError) {
+          console.error('💥 Photo type analysis error:', analyzeError)
+          detectedPhotoType = ((job).photoTypeFromSheet as PhotoType) || 'generic'
+        }
         
         const enhanceResponse = await fetch(`${baseUrl}/api/generate/enhance`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            collageUrl: singleImageUrl,
-            prompt: simplePrompt,
-            strength: job.enhancementStrength || 0.3,
+            imageUrl: singleImageUrl,
+            photoType: detectedPhotoType,
+            strength: job.enhancementStrength || 0.10,
             jobId: jobId,
           }),
         })
