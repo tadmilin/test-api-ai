@@ -73,10 +73,12 @@ export async function POST(request: NextRequest) {
           console.log(`\n🖼️ Processing image ${i + 1}/${referenceUrls.length}...`)
           
           try {
-            // ✨ Step 1a: Analyze photo type with GPT Vision
-            console.log('🔍 Analyzing photo type...')
+            // ✨ Step 1a: Analyze photo type with GPT Vision + Validation
+            console.log('🔍 Analyzing photo type and validating against sheet data...')
             
             let detectedPhotoType: PhotoType = 'generic'
+            let isRelevant = true
+            let validationWarning: string | null = null
             
             try {
               const analyzeRes = await fetch(`${baseUrl}/api/analyze/photoType`, {
@@ -89,8 +91,31 @@ export async function POST(request: NextRequest) {
               })
 
               if (analyzeRes.ok) {
-                const { sheetType, detectedType } = await analyzeRes.json()
+                const { sheetType, detectedType, confidence } = await analyzeRes.json()
                 detectedPhotoType = resolvePhotoType(sheetType, detectedType)
+                
+                // 🔍 Validation: Check if detected type matches sheet type
+                if (sheetType && detectedType && sheetType !== 'generic' && detectedType !== 'other') {
+                  if (sheetType !== detectedType) {
+                    isRelevant = false
+                    validationWarning = `⚠️ Mismatch: Sheet says "${sheetType}" but image looks like "${detectedType}" (confidence: ${confidence || 'N/A'})`
+                    console.warn(validationWarning)
+                    
+                    // Log warning to job logs
+                    await payload.create({
+                      collection: 'job-logs',
+                      data: {
+                        jobId: jobId,
+                        level: 'warning',
+                        message: `Image ${i + 1}: ${validationWarning}`,
+                        timestamp: new Date().toISOString(),
+                      },
+                    })
+                  } else {
+                    console.log(`✅ Validation passed: Image matches "${detectedType}"`)
+                  }
+                }
+                
                 console.log(`📋 Sheet type: ${sheetType || 'none'}, GPT detected: ${detectedType || 'none'} → Resolved: ${detectedPhotoType}`)
                 
                 // เซฟ resolvedPhotoType ครั้งแรก
@@ -99,7 +124,10 @@ export async function POST(request: NextRequest) {
                   await payload.update({
                     collection: 'jobs',
                     id: jobId,
-                    data: { resolvedPhotoType: detectedPhotoType } as any,
+                    data: { 
+                      resolvedPhotoType: detectedPhotoType,
+                      ...(validationWarning && { errorMessage: validationWarning })
+                    } as any,
                   })
                 }
               } else {
@@ -111,13 +139,44 @@ export async function POST(request: NextRequest) {
               detectedPhotoType = ((job as any).photoTypeFromSheet as PhotoType) || 'generic'
             }
             
-            // ✨ Step 1b: Enhance with detected photo type
+            // ✨ Step 1b: Generate prompt with GPT
+            console.log('📝 Generating enhancement prompt...')
+            
+            let enhancementPrompt = 'Professional photo retouch: improve lighting, colors, clarity'
+            
+            try {
+              const promptRes = await fetch(`${baseUrl}/api/generate/prompt`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  productName: job.productName,
+                  contentTopic: job.contentTopic || job.contentDescription,
+                  contentDescription: job.contentDescription,
+                  referenceImageUrls: [imageUrl],
+                  analysisOnly: false,
+                }),
+              })
+
+              if (promptRes.ok) {
+                const { enhancePrompt } = await promptRes.json()
+                if (enhancePrompt) {
+                  enhancementPrompt = enhancePrompt
+                  console.log('✅ Generated prompt:', enhancementPrompt.substring(0, 100) + '...')
+                }
+              } else {
+                console.warn('⚠️ Prompt generation failed, using default')
+              }
+            } catch (promptError) {
+              console.error('💥 Prompt generation error:', promptError)
+            }
+            
+            // ✨ Step 1c: Enhance with generated prompt
             const enhanceResponse = await fetch(`${baseUrl}/api/generate/enhance`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 imageUrl,
-                photoType: detectedPhotoType,
+                prompt: enhancementPrompt,
                 strength: job.enhancementStrength || 0.30,
                 jobId: jobId,
               }),
@@ -237,13 +296,44 @@ export async function POST(request: NextRequest) {
           detectedPhotoType = ((job).photoTypeFromSheet as PhotoType) || 'generic'
         }
         
+        // ✨ Generate prompt with GPT
+        console.log('📝 Generating enhancement prompt...')
+        
+        let enhancementPrompt = 'Professional photo retouch: improve lighting, colors, clarity'
+        
+        try {
+          const promptRes = await fetch(`${baseUrl}/api/generate/prompt`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              productName: job.productName,
+              contentTopic: job.contentTopic || job.contentDescription,
+              contentDescription: job.contentDescription,
+              referenceImageUrls: [singleImageUrl],
+              analysisOnly: false,
+            }),
+          })
+
+          if (promptRes.ok) {
+            const { enhancePrompt } = await promptRes.json()
+            if (enhancePrompt) {
+              enhancementPrompt = enhancePrompt
+              console.log('✅ Generated prompt:', enhancementPrompt.substring(0, 100) + '...')
+            }
+          } else {
+            console.warn('⚠️ Prompt generation failed, using default')
+          }
+        } catch (promptError) {
+          console.error('💥 Prompt generation error:', promptError)
+        }
+        
         const enhanceResponse = await fetch(`${baseUrl}/api/generate/enhance`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             imageUrl: singleImageUrl,
-            photoType: detectedPhotoType,
-            strength: job.enhancementStrength || 0.10,
+            prompt: enhancementPrompt,
+            strength: job.enhancementStrength || 0.30,
             jobId: jobId,
           }),
         })

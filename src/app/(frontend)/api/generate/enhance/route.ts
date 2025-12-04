@@ -7,7 +7,7 @@ import type { PhotoType } from '@/utilities/photoTypeClassifier'
 
 export async function POST(request: NextRequest) {
   try {
-    const { imageUrl, photoType, strength, jobId } = await request.json()
+    const { imageUrl, prompt, strength, jobId } = await request.json()
 
     if (!imageUrl) {
       return NextResponse.json({ error: 'imageUrl is required' }, { status: 400 })
@@ -17,14 +17,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'jobId is required' }, { status: 400 })
     }
 
-    // Build prompt based on photo type
-    const resolvedPhotoType: PhotoType = photoType || 'generic'
-    const prompt = buildRetouchPrompt(resolvedPhotoType)
+    // Use provided prompt or fallback to default
+    const enhancementPrompt = prompt || 'Professional photo retouch: improve lighting, colors, and clarity naturally'
 
     console.log('🎨 Enhancing image with SDXL...')
-    console.log('Photo Type:', resolvedPhotoType)
     console.log('[ENHANCE] imageUrl =', imageUrl)
-    console.log('Strength:', strength || 0.10)
+    console.log('📝 Prompt:', enhancementPrompt)
+    console.log('Strength:', strength || 0.30)
     
     // 🔍 CRITICAL: ยืนยันว่ารูปที่ยิงเข้าโมเดลคือรูปใน Drive จริง
     console.log('⚠️ VERIFY THIS URL IN BROWSER - Should show original Drive image!')
@@ -143,18 +142,21 @@ export async function POST(request: NextRequest) {
     console.log('🚀 Sending to SDXL img2img model...')
     console.log('📸 Final image URL sent to model:', processedImageUrl)
     console.log('📝 Prompt:', prompt.substring(0, 100) + '...')
-    console.log('🎛️ Strength:', Math.min(Math.max(strength || 0.10, 0.05), 0.15))
+    
+    const finalStrength = Math.min(Math.max(strength || 0.30, 0.25), 0.40)
+    console.log('🎛️ Strength (from job config):', strength)
+    console.log('🎛️ Final Strength (after clamp):', finalStrength)
     
     const sdxlPrediction = await replicate.predictions.create({
       // SDXL img2img model (stability-ai/sdxl)
       version: '7762fd07cf82c948538e41f63f77d685e02b063e37e496e96eefd46c929f9bdc',
       input: {
         image: processedImageUrl,
-        prompt,
+        prompt: enhancementPrompt,
         negative_prompt: NEGATIVE_PROMPT,
         num_inference_steps: 30,
-        guidance_scale: 7.5, // เพิ่มขึ้นเพื่อให้ AI ปรับมากขึ้น
-        prompt_strength: Math.min(Math.max(strength || 0.30, 0.25), 0.40), // เพิ่มเป็น 0.25-0.40 สำหรับ retouch ที่เห็นผล
+        guidance_scale: 7.5,
+        prompt_strength: finalStrength,
         scheduler: 'DPMSolverMultistep',
         refine: 'no_refiner',
       },
@@ -214,7 +216,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       imageUrl: blob.url,
-      photoType: resolvedPhotoType,
+      prompt: enhancementPrompt,
     })
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to enhance image'
