@@ -36,6 +36,30 @@ class GraphicDesigner:
             return img.convert('RGB')
         except Exception as e:
             raise Exception(f"Failed to download image from {url}: {str(e)}")
+    
+    def fit_image(self, image: Image.Image, target_size: Tuple[int, int]) -> Image.Image:
+        """
+        Crop รูปให้เต็มพื้นที่เป๊ะๆ (cover style - ไม่มีขอบดำ)
+        """
+        target_w, target_h = target_size
+        img_ratio = image.width / image.height
+        target_ratio = target_w / target_h
+        
+        if img_ratio > target_ratio:
+            # รูปกว้างกว่า - ครอปซ้าย-ขวา
+            new_h = image.height
+            new_w = int(new_h * target_ratio)
+            left = (image.width - new_w) // 2
+            cropped = image.crop((left, 0, left + new_w, image.height))
+        else:
+            # รูปสูงกว่า - ครอปบน-ล่าง
+            new_w = image.width
+            new_h = int(new_w / target_ratio)
+            top = (image.height - new_h) // 2
+            cropped = image.crop((0, top, image.width, top + new_h))
+        
+        # Resize เป็นขนาดที่ต้องการ
+        return cropped.resize(target_size, Image.Resampling.LANCZOS)
         
     def extract_dominant_colors(self, image: Image.Image, num_colors: int = 3) -> List[Tuple[int, int, int]]:
         """
@@ -169,64 +193,61 @@ class GraphicDesigner:
     
     def create_style_modern_minimal(self, images: List[Image.Image]) -> Image.Image:
         """
-        สไตล์ 1: Modern Minimal - กรอบบางสีเรียบ พื้นขาว
+        สไตล์ 1: Modern Minimal - เต็มเฟรม ไม่มีกรอบ
         """
-        # Extract colors from first image
-        colors = self.extract_dominant_colors(images[0], num_colors=1)
-        accent_color = colors[0]
+        canvas = Image.new('RGB', self.canvas_size, (245, 245, 245))
         
-        canvas = Image.new('RGB', self.canvas_size, (255, 255, 255))
+        gap = 8
+        margin = 20
         
-        # วาง 2 รูปแบบ split
-        available_w = self.canvas_size[0] - self.margin * 3
-        half_w = available_w // 2
-        available_h = self.canvas_size[1] - self.margin * 2
-        
-        if len(images) >= 1:
-            img1 = images[0].copy()
-            img1.thumbnail((half_w, available_h), Image.Resampling.LANCZOS)
-            framed1 = self.add_frame(img1, accent_color, frame_width=8)
-            x1 = self.margin
-            y1 = self.margin + (available_h - framed1.height) // 2
-            canvas.paste(framed1, (x1, y1))
-        
-        if len(images) >= 2:
-            img2 = images[1].copy()
-            img2.thumbnail((half_w, available_h), Image.Resampling.LANCZOS)
-            framed2 = self.add_frame(img2, accent_color, frame_width=8)
-            x2 = self.margin * 2 + half_w
-            y2 = self.margin + (available_h - framed2.height) // 2
-            canvas.paste(framed2, (x2, y2))
+        if len(images) == 1:
+            # 1 รูป: เต็มจอ
+            img = self.fit_image(images[0], (self.canvas_size[0] - margin*2, self.canvas_size[1] - margin*2))
+            canvas.paste(img, (margin, margin))
+        elif len(images) == 2:
+            # 2 รูป: แบ่งครึ่ง
+            w = (self.canvas_size[0] - margin*2 - gap) // 2
+            h = self.canvas_size[1] - margin*2
+            
+            img1 = self.fit_image(images[0], (w, h))
+            canvas.paste(img1, (margin, margin))
+            
+            img2 = self.fit_image(images[1], (w, h))
+            canvas.paste(img2, (margin + w + gap, margin))
+        else:
+            # 3-4 รูป: Hero Grid
+            main_w = int((self.canvas_size[0] - margin*2 - gap) * 0.6)
+            main_h = self.canvas_size[1] - margin*2
+            
+            side_w = self.canvas_size[0] - margin*2 - gap - main_w
+            side_h = (main_h - gap * 2) // 3
+            
+            # รูปใหญ่ซ้าย
+            img_main = self.fit_image(images[0], (main_w, main_h))
+            canvas.paste(img_main, (margin, margin))
+            
+            # รูปเล็กขวา
+            for i in range(min(3, len(images) - 1)):
+                img_small = self.fit_image(images[i+1], (side_w, side_h))
+                y = margin + i * (side_h + gap)
+                canvas.paste(img_small, (margin + main_w + gap, y))
         
         return canvas
     
     def create_style_gradient_luxury(self, images: List[Image.Image]) -> Image.Image:
         """
-        สไตล์ 2: Gradient Luxury - พื้นหลัง gradient หรูหรา
+        สไตล์ 2: Gradient Luxury - 1 รูปเต็มจอ พื้นขอบมืด
         """
-        # Extract colors
-        colors = self.extract_dominant_colors(images[0], num_colors=2)
-        color1 = colors[0]
-        color2 = self.get_complementary_color(color1)
+        # พื้นหลังสีเข้ม
+        canvas = Image.new('RGB', self.canvas_size, (30, 30, 30))
         
-        # สร้างพื้นหลัง gradient
-        canvas = self.create_gradient_background(
-            self.canvas_size, color1, color2, direction='diagonal'
-        )
+        margin = 40
+        img_w = self.canvas_size[0] - margin * 2
+        img_h = self.canvas_size[1] - margin * 2
         
-        # วางรูปตรงกลาง
         if len(images) >= 1:
-            img = images[0].copy()
-            max_w = self.canvas_size[0] - self.margin * 2
-            max_h = self.canvas_size[1] - self.margin * 2
-            img.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
-            
-            # เพิ่มกรอบสีขาว
-            framed = self.add_frame(img, (255, 255, 255), frame_width=20)
-            
-            x = (self.canvas_size[0] - framed.width) // 2
-            y = (self.canvas_size[1] - framed.height) // 2
-            canvas.paste(framed, (x, y))
+            img = self.fit_image(images[0], (img_w, img_h))
+            canvas.paste(img, (margin, margin))
         
         return canvas
     
@@ -251,37 +272,18 @@ class GraphicDesigner:
         small_w = available_w - hero_w
         small_h = (available_h - spacing * 2) // 3
         
-        # รูปหลักซ้าย (ภูเขา/ธรรมชาติ)
+        # รูปหลักซ้าย
         if len(images) >= 1:
-            hero = images[0].copy()
-            hero.thumbnail((hero_w, hero_h), Image.Resampling.LANCZOS)
-            # เพิ่มกรอบสีขาวบางๆ
-            framed = self.add_frame(hero, (255, 255, 255), frame_width=10)
-            # มุมโค้ง
-            framed = self.add_rounded_corners(framed, radius=25)
-            x = margin
-            y = margin + (hero_h - framed.height) // 2
-            # Convert RGBA to RGB for paste
-            if framed.mode == 'RGBA':
-                bg_temp = Image.new('RGB', framed.size, bg_color)
-                bg_temp.paste(framed, (0, 0), framed)
-                framed = bg_temp
-            canvas.paste(framed, (x, y))
+            hero = self.fit_image(images[0], (hero_w, hero_h))
+            canvas.paste(hero, (margin, margin))
         
         # 3 รูปเล็กขวา
         small_x = margin + hero_w + spacing
         for i in range(min(3, len(images) - 1)):
             if i + 1 < len(images):
                 small_y = margin + i * (small_h + spacing)
-                small = images[i + 1].copy()
-                small.thumbnail((small_w, small_h), Image.Resampling.LANCZOS)
-                framed = self.add_frame(small, (255, 255, 255), frame_width=8)
-                framed = self.add_rounded_corners(framed, radius=20)
-                if framed.mode == 'RGBA':
-                    bg_temp = Image.new('RGB', framed.size, bg_color)
-                    bg_temp.paste(framed, (0, 0), framed)
-                    framed = bg_temp
-                canvas.paste(framed, (small_x, small_y))
+                small = self.fit_image(images[i + 1], (small_w, small_h))
+                canvas.paste(small, (small_x, small_y))
         
         return canvas
     
@@ -306,34 +308,18 @@ class GraphicDesigner:
         small_w = available_w - hero_w
         small_h = (available_h - spacing * 2) // 3
         
-        # รูปหลักซ้าย (ป่า/ธรรมชาติ)
+        # รูปหลักซ้าย
         if len(images) >= 1:
-            hero = images[0].copy()
-            hero.thumbnail((hero_w, hero_h), Image.Resampling.LANCZOS)
-            framed = self.add_frame(hero, (255, 255, 255), frame_width=12)
-            framed = self.add_rounded_corners(framed, radius=30)
-            x = margin
-            y = margin + (hero_h - framed.height) // 2
-            if framed.mode == 'RGBA':
-                bg_temp = Image.new('RGB', framed.size, bg_color)
-                bg_temp.paste(framed, (0, 0), framed)
-                framed = bg_temp
-            canvas.paste(framed, (x, y))
+            hero = self.fit_image(images[0], (hero_w, hero_h))
+            canvas.paste(hero, (margin, margin))
         
         # 3 รูปเล็กขวา
         small_x = margin + hero_w + spacing
         for i in range(min(3, len(images) - 1)):
             if i + 1 < len(images):
                 small_y = margin + i * (small_h + spacing)
-                small = images[i + 1].copy()
-                small.thumbnail((small_w, small_h), Image.Resampling.LANCZOS)
-                framed = self.add_frame(small, (255, 255, 255), frame_width=8)
-                framed = self.add_rounded_corners(framed, radius=20)
-                if framed.mode == 'RGBA':
-                    bg_temp = Image.new('RGB', framed.size, bg_color)
-                    bg_temp.paste(framed, (0, 0), framed)
-                    framed = bg_temp
-                canvas.paste(framed, (small_x, small_y))
+                small = self.fit_image(images[i + 1], (small_w, small_h))
+                canvas.paste(small, (small_x, small_y))
         
         return canvas
     
@@ -363,32 +349,16 @@ class GraphicDesigner:
         
         # รูปใหญ่บน
         if len(images) >= 1:
-            top_img = images[0].copy()
-            top_img.thumbnail((top_w, top_h), Image.Resampling.LANCZOS)
-            framed = self.add_frame(top_img, frame_color, frame_width=15)
-            framed = self.add_rounded_corners(framed, radius=25)
-            x = margin + (top_w - framed.width) // 2
-            y = margin
-            if framed.mode == 'RGBA':
-                bg_temp = Image.new('RGB', framed.size, bg_color)
-                bg_temp.paste(framed, (0, 0), framed)
-                framed = bg_temp
-            canvas.paste(framed, (x, y))
+            top_img = self.fit_image(images[0], (top_w, top_h))
+            canvas.paste(top_img, (margin, margin))
         
         # 3 รูปเล็กล่าง
         bottom_y = margin + top_h + spacing
         for i in range(min(3, len(images) - 1)):
             if i + 1 < len(images):
                 bottom_x = margin + i * (bottom_w + spacing)
-                small = images[i + 1].copy()
-                small.thumbnail((bottom_w, bottom_h), Image.Resampling.LANCZOS)
-                framed = self.add_frame(small, frame_color, frame_width=10)
-                framed = self.add_rounded_corners(framed, radius=20)
-                if framed.mode == 'RGBA':
-                    bg_temp = Image.new('RGB', framed.size, bg_color)
-                    bg_temp.paste(framed, (0, 0), framed)
-                    framed = bg_temp
-                canvas.paste(framed, (bottom_x, bottom_y))
+                small = self.fit_image(images[i + 1], (bottom_w, bottom_h))
+                canvas.paste(small, (bottom_x, bottom_y))
         
         return canvas
     

@@ -200,8 +200,41 @@ export const Jobs: CollectionConfig = {
                 { label: 'Custom 1:1 (1200x1200px)', value: 'custom_1_1' },
               ],
               admin: {
-                condition: (data: { useCollage?: boolean }) => data.useCollage === true,
-                description: 'Preset dimensions for social media platforms',
+                description: 'Target social media platform format (only for Graphic Design)',
+                condition: (data: any) => !data.useOverlayDesign,
+              },
+            },
+            {
+              name: 'useOverlayDesign',
+              type: 'checkbox',
+              label: 'Use Overlay Design',
+              defaultValue: false,
+              admin: {
+                description: 'Use NEW overlay system: Hero image + smaller overlays + graphic patterns',
+              },
+            },
+            {
+              name: 'overlayAspectRatio',
+              type: 'select',
+              label: 'Overlay Aspect Ratio',
+              defaultValue: '3:1',
+              options: [
+                { label: '3:1 (Wide - 1800x600px)', value: '3:1' },
+                { label: '2:1 (Standard - 1600x800px)', value: '2:1' },
+              ],
+              admin: {
+                description: 'Aspect ratio for overlay design',
+                condition: (data: any) => data.useOverlayDesign === true,
+              },
+            },
+            {
+              name: 'heroImageIndex',
+              type: 'number',
+              label: 'Hero Image Index',
+              defaultValue: 0,
+              admin: {
+                description: 'Which image to use as the main background (0 = first image, 1 = second, etc.)',
+                condition: (data: any) => data.useOverlayDesign === true,
               },
             },
             {

@@ -96,6 +96,11 @@ export default function DashboardPage() {
   const [driveImages, setDriveImages] = useState<DriveImage[]>([])
   const [selectedImages, setSelectedImages] = useState<DriveImage[]>([])
   const [creating, setCreating] = useState(false)
+  
+  // Overlay Design Options
+  const [useOverlayDesign, setUseOverlayDesign] = useState(false)
+  const [overlayAspectRatio, setOverlayAspectRatio] = useState<'3:1' | '2:1'>('3:1')
+  const [heroImageIndex, setHeroImageIndex] = useState(0)
 
   // View Generated Images
   const [viewingJob, setViewingJob] = useState<Job | null>(null)
@@ -349,6 +354,9 @@ export default function DashboardPage() {
           photoTypeFromSheet: selectedSheetRow['Photo_Type'] || undefined,
           referenceImageIds: selectedImages.map((img) => ({ imageId: img.id })),
           referenceImageUrls: selectedImages.map((img) => ({ url: img.url })),
+          useOverlayDesign: useOverlayDesign,
+          overlayAspectRatio: useOverlayDesign ? overlayAspectRatio : undefined,
+          heroImageIndex: useOverlayDesign ? heroImageIndex : undefined,
           status: 'pending',
         }),
       })
@@ -739,16 +747,128 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              {/* Info: Automatic Processing */}
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl border-2 border-blue-200">
-                <h3 className="text-lg font-semibold text-blue-900 mb-2">✨ ระบบประมวลผลอัตโนมัติ</h3>
-                <div className="space-y-2 text-sm text-gray-700">
-                  <p>🎯 <strong>Gemini Vision</strong> - วิเคราะห์ประเภทภาพอัตโนมัติ (ห้องพัก, อาหาร, สระว่ายน้ำ...)</p>
-                  <p>🎨 <strong>Nano-Banana AI</strong> - ปรับปรุงภาพให้สวยงามแบบมืออาชีพ</p>
-                  <p>🖼️ <strong>Graphic Designer</strong> - สร้างเลย์เอาต์สวยงามพร้อมกรอบและสีที่เข้ากัน</p>
-                  <p>📐 <strong>รองรับทุกแพลตฟอร์ม</strong> - Facebook (1200×630), Instagram Feed (1080×1080), Instagram Story (1080×1920)</p>
+              {/* Overlay Design Options */}
+              <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-xl border-2 border-purple-200">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-purple-900">🎨 Overlay Design (NEW!)</h3>
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useOverlayDesign}
+                      onChange={(e) => setUseOverlayDesign(e.target.checked)}
+                      className="mr-2 w-5 h-5"
+                    />
+                    <span className="font-medium text-purple-900">เปิดใช้งาน</span>
+                  </label>
                 </div>
+                
+                {useOverlayDesign && (
+                  <div className="space-y-4 mt-4">
+                    {/* Aspect Ratio Selector */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        📐 อัตราส่วน (Aspect Ratio)
+                      </label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setOverlayAspectRatio('3:1')}
+                          className={`p-3 rounded-lg border-2 font-medium transition-all ${
+                            overlayAspectRatio === '3:1'
+                              ? 'bg-purple-600 text-white border-purple-600'
+                              : 'bg-white text-gray-700 border-gray-300 hover:border-purple-400'
+                          }`}
+                        >
+                          3:1 (Wide)
+                          <div className="text-xs mt-1 opacity-80">1800×600px</div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setOverlayAspectRatio('2:1')}
+                          className={`p-3 rounded-lg border-2 font-medium transition-all ${
+                            overlayAspectRatio === '2:1'
+                              ? 'bg-purple-600 text-white border-purple-600'
+                              : 'bg-white text-gray-700 border-gray-300 hover:border-purple-400'
+                          }`}
+                        >
+                          2:1 (Standard)
+                          <div className="text-xs mt-1 opacity-80">1600×800px</div>
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {/* Hero Image Selector */}
+                    {selectedImages.length > 1 && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          ⭐ เลือกรูปหลัก (Hero Image)
+                        </label>
+                        <div className="grid grid-cols-4 gap-2">
+                          {selectedImages.map((img, index) => (
+                            <button
+                              key={img.id}
+                              type="button"
+                              onClick={() => setHeroImageIndex(index)}
+                              className={`relative rounded-lg overflow-hidden border-3 transition-all ${
+                                heroImageIndex === index
+                                  ? 'border-purple-600 ring-4 ring-purple-200 scale-105'
+                                  : 'border-gray-300 hover:border-purple-400'
+                              }`}
+                            >
+                              <div className="aspect-[4/3] relative">
+                                <Image
+                                  src={img.thumbnailUrl}
+                                  alt={img.name}
+                                  fill
+                                  className="object-cover"
+                                  unoptimized
+                                />
+                              </div>
+                              {heroImageIndex === index && (
+                                <div className="absolute inset-0 bg-purple-600 bg-opacity-40 flex items-center justify-center">
+                                  <span className="text-white font-bold text-2xl">★</span>
+                                </div>
+                              )}
+                              <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-60 text-white text-xs p-1 text-center">
+                                #{index + 1}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-xs text-gray-600 mt-2">
+                          💡 รูปหลักจะเป็นพื้นหลังเต็มจอ รูปอื่นจะซ้อนทับด้านบนอย่างสวยงาม
+                        </p>
+                      </div>
+                    )}
+                    
+                    {/* Info */}
+                    <div className="bg-purple-100 p-3 rounded-lg">
+                      <p className="text-sm text-purple-900">
+                        <strong>✨ ระบบ Overlay Design:</strong>
+                      </p>
+                      <ul className="text-xs text-purple-800 mt-2 space-y-1 ml-4 list-disc">
+                        <li>รูปหลักเต็มจอพร้อม Gradient Overlay</li>
+                        <li>รูปเล็กซ้อนทับพร้อมเงา (มุม 4 มุม)</li>
+                        <li>Template Patterns สุ่มอัตโนมัติ (Geometric/Wave/Dots)</li>
+                        <li>ดึงสีจากรูปมาใช้ในการออกแบบ</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
               </div>
+              
+              {/* Info: Automatic Processing */}
+              {!useOverlayDesign && (
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl border-2 border-blue-200">
+                  <h3 className="text-lg font-semibold text-blue-900 mb-2">✨ ระบบประมวลผลอัตโนมัติ</h3>
+                  <div className="space-y-2 text-sm text-gray-700">
+                    <p>🎯 <strong>Gemini Vision</strong> - วิเคราะห์ประเภทภาพอัตโนมัติ (ห้องพัก, อาหาร, สระว่ายน้ำ...)</p>
+                    <p>🎨 <strong>Nano-Banana AI</strong> - ปรับปรุงภาพให้สวยงามแบบมืออาชีพ</p>
+                    <p>🖼️ <strong>Graphic Designer</strong> - สร้างเลย์เอาต์สวยงามพร้อมกรอบและสีที่เข้ากัน</p>
+                    <p>📐 <strong>รองรับทุกแพลตฟอร์ม</strong> - Facebook (1200×630), Instagram Feed (1080×1080), Instagram Story (1080×1920)</p>
+                  </div>
+                </div>
+              )}
 
               {/* Submit Button */}
               <button

@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     const job = await payload.findByID({
       collection: 'jobs',
       id: jobId,
-    })
+    }) as any  // Type cast to avoid TypeScript errors for new fields
 
     if (!job) {
       return NextResponse.json(
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
       // Get base URL for internal API calls
       const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
       
-      const referenceUrls = job.referenceImageUrls?.map((img) => img.url).filter(Boolean) || []
+      const referenceUrls = job.referenceImageUrls?.map((img: any) => img.url).filter(Boolean) || []
       
       console.log(`📊 Processing ${referenceUrls.length} images`)
       
@@ -184,9 +184,21 @@ export async function POST(request: NextRequest) {
         // Step 2: สร้าง Professional Graphic Design (ทั้งรูปเดียวและหลายรูป)
         console.log('\n🎨 Step 2: Creating professional graphic design...')
         
+        // เช็คว่าใช้ Overlay Design หรือ Graphic Design
+        const useOverlayDesign = job.useOverlayDesign === true
+        const overlayAspectRatio = typeof job.overlayAspectRatio === 'string' ? job.overlayAspectRatio : '3:1'
+        const heroImageIndex = typeof job.heroImageIndex === 'number' ? job.heroImageIndex : 0
         const socialMediaFormat = typeof job.socialMediaFormat === 'string' ? job.socialMediaFormat : 'facebook_post'
         
-        console.log(`📐 Format: ${socialMediaFormat}, Images: ${enhancedImageUrls.length}`)
+        if (useOverlayDesign) {
+          console.log(`📐 Mode: OVERLAY DESIGN`)
+          console.log(`📐 Aspect Ratio: ${overlayAspectRatio}`)
+          console.log(`⭐ Hero Image Index: ${heroImageIndex}`)
+        } else {
+          console.log(`📐 Mode: GRAPHIC DESIGN`)
+          console.log(`📐 Format: ${socialMediaFormat}`)
+        }
+        console.log(`🖼️ Images: ${enhancedImageUrls.length}`)
         
         try {
           const collageResponse = await fetch(`${baseUrl}/api/collage`, {
@@ -194,8 +206,11 @@ export async function POST(request: NextRequest) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               imageUrls: enhancedImageUrls,
-              socialMediaFormat: socialMediaFormat,
-              use_graphic_design: true,  // เปิด Graphic Design เสมอ
+              use_overlay_design: useOverlayDesign,
+              aspect_ratio: useOverlayDesign ? overlayAspectRatio : undefined,
+              hero_image_index: useOverlayDesign ? heroImageIndex : undefined,
+              socialMediaFormat: !useOverlayDesign ? socialMediaFormat : undefined,
+              use_graphic_design: !useOverlayDesign,  // เปิด Graphic Design ถ้าไม่ใช่ Overlay
             }),
           })
 
