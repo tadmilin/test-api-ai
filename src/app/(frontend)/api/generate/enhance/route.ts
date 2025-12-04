@@ -140,21 +140,23 @@ export async function POST(request: NextRequest) {
 
     // SDXL img2img retouching - แต่งรูปเดิมเท่านั้น
     console.log('🎨 SDXL img2img subtle retouching...')
-    console.log('🚀 Sending to SDXL model...')
+    console.log('🚀 Sending to SDXL img2img model...')
     console.log('📸 Final image URL sent to model:', processedImageUrl)
     console.log('📝 Prompt:', prompt.substring(0, 100) + '...')
     console.log('🎛️ Strength:', Math.min(Math.max(strength || 0.10, 0.05), 0.15))
     
     const sdxlPrediction = await replicate.predictions.create({
-      version: '39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
+      // SDXL img2img model (stability-ai/sdxl)
+      version: '7762fd07cf82c948538e41f63f77d685e02b063e37e496e96eefd46c929f9bdc',
       input: {
         image: processedImageUrl,
         prompt,
         negative_prompt: NEGATIVE_PROMPT,
         num_inference_steps: 25,
-        guidance_scale: Math.min(Math.max(3.0, 4.0), 5.0), // 3-5 range, default 4
-        strength: Math.min(Math.max(strength || 0.10, 0.05), 0.15), // 0.05-0.15 range
+        guidance_scale: 4.0, // 3-5 range for img2img
+        prompt_strength: Math.min(Math.max(strength || 0.10, 0.05), 0.15), // img2img ใช้ prompt_strength แทน strength
         scheduler: 'DPMSolverMultistep',
+        refine: 'no_refiner', // ไม่ต้อง refine เพื่อความเร็ว
       },
     })
 
