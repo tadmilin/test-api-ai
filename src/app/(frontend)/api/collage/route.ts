@@ -4,13 +4,15 @@ import { put } from '@vercel/blob'
 interface CollageRequest {
   imageUrls: string[]
   template?: string
-  aspectRatio?: string  // "3:1", "2:2", "1:1", "16:9", "4:3", "21:9"
-  size?: string  // "SM" (800), "MD" (1024), "LG" (1920), "XL" (2560)
+  socialMediaFormat?: string  // "facebook_post", "instagram_feed", "instagram_story", etc.
+  // Legacy support:
+  aspectRatio?: string
+  size?: string
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { imageUrls, template, aspectRatio, size } = await request.json() as CollageRequest
+    const { imageUrls, template, socialMediaFormat, aspectRatio, size } = await request.json() as CollageRequest
 
     if (!imageUrls || imageUrls.length === 0) {
       return NextResponse.json(
@@ -52,7 +54,7 @@ export async function POST(request: NextRequest) {
 
     // เรียก Python service
     console.log('🐍 Calling Python collage service...')
-    console.log(`📐 Template: ${template || 'auto'}, AspectRatio: ${aspectRatio || '16:9'}, Size: ${size || 'MD'}`)
+    console.log(`📐 Template: ${template || 'auto'}, Format: ${socialMediaFormat || aspectRatio || 'default'}, Size: ${size || 'default'}`)
     const collageResponse = await fetch(`${pythonServiceUrl}/collage`, {
       method: 'POST',
       headers: {
@@ -61,8 +63,9 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         image_urls: imageUrls,
         template: template || null,
-        aspect_ratio: aspectRatio || null,
-        size: size || 'MD',
+        social_media_format: socialMediaFormat || null,
+        aspect_ratio: aspectRatio || null,  // Legacy fallback
+        size: size || 'MD',  // Legacy fallback
       }),
     })
 

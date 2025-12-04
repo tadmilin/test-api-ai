@@ -189,10 +189,9 @@ export async function POST(request: NextRequest) {
         console.log('\n🧩 Step 2: Creating collage from enhanced images...')
         
         const collageTemplate = job.collageTemplate || 'hero_grid'
-        const aspectRatio = typeof job.aspectRatio === 'string' ? job.aspectRatio : '16:9'
-        const canvasSize = typeof job.canvasSize === 'string' ? job.canvasSize : 'MD'
+        const socialMediaFormat = typeof job.socialMediaFormat === 'string' ? job.socialMediaFormat : 'facebook_post'
         
-        console.log(`📐 Template: ${collageTemplate}, AspectRatio: ${aspectRatio}, Size: ${canvasSize}`)
+        console.log(`📐 Template: ${collageTemplate}, Format: ${socialMediaFormat}`)
         
         try {
           const collageResponse = await fetch(`${baseUrl}/api/collage`, {
@@ -201,8 +200,7 @@ export async function POST(request: NextRequest) {
             body: JSON.stringify({
               imageUrls: enhancedImageUrls,
               template: collageTemplate,
-              aspectRatio: aspectRatio,
-              size: canvasSize,
+              socialMediaFormat: socialMediaFormat,
             }),
           })
 

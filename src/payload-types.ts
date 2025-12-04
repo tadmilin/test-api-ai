@@ -846,13 +846,11 @@ export interface Job {
    */
   collageTemplate?: ('auto' | 'hero_grid' | 'split' | 'masonry' | 'grid') | null;
   /**
-   * Aspect ratio for the collage output
+   * Preset dimensions for social media platforms
    */
-  aspectRatio?: ('3:1' | '21:9' | '16:9' | '4:3' | '2:2' | '1:1') | null;
-  /**
-   * Width of the canvas. Height calculated from aspect ratio.
-   */
-  canvasSize?: ('SM' | 'MD' | 'LG' | 'XL') | null;
+  socialMediaFormat?:
+    | ('facebook_post' | 'instagram_feed' | 'instagram_story' | 'custom_16_9' | 'custom_4_3' | 'custom_1_1')
+    | null;
   /**
    * How much the AI modifies the image (0.25 = subtle, 0.30 = recommended, 0.40 = noticeable)
    */
@@ -1551,8 +1549,7 @@ export interface JobsSelect<T extends boolean = true> {
       };
   useCollage?: T;
   collageTemplate?: T;
-  aspectRatio?: T;
-  canvasSize?: T;
+  socialMediaFormat?: T;
   enhancementStrength?: T;
   generatedPrompt?: T;
   promptGeneratedAt?: T;
