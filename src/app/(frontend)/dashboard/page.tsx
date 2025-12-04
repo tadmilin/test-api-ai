@@ -337,6 +337,11 @@ export default function DashboardPage() {
       alert('Please select product data from sheet')
       return
     }
+    
+    if (selectedImages.length === 0) {
+      alert('Please select at least 1 image')
+      return
+    }
 
     setCreating(true)
 
@@ -354,9 +359,10 @@ export default function DashboardPage() {
           photoTypeFromSheet: selectedSheetRow['Photo_Type'] || undefined,
           referenceImageIds: selectedImages.map((img) => ({ imageId: img.id })),
           referenceImageUrls: selectedImages.map((img) => ({ url: img.url })),
-          useOverlayDesign: useOverlayDesign,
-          overlayAspectRatio: useOverlayDesign ? overlayAspectRatio : undefined,
-          heroImageIndex: useOverlayDesign ? heroImageIndex : undefined,
+          useOverlayDesign: useOverlayDesign && selectedImages.length > 1,  // Overlay ต้องมีมากกว่า 1 รูป
+          overlayAspectRatio: useOverlayDesign && selectedImages.length > 1 ? overlayAspectRatio : undefined,
+          heroImageIndex: useOverlayDesign && selectedImages.length > 1 ? heroImageIndex : undefined,
+          socialMediaFormat: !useOverlayDesign || selectedImages.length === 1 ? 'facebook_post' : undefined,  // ใช้ social format สำหรับรูปเดี่ยว
           status: 'pending',
         }),
       })
@@ -748,21 +754,22 @@ export default function DashboardPage() {
               </div>
 
               {/* Overlay Design Options */}
-              <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-xl border-2 border-purple-200">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-purple-900">🎨 Overlay Design (NEW!)</h3>
-                  <label className="flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={useOverlayDesign}
-                      onChange={(e) => setUseOverlayDesign(e.target.checked)}
-                      className="mr-2 w-5 h-5"
-                    />
-                    <span className="font-medium text-purple-900">เปิดใช้งาน</span>
-                  </label>
-                </div>
-                
-                {useOverlayDesign && (
+              {selectedImages.length > 1 && (
+                <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-xl border-2 border-purple-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-purple-900">🎨 Overlay Design (2+ รูป)</h3>
+                    <label className="flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={useOverlayDesign}
+                        onChange={(e) => setUseOverlayDesign(e.target.checked)}
+                        className="mr-2 w-5 h-5"
+                      />
+                      <span className="font-medium text-purple-900">เปิดใช้งาน</span>
+                    </label>
+                  </div>
+                  
+                  {useOverlayDesign && (
                   <div className="space-y-4 mt-4">
                     {/* Aspect Ratio Selector */}
                     <div>
@@ -854,8 +861,9 @@ export default function DashboardPage() {
                       </ul>
                     </div>
                   </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
               
               {/* Info: Automatic Processing */}
               {!useOverlayDesign && (
