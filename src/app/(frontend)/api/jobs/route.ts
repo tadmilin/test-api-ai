@@ -71,10 +71,17 @@ export async function POST(request: NextRequest) {
     const {
       productName,
       productDescription,
+      contentTopic,
+      postTitleHeadline,
+      contentDescription,
+      photoTypeFromSheet,
       mood,
       targetPlatforms,
       referenceImageIds,
       referenceImageUrls,
+      templateType,
+      templateMode,
+      templateStyle,
       status = 'pending',
     } = body
 
@@ -103,22 +110,32 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create new job
+    // Create new job with all fields
     const job = await payload.create({
       collection: 'jobs',
       data: {
         productName,
         productDescription: productDescription || '',
+        contentTopic: contentTopic || undefined,
+        postTitleHeadline: postTitleHeadline || undefined,
+        contentDescription: contentDescription || undefined,
+        photoTypeFromSheet: photoTypeFromSheet || undefined,
         mood: mood || '',
         targetPlatforms: targetPlatforms || ['facebook', 'instagram_feed'],
         referenceImageIds: referenceImageIds || [],
         referenceImageUrls: referenceImageUrls || [],
+        templateType: templateType || 'triple',
+        templateMode: templateMode || 'ai',
+        templateStyle: templateStyle || 'minimal',
         status,
         createdBy: currentUser?.id || undefined,
       },
     })
 
-    return NextResponse.json(job)
+    return NextResponse.json({
+      success: true,
+      doc: job, // Wrap in doc for consistency with Payload response format
+    })
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to create job'
     console.error('Error creating job:', error)

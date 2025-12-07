@@ -411,15 +411,24 @@ export default function DashboardPage() {
       })
 
       if (!jobRes.ok) {
-        throw new Error('Failed to create job')
+        const errorData = await jobRes.json().catch(() => ({ error: 'Unknown error' }))
+        throw new Error(errorData.error || 'Failed to create job')
       }
 
-      const job = await jobRes.json()
-      console.log('✅ Job created:', job)
+      const response = await jobRes.json()
+      console.log('✅ Job created:', response)
+
+      // Handle both response formats: {doc: job} or job directly
+      const jobData = response.doc || response
+      const jobId = jobData.id
+      
+      if (!jobId) {
+        throw new Error('No job ID in response')
+      }
 
       // Set states for review workflow
-      setCurrentJobId(job.doc.id)
-      setProcessingJobId(job.doc.id)
+      setCurrentJobId(jobId)
+      setProcessingJobId(jobId)
       setProcessingStatus('🎨 Phase 1: Enhancing images with Nano-Banana Pro...')
       setShowCreateForm(false)
 
@@ -427,11 +436,12 @@ export default function DashboardPage() {
       const processRes = await fetch('/api/generate/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId: job.doc.id }),
+        body: JSON.stringify({ jobId: jobId }),
       })
 
       if (!processRes.ok) {
-        throw new Error('Failed to start processing')
+        const errorData = await processRes.json().catch(() => ({ error: 'Unknown error' }))
+        throw new Error(errorData.error || 'Failed to start processing')
       }
 
       const processData = await processRes.json()
@@ -443,6 +453,10 @@ export default function DashboardPage() {
         setEnhancedImages(processData.enhancedImages || [])
         setReviewMode(true)
         alert('✅ รูปทั้งหมดถูกปรับปรุงแล้ว! กรุณาตรวจสอบและอนุมัติรูป')
+      } else if (processData.error) {
+        throw new Error(processData.error)
+      } else {
+        throw new Error('Unexpected response from processing API')
       }
 
       // Refresh dashboard
@@ -474,7 +488,10 @@ export default function DashboardPage() {
         }),
       })
 
-      if (!res.ok) throw new Error('Failed to approve image')
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }))
+        throw new Error(errorData.error || 'Failed to approve image')
+      }
 
       const data = await res.json()
       
@@ -489,7 +506,7 @@ export default function DashboardPage() {
       }
     } catch (error) {
       console.error('Approve error:', error)
-      alert('Failed to approve image')
+      alert('Failed to approve image: ' + (error instanceof Error ? error.message : 'Unknown error'))
     }
   }
 
@@ -510,9 +527,16 @@ export default function DashboardPage() {
         }),
       })
 
-      if (!res.ok) throw new Error('Failed to regenerate image')
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }))
+        throw new Error(errorData.error || 'Failed to regenerate image')
+      }
 
       const data = await res.json()
+      
+      if (!data.newUrl) {
+        throw new Error('No new URL in response')
+      }
       
       // Update local state with new URL
       const updated = [...enhancedImages]
@@ -523,7 +547,7 @@ export default function DashboardPage() {
       alert('✅ รูปถูกสร้างใหม่แล้ว! กรุณาตรวจสอบอีกครั้ง')
     } catch (error) {
       console.error('Regenerate error:', error)
-      alert('Failed to regenerate image')
+      alert('Failed to regenerate image: ' + (error instanceof Error ? error.message : 'Unknown error'))
     } finally {
       setRegeneratingIndex(null)
     }
@@ -549,9 +573,16 @@ export default function DashboardPage() {
         body: JSON.stringify({ jobId: currentJobId }),
       })
 
-      if (!res.ok) throw new Error('Failed to finalize template')
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }))
+        throw new Error(errorData.error || 'Failed to finalize template')
+      }
 
       const data = await res.json()
+      
+      if (!data.finalImageUrl) {
+        throw new Error('No final image URL in response')
+      }
       
       setFinalImageUrl(data.finalImageUrl)
       setReviewMode(false)
