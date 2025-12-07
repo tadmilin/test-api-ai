@@ -359,28 +359,32 @@ export default function DashboardPage() {
 
   async function createJob() {
     if (!selectedSheetRow) {
-      alert('Please select product data from sheet')
+      alert('❌ กรุณาเลือกสินค้าจาก Google Sheet ก่อน')
       return
     }
     
     if (selectedImages.length === 0) {
-      alert('Please select at least 1 image')
+      alert('❌ กรุณาเลือกรูปอย่างน้อย 1 รูป')
       return
     }
 
     // Validate template type matches selected images
     const requiredImages = templateType === 'single' ? 1 : templateType === 'dual' ? 2 : templateType === 'triple' ? 3 : 4
     if (selectedImages.length < requiredImages) {
-      alert(`กรุณาเลือกรูปอย่างน้อย ${requiredImages} รูปสำหรับ Template ${templateType}`)
+      alert(`❌ กรุณาเลือกรูปอย่างน้อย ${requiredImages} รูปสำหรับ Template ${templateType}`)
       return
     }
 
     // Filter out any undefined images
     const validImages = selectedImages.filter(img => img && img.id && img.url)
     if (validImages.length === 0) {
-      alert('ไม่พบรูปภาพที่ถูกต้อง กรุณาเลือกรูปใหม่')
+      alert('❌ ไม่พบรูปภาพที่ถูกต้อง กรุณาเลือกรูปใหม่')
       return
     }
+
+    console.log('🚀 Starting job creation...')
+    console.log('📊 Valid images:', validImages.length)
+    console.log('📐 Template:', templateType, '|', templateStyle)
 
     setCreating(true)
     setReviewMode(false)
@@ -607,6 +611,11 @@ export default function DashboardPage() {
     setEnhancedImages([])
     setFinalImageUrl(null)
     setShowCreateForm(true)
+    setCreating(false)
+    setProcessingJobId(null)
+    setProcessingStatus('')
+    setRegeneratingIndex(null)
+    // Keep selectedImages and other form data for re-submission
   }
 
   async function _handleApproveReject(jobId: string, action: 'approve' | 'reject') {
@@ -970,6 +979,35 @@ export default function DashboardPage() {
               </div>
             </div>
 
+            {/* Template Configuration (Can change before finalizing) */}
+            <div className="mb-6 p-6 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl border-2 border-indigo-200">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-indigo-900">⚙️ ตั้งค่า Template</h3>
+                <span className="text-xs bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full font-medium">
+                  เปลี่ยนได้ทุกเมื่อ
+                </span>
+              </div>
+              <p className="text-sm text-indigo-700 mb-4">
+                เปลี่ยนจำนวนรูปหรือสไตล์ของ Template ก่อนกดสร้าง
+              </p>
+              
+              {/* Template Type Selector */}
+              <div className="mb-4">
+                <TemplateTypeSelector
+                  value={templateType}
+                  onChange={setTemplateType}
+                  maxImages={enhancedImages.length}
+                />
+              </div>
+
+              {/* Style Selector */}
+              <StyleSelector
+                value={templateStyle}
+                onChange={setTemplateStyle}
+                mode="ai"
+              />
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {enhancedImages.map((img, index) => (
                 <div key={index} className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-4 border-2 border-gray-200">
@@ -999,7 +1037,11 @@ export default function DashboardPage() {
 
                   {/* Action Buttons */}
                   <div className="flex gap-2">
-                    {img.status !== 'approved' && (
+                    {img.status === 'approved' ? (
+                      <div className="flex-1 bg-green-100 text-green-700 py-2 rounded-lg font-medium text-sm text-center border-2 border-green-300">
+                        ✅ อนุมัติแล้ว
+                      </div>
+                    ) : (
                       <button
                         onClick={() => handleApproveImage(index)}
                         disabled={regeneratingIndex === index}
@@ -1008,13 +1050,15 @@ export default function DashboardPage() {
                         ✅ อนุมัติ
                       </button>
                     )}
-                    <button
-                      onClick={() => handleRegenerateImage(index)}
-                      disabled={regeneratingIndex === index}
-                      className="flex-1 bg-amber-600 text-white py-2 rounded-lg hover:bg-amber-700 font-medium text-sm disabled:bg-gray-400"
-                    >
-                      {regeneratingIndex === index ? '⏳ กำลังสร้าง...' : '🔄 สร้างใหม่'}
-                    </button>
+                    {img.status !== 'approved' && (
+                      <button
+                        onClick={() => handleRegenerateImage(index)}
+                        disabled={regeneratingIndex === index}
+                        className="flex-1 bg-amber-600 text-white py-2 rounded-lg hover:bg-amber-700 font-medium text-sm disabled:bg-gray-400"
+                      >
+                        {regeneratingIndex === index ? '⏳ กำลังสร้าง...' : '🔄 สร้างใหม่'}
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

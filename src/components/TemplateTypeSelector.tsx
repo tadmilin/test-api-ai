@@ -61,10 +61,17 @@ export default function TemplateTypeSelector({ value, onChange, maxImages }: Tem
           )
         })}
       </div>
-      {maxImages && maxImages < 4 && (
-        <p className="text-xs text-amber-600 mt-2">
-          ⚠️ คุณเลือกรูปไว้ {maxImages} รูป - Template แบบ {maxImages + 1} รูปขึ้นไปจะถูกปิด
-        </p>
+      {maxImages && (
+        <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-xs text-blue-700">
+            📊 คุณมีรูปทั้งหมด <span className="font-bold">{maxImages} รูป</span>
+            {maxImages < 4 && (
+              <span className="block mt-1 text-amber-700">
+                ⚠️ Template แบบ {maxImages + 1} รูปขึ้นไปจะถูกปิดการใช้งาน
+              </span>
+            )}
+          </p>
+        </div>
       )}
     </div>
   )
