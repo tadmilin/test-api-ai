@@ -30,12 +30,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Update job status to processing
+    // Get template settings
+    const templateMode = (typeof job.templateMode === 'string' ? job.templateMode : 'satori') as 'satori' | 'ai'
+    const templateType = (typeof job.templateType === 'string' ? job.templateType : 'triple') as string
+    const templateStyle = (typeof job.templateStyle === 'string' ? job.templateStyle : 'minimal') as string
+
+    console.log(`🎯 Template Mode: ${templateMode}`)
+    console.log(`📐 Template Type: ${templateType}`)
+    if (templateMode === 'ai') {
+      console.log(`🎨 Template Style: ${templateStyle}`)
+    }
+
+    // Update job status to enhancing
     await payload.update({
       collection: 'jobs',
       id: jobId,
       data: {
-        status: 'processing',
+        status: 'processing', // Use 'processing' instead of 'enhancing'
       },
     })
 
@@ -45,7 +56,7 @@ export async function POST(request: NextRequest) {
       data: {
         jobId: jobId,
         level: 'info',
-        message: 'Started processing job',
+        message: `Started processing job (Mode: ${templateMode})`,
         timestamp: new Date().toISOString(),
       },
     })
@@ -58,12 +69,12 @@ export async function POST(request: NextRequest) {
       
       console.log(`📊 Processing ${referenceUrls.length} images`)
       
-      // NEW WORKFLOW: Enhance แต่ละรูปก่อน แล้วค่อยสร้าง Graphic Design
+      // PHASE 1: Enhance all images
       let finalImageUrl: string | null = null
       
-      console.log('🎨 Creating professional graphic design with auto layout...')
+      console.log('🎨 Phase 1: Enhancing images with Nano-Banana Pro...')
       
-      const enhancedImageUrls: string[] = []
+      const enhancedImageUrls: { url: string; status: 'pending' | 'approved' | 'regenerating'; originalUrl: string }[] = []
       let resolvedType: PhotoType | null = null
       
       // Enhance ทีละรูป
@@ -151,13 +162,21 @@ export async function POST(request: NextRequest) {
             if (!enhanceResponse.ok) {
               const errorText = await enhanceResponse.text()
               console.error(`⚠️ Enhancement failed for image ${i + 1}:`, errorText)
-              // ถ้าแต่งไม่สำเร็จ ใช้รูปต้นฉบับแทน
+              // ถ้า error ใช้รูปต้นฉบับแทน
               if (typeof imageUrl === 'string' && imageUrl) {
-                enhancedImageUrls.push(imageUrl)
+                enhancedImageUrls.push({
+                  url: imageUrl,
+                  status: 'pending' as const,
+                  originalUrl: imageUrl,
+                })
               }
             } else {
               const { imageUrl: enhancedUrl } = await enhanceResponse.json()
-              enhancedImageUrls.push(enhancedUrl)
+              enhancedImageUrls.push({
+                url: enhancedUrl,
+                status: 'pending' as const,
+                originalUrl: imageUrl,
+              })
               console.log(`✅ Image ${i + 1} enhanced:`, enhancedUrl)
               
               await payload.create({
@@ -174,198 +193,74 @@ export async function POST(request: NextRequest) {
             console.error(`💥 Error enhancing image ${i + 1}:`, error)
             // ถ้า error ใช้รูปต้นฉบับแทน
             if (typeof imageUrl === 'string' && imageUrl) {
-              enhancedImageUrls.push(imageUrl)
+              enhancedImageUrls.push({
+                url: imageUrl,
+                status: 'pending' as const,
+                originalUrl: imageUrl,
+              })
             }
           }
         }
         
         console.log(`\n✅ Enhanced ${enhancedImageUrls.length} images`)
-        
-        // Step 2: สร้าง Professional Design ด้วย Satori
-        console.log('\n🎨 Step 2: Creating professional design with Satori...')
-        
-        // เช็คว่าใช้ Overlay Design หรือ Graphic Design
-        const useOverlayDesign = job.useOverlayDesign === true && enhancedImageUrls.length > 1
-        const overlayAspectRatio = typeof job.overlayAspectRatio === 'string' ? job.overlayAspectRatio : '3:1'
-        const heroImageIndex = typeof job.heroImageIndex === 'number' ? job.heroImageIndex : 0
-        const overlayTheme = typeof job.overlayTheme === 'string' ? job.overlayTheme : 'modern'
-        const graphicTheme = typeof job.graphicTheme === 'string' ? job.graphicTheme : 'modern'
-        const socialMediaFormat = typeof job.socialMediaFormat === 'string' ? job.socialMediaFormat : 'facebook_post'
-        
-        if (useOverlayDesign) {
-          console.log(`📐 Mode: OVERLAY DESIGN (Satori)`)
-          console.log(`📐 Aspect Ratio: ${overlayAspectRatio}`)
-          console.log(`⭐ Hero Image Index: ${heroImageIndex}`)
-        } else {
-          console.log(`📐 Mode: GRAPHIC DESIGN (Satori)`)
-          console.log(`📐 Format: ${socialMediaFormat}`)
-        }
-        console.log(`🖼️ Images: ${enhancedImageUrls.length}`)
-        
-        try {
-          if (useOverlayDesign) {
-            // ใช้ Satori สำหรับ Overlay Design
-            const params = new URLSearchParams()
-            enhancedImageUrls.forEach(url => params.append('image', url))
-            params.append('aspectRatio', overlayAspectRatio)
-            params.append('heroIndex', heroImageIndex.toString())
-            params.append('style', overlayTheme)  // ใช้ธีมที่เลือก
-            
-            const overlayUrl = `${baseUrl}/api/generate-overlay?${params.toString()}`
-            
-            console.log('🎨 Generating overlay design with Satori...')
-            const overlayResponse = await fetch(overlayUrl)
-            
-            if (overlayResponse.ok) {
-              // Satori returns image directly, we need to upload it
-              const imageBuffer = await overlayResponse.arrayBuffer()
-              const imageBlob = new Blob([imageBuffer], { type: 'image/png' })
-              
-              // Upload to Media collection
-              const formData = new FormData()
-              formData.append('file', imageBlob, `overlay-${jobId}.png`)
-              
-              const uploadResponse = await fetch(`${baseUrl}/api/media`, {
-                method: 'POST',
-                body: formData,
-              })
-              
-              if (uploadResponse.ok) {
-                const uploadData = await uploadResponse.json()
-                finalImageUrl = uploadData.doc.url
-                console.log('✅ Overlay design created:', finalImageUrl)
-                
-                await payload.create({
-                  collection: 'job-logs',
-                  data: {
-                    jobId: jobId,
-                    level: 'info',
-                    message: `Created overlay design from ${enhancedImageUrls.length} enhanced images`,
-                    timestamp: new Date().toISOString(),
-                  },
-                })
-              } else {
-                console.error('❌ Failed to upload overlay image')
-                finalImageUrl = enhancedImageUrls[0]
-              }
-            } else {
-              console.error('❌ Overlay generation failed')
-              finalImageUrl = enhancedImageUrls[0]
-            }
-          } else {
-            // ใช้ Satori สำหรับ Graphic Design (รูปเดียว หรือ ไม่เปิด Overlay)
-            const params = new URLSearchParams()
-            enhancedImageUrls.forEach(url => params.append('image', url))
-            params.append('format', socialMediaFormat)
-            params.append('style', graphicTheme)  // ใช้ธีมที่เลือก
-            
-            const graphicUrl = `${baseUrl}/api/generate-graphic?${params.toString()}`
-            
-            console.log('🎨 Generating graphic design with Satori...')
-            const graphicResponse = await fetch(graphicUrl)
 
-            if (graphicResponse.ok) {
-              // Upload image to Blob storage
-              const imageBuffer = await graphicResponse.arrayBuffer()
-              const timestamp = Date.now()
-              
-              const { put } = await import('@vercel/blob')
-              const blob = await put(`graphics/graphic-${timestamp}.png`, imageBuffer, {
-                access: 'public',
-                contentType: 'image/png',
-              })
-              
-              finalImageUrl = blob.url
-              console.log('✅ Graphic design created:', finalImageUrl)
-              
-              await payload.create({
-                collection: 'job-logs',
-                data: {
-                  jobId: jobId,
-                  level: 'info',
-                  message: `Created professional graphic design from ${enhancedImageUrls.length} enhanced image(s)`,
-                  timestamp: new Date().toISOString(),
-                },
-              })
-            } else {
-              const errorText = await graphicResponse.text()
-              console.error('❌ Graphic design creation failed:', errorText)
-              finalImageUrl = enhancedImageUrls[0]
-            }
-          }
-        } catch (designError) {
-          console.error('💥 Design process failed:', designError)
-          finalImageUrl = enhancedImageUrls[0]
-        }
-      
-      // Step 4: Update job status to completed
-      console.log('✅ Job processing complete! Final image:', finalImageUrl)
-      
-      // Prepare generated images object for different platforms
-      const generatedImages: Record<string, { url: string; width: number; height: number }> = {}
-      
-      if (finalImageUrl) {
-        // For now, use the final image for all platforms
-        // TODO: Add resize functionality later
-        generatedImages['facebook'] = { url: finalImageUrl, width: 1200, height: 630 }
-        generatedImages['instagram_feed'] = { url: finalImageUrl, width: 1080, height: 1080 }
-        generatedImages['instagram_story'] = { url: finalImageUrl, width: 1080, height: 1920 }
+        // Save enhanced images and update status to completed (will be updated by finalize later)
+        await payload.update({
+          collection: 'jobs',
+          id: jobId,
+          data: {
+            enhancedImageUrls: enhancedImageUrls,
+            status: 'completed', // Use 'completed' temporarily, frontend will show review UI
+          },
+        })
+
+        await payload.create({
+          collection: 'job-logs',
+          data: {
+            jobId: jobId,
+            level: 'info',
+            message: `Phase 1 complete: ${enhancedImageUrls.length} images enhanced. Waiting for review.`,
+            timestamp: new Date().toISOString(),
+          },
+        })
+
+        console.log('⏸️ PAUSED: Waiting for user to review and approve images')
+        console.log(`📍 Next step: User should visit /review-images/${jobId}`)
+
+        return NextResponse.json({
+          success: true,
+          message: 'Images enhanced. Please review and approve.',
+          jobId: jobId,
+          status: 'review_pending',
+          enhancedImages: enhancedImageUrls,
+          nextUrl: `/review-images/${jobId}`,
+        })
+
+      } catch (error: any) {
+        console.error('💥 Processing error:', error)
+        
+        // Update job status to failed
+        await payload.update({
+          collection: 'jobs',
+          id: jobId,
+          data: {
+            status: 'failed',
+            errorMessage: error.message || 'Processing failed',
+          },
+        })
+
+        await payload.create({
+          collection: 'job-logs',
+          data: {
+            jobId: jobId,
+            level: 'error',
+            message: error.message || 'Processing failed',
+            timestamp: new Date().toISOString(),
+          },
+        })
+
+        throw error
       }
-      
-      // Update job with final image URL and generated images
-      await payload.update({
-        collection: 'jobs',
-        id: jobId,
-        data: {
-          generatedPrompt: `Template prompts generated for ${referenceUrls.length} image(s) using Gemini Vision + Nano-Banana`,
-          promptGeneratedAt: new Date().toISOString(),
-          status: 'completed',
-          generatedImages: generatedImages,
-        },
-      })
-
-      await payload.create({
-        collection: 'job-logs',
-        data: {
-          jobId: jobId,
-          level: 'info',
-          message: `Job completed successfully. Processed ${referenceUrls.length} image(s)`,
-          timestamp: new Date().toISOString(),
-        },
-      })
-
-      return NextResponse.json({
-        success: true,
-        jobId,
-        finalImageUrl,
-      })
-
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Image generation failed'
-      // Log error
-      await payload.create({
-        collection: 'job-logs',
-        data: {
-          jobId: jobId,
-          level: 'error',
-          message: errorMessage,
-          timestamp: new Date().toISOString(),
-        },
-      })
-
-      // Update job status to failed
-      await payload.update({
-        collection: 'jobs',
-        id: jobId,
-        data: {
-          status: 'failed',
-          errorMessage: errorMessage,
-          retryCount: (job.retryCount || 0) + 1,
-        },
-      })
-
-      throw error
-    }
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to process job'

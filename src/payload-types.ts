@@ -792,7 +792,17 @@ export interface Form {
  */
 export interface Job {
   id: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed' | 'approved' | 'rejected';
+  status:
+    | 'pending'
+    | 'processing'
+    | 'enhancing'
+    | 'review_pending'
+    | 'style_selection'
+    | 'generating_template'
+    | 'completed'
+    | 'failed'
+    | 'approved'
+    | 'rejected';
   productName: string;
   productDescription?: string | null;
   /**
@@ -838,19 +848,66 @@ export interface Job {
       }[]
     | null;
   /**
-   * Combine multiple images into a collage before enhancement
+   * Number of images in the final template
    */
-  useCollage?: boolean | null;
+  templateType?: ('single' | 'dual' | 'triple' | 'quad') | null;
   /**
-   * Layout template for collage creation
+   * Satori = consistent layout, AI = creative dynamic design
    */
-  collageTemplate?: ('auto' | 'hero_grid' | 'split' | 'masonry' | 'grid') | null;
+  templateMode?: ('satori' | 'ai') | null;
   /**
-   * Preset dimensions for social media platforms
+   * Enhanced images with approval status
+   */
+  enhancedImageUrls?:
+    | {
+        url?: string | null;
+        status?: ('pending' | 'approved' | 'regenerating') | null;
+        originalUrl?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * All enhanced images have been reviewed and approved
+   */
+  reviewCompleted?: boolean | null;
+  /**
+   * Template style has been selected
+   */
+  styleSelected?: boolean | null;
+  /**
+   * Style for AI-generated template
+   */
+  templateStyle?: ('minimal' | 'classic' | 'graphic') | null;
+  /**
+   * URL of the final generated template
+   */
+  finalImageUrl?: string | null;
+  /**
+   * Target social media platform format (only for Graphic Design)
    */
   socialMediaFormat?:
     | ('facebook_post' | 'instagram_feed' | 'instagram_story' | 'custom_16_9' | 'custom_4_3' | 'custom_1_1')
     | null;
+  /**
+   * Use NEW overlay system: Hero image + smaller overlays + graphic patterns
+   */
+  useOverlayDesign?: boolean | null;
+  /**
+   * Aspect ratio for overlay design
+   */
+  overlayAspectRatio?: ('3:1' | '2:1') | null;
+  /**
+   * Which image to use as the main background (0 = first image, 1 = second, etc.)
+   */
+  heroImageIndex?: number | null;
+  /**
+   * Theme style for overlay design
+   */
+  overlayTheme?: ('modern' | 'luxury' | 'resort') | null;
+  /**
+   * Theme style for graphic design
+   */
+  graphicTheme?: ('modern' | 'luxury' | 'minimal') | null;
   /**
    * How much the AI modifies the image (0.25 = subtle, 0.30 = recommended, 0.40 = noticeable)
    */
@@ -1547,9 +1604,26 @@ export interface JobsSelect<T extends boolean = true> {
         url?: T;
         id?: T;
       };
-  useCollage?: T;
-  collageTemplate?: T;
+  templateType?: T;
+  templateMode?: T;
+  enhancedImageUrls?:
+    | T
+    | {
+        url?: T;
+        status?: T;
+        originalUrl?: T;
+        id?: T;
+      };
+  reviewCompleted?: T;
+  styleSelected?: T;
+  templateStyle?: T;
+  finalImageUrl?: T;
   socialMediaFormat?: T;
+  useOverlayDesign?: T;
+  overlayAspectRatio?: T;
+  heroImageIndex?: T;
+  overlayTheme?: T;
+  graphicTheme?: T;
   enhancementStrength?: T;
   generatedPrompt?: T;
   promptGeneratedAt?: T;

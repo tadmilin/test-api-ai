@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
               width: '100%',
               display: 'flex',
               backgroundColor: theme.bg,
-              padding: '40px',
+              padding: '20px',
               justifyContent: 'center',
               alignItems: 'center',
             }}
@@ -86,8 +86,7 @@ export async function GET(request: NextRequest) {
                 width: '100%',
                 height: '100%',
                 border: `4px solid ${theme.border}`,
-                padding: '10px',
-                backgroundColor: theme.bg,
+                overflow: 'hidden',
               }}
             >
               <img

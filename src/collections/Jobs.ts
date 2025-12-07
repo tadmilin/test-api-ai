@@ -23,6 +23,10 @@ export const Jobs: CollectionConfig = {
       options: [
         { label: 'Pending', value: 'pending' },
         { label: 'Processing', value: 'processing' },
+        { label: 'Enhancing', value: 'enhancing' },
+        { label: 'Review Pending', value: 'review_pending' },
+        { label: 'Style Selection', value: 'style_selection' },
+        { label: 'Generating Template', value: 'generating_template' },
         { label: 'Completed', value: 'completed' },
         { label: 'Failed', value: 'failed' },
         { label: 'Approved', value: 'approved' },
@@ -160,6 +164,105 @@ export const Jobs: CollectionConfig = {
                   type: 'text',
                 },
               ],
+            },
+            {
+              name: 'templateType',
+              type: 'select',
+              label: 'Template Type',
+              defaultValue: 'triple',
+              options: [
+                { label: 'Single (1 image)', value: 'single' },
+                { label: 'Dual (2 images)', value: 'dual' },
+                { label: 'Triple (3 images)', value: 'triple' },
+                { label: 'Quad (4 images)', value: 'quad' },
+              ],
+              admin: {
+                description: 'Number of images in the final template',
+              },
+            },
+            {
+              name: 'templateMode',
+              type: 'select',
+              label: 'Template Generation Mode',
+              defaultValue: 'satori',
+              options: [
+                { label: 'Consistent (Satori - Pixel Perfect)', value: 'satori' },
+                { label: 'Creative (AI - Dynamic & Unique)', value: 'ai' },
+              ],
+              admin: {
+                description: 'Satori = consistent layout, AI = creative dynamic design',
+              },
+            },
+            {
+              name: 'enhancedImageUrls',
+              type: 'array',
+              label: 'Enhanced Images',
+              fields: [
+                {
+                  name: 'url',
+                  type: 'text',
+                  label: 'Image URL',
+                },
+                {
+                  name: 'status',
+                  type: 'select',
+                  defaultValue: 'pending',
+                  options: [
+                    { label: 'Pending', value: 'pending' },
+                    { label: 'Approved', value: 'approved' },
+                    { label: 'Regenerating', value: 'regenerating' },
+                  ],
+                },
+                {
+                  name: 'originalUrl',
+                  type: 'text',
+                  label: 'Original Image URL',
+                },
+              ],
+              admin: {
+                description: 'Enhanced images with approval status',
+              },
+            },
+            {
+              name: 'reviewCompleted',
+              type: 'checkbox',
+              label: 'Review Completed',
+              defaultValue: false,
+              admin: {
+                description: 'All enhanced images have been reviewed and approved',
+              },
+            },
+            {
+              name: 'styleSelected',
+              type: 'checkbox',
+              label: 'Style Selected',
+              defaultValue: false,
+              admin: {
+                description: 'Template style has been selected',
+              },
+            },
+            {
+              name: 'templateStyle',
+              type: 'select',
+              label: 'Template Style (AI Mode)',
+              options: [
+                { label: 'Minimal (Clean & Simple)', value: 'minimal' },
+                { label: 'Classic (Elegant & Luxury)', value: 'classic' },
+                { label: 'Graphic (Creative & Artistic)', value: 'graphic' },
+              ],
+              admin: {
+                description: 'Style for AI-generated template',
+                condition: (data: any) => data.templateMode === 'ai',
+              },
+            },
+            {
+              name: 'finalImageUrl',
+              type: 'text',
+              label: 'Final Template URL',
+              admin: {
+                description: 'URL of the final generated template',
+                readOnly: true,
+              },
             },
             {
               name: 'socialMediaFormat',

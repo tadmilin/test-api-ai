@@ -137,16 +137,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Nano-Banana enhancement - conversational image editing
-    console.log('✨ Sending to Nano-Banana (Gemini 2.5 Flash Image)...')
+    console.log('✨ Sending to Nano-Banana Pro (Gemini 3 Pro Image)...')
     console.log('📸 Final image URL sent to model:', processedImageUrl)
     console.log('📝 Prompt:', prompt)
     
     const nanoBananaPrediction = await replicate.predictions.create({
-      model: 'google/nano-banana',
+      model: 'google/nano-banana-pro',
       input: {
         image_input: [processedImageUrl],  // Must be an array!
         prompt: prompt,
-        // Nano-Banana uses simple conversational prompts
+        // Nano-Banana Pro: Up to 4K resolution, 14 reference images, Google Search grounding, Thinking mode
         // No strength, negative_prompt, steps, or guidance parameters
       },
     })

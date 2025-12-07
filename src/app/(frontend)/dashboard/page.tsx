@@ -3,6 +3,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
+import TemplateTypeSelector from '@/components/TemplateTypeSelector'
+import ModeToggle from '@/components/ModeToggle'
+import StyleSelector from '@/components/StyleSelector'
 
 interface CurrentUser {
   id: string
@@ -97,7 +100,19 @@ export default function DashboardPage() {
   const [selectedImages, setSelectedImages] = useState<DriveImage[]>([])
   const [creating, setCreating] = useState(false)
   
-  // Overlay Design Options
+  // NEW: Template Settings
+  const [templateType, setTemplateType] = useState<'single' | 'dual' | 'triple' | 'quad'>('triple')
+  const [templateMode, setTemplateMode] = useState<'satori' | 'ai'>('satori')
+  const [templateStyle, setTemplateStyle] = useState<'minimal' | 'classic' | 'graphic'>('minimal')
+  
+  // NEW: Review & Finalize States
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null)
+  const [enhancedImages, setEnhancedImages] = useState<Array<{url: string, status: string, originalUrl: string}>>([])
+  const [reviewMode, setReviewMode] = useState(false)
+  const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null)
+  const [finalImageUrl, setFinalImageUrl] = useState<string | null>(null)
+  
+  // Overlay Design Options (for Satori mode)
   const [useOverlayDesign, setUseOverlayDesign] = useState(false)
   const [overlayAspectRatio, setOverlayAspectRatio] = useState<'3:1' | '2:1'>('3:1')
   const [heroImageIndex, setHeroImageIndex] = useState(0)
@@ -347,10 +362,19 @@ export default function DashboardPage() {
       return
     }
 
+    // Validate template type matches selected images
+    const requiredImages = templateType === 'single' ? 1 : templateType === 'dual' ? 2 : templateType === 'triple' ? 3 : 4
+    if (selectedImages.length < requiredImages) {
+      alert(`กรุณาเลือกรูปอย่างน้อย ${requiredImages} รูปสำหรับ Template ${templateType}`)
+      return
+    }
+
     setCreating(true)
+    setReviewMode(false)
+    setFinalImageUrl(null)
 
     try {
-      // Create job
+      // Create job with new template settings
       const jobRes = await fetch('/api/jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -363,12 +387,20 @@ export default function DashboardPage() {
           photoTypeFromSheet: selectedSheetRow['Photo_Type'] || undefined,
           referenceImageIds: selectedImages.map((img) => ({ imageId: img.id })),
           referenceImageUrls: selectedImages.map((img) => ({ url: img.url })),
-          useOverlayDesign: useOverlayDesign && selectedImages.length > 1,  // Overlay ต้องมีมากกว่า 1 รูป
-          overlayAspectRatio: useOverlayDesign && selectedImages.length > 1 ? overlayAspectRatio : undefined,
-          heroImageIndex: useOverlayDesign && selectedImages.length > 1 ? heroImageIndex : undefined,
-          overlayTheme: useOverlayDesign && selectedImages.length > 1 ? overlayTheme : undefined,  // ส่งธีมสำหรับ Overlay
-          graphicTheme: !useOverlayDesign || selectedImages.length === 1 ? graphicTheme : undefined,  // ส่งธีมสำหรับ Graphic Design
-          socialMediaFormat: !useOverlayDesign || selectedImages.length === 1 ? 'facebook_post' : undefined,  // ใช้ social format สำหรับรูปเดี่ยว
+          
+          // NEW: Template settings
+          templateType: templateType,
+          templateMode: templateMode,
+          templateStyle: templateMode === 'ai' ? templateStyle : undefined,
+          
+          // OLD: Satori settings (kept for backward compatibility)
+          useOverlayDesign: templateMode === 'satori' && useOverlayDesign && selectedImages.length > 1,
+          overlayAspectRatio: templateMode === 'satori' && useOverlayDesign && selectedImages.length > 1 ? overlayAspectRatio : undefined,
+          heroImageIndex: templateMode === 'satori' && useOverlayDesign && selectedImages.length > 1 ? heroImageIndex : undefined,
+          overlayTheme: templateMode === 'satori' && useOverlayDesign && selectedImages.length > 1 ? overlayTheme : undefined,
+          graphicTheme: templateMode === 'satori' && (!useOverlayDesign || selectedImages.length === 1) ? graphicTheme : undefined,
+          socialMediaFormat: templateMode === 'satori' && (!useOverlayDesign || selectedImages.length === 1) ? 'facebook_post' : undefined,
+          
           status: 'pending',
         }),
       })
@@ -378,89 +410,167 @@ export default function DashboardPage() {
       }
 
       const job = await jobRes.json()
-      console.log('Job created:', job)
+      console.log('✅ Job created:', job)
 
-      // Set processing state
-      setProcessingJobId(job.id)
-      setProcessingStatus('🔄 Creating job...')
+      // Set states for review workflow
+      setCurrentJobId(job.doc.id)
+      setProcessingJobId(job.doc.id)
+      setProcessingStatus('🎨 Phase 1: Enhancing images with Nano-Banana Pro...')
       setShowCreateForm(false)
 
-      // Start processing in background
-      setProcessingStatus('🤖 Generating enhancement prompt...')
-      
-      fetch('/api/generate/process', {
+      // Start Phase 1: Enhancement
+      const processRes = await fetch('/api/generate/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId: job.id }),
-      }).catch(err => console.error('Process error:', err))
+        body: JSON.stringify({ jobId: job.doc.id }),
+      })
 
-      // Refresh dashboard immediately to show new job
+      if (!processRes.ok) {
+        throw new Error('Failed to start processing')
+      }
+
+      const processData = await processRes.json()
+      
+      if (processData.status === 'review_pending') {
+        // Phase 1 complete - show review UI
+        setProcessingStatus('')
+        setProcessingJobId(null)
+        setEnhancedImages(processData.enhancedImages || [])
+        setReviewMode(true)
+        alert('✅ รูปทั้งหมดถูกปรับปรุงแล้ว! กรุณาตรวจสอบและอนุมัติรูป')
+      }
+
+      // Refresh dashboard
       fetchDashboardData()
-      
-      // Poll for updates every 3 seconds
-      let pollCount = 0
-      const maxPolls = 100 // 5 minutes max
-      
-      const pollInterval = setInterval(async () => {
-        pollCount++
-        
-        const jobsRes = await fetch('/api/jobs')
-        const data = await jobsRes.json()
-        const currentJob = data.jobs.find((j: Job) => j.id === job.id)
-        
-        if (currentJob) {
-          // Update status message
-          if (currentJob.status === 'processing') {
-            if (currentJob.generatedPrompt && !currentJob.generatedImages) {
-              setProcessingStatus('✨ Enhancing image with Replicate AI...')
-            } else if (currentJob.generatedImages) {
-              setProcessingStatus('📐 Resizing images for platforms...')
-            } else {
-              setProcessingStatus('🤖 Generating enhancement prompt...')
-            }
-          } else if (currentJob.status === 'completed') {
-            clearInterval(pollInterval)
-            setProcessingStatus('✅ Complete!')
-            fetchDashboardData()
-            
-            // Auto-open the result
-            setTimeout(() => {
-              setViewingJob(currentJob)
-              setProcessingJobId(null)
-              setProcessingStatus('')
-            }, 1000)
-            
-            return
-          } else if (currentJob.status === 'failed') {
-            clearInterval(pollInterval)
-            setProcessingStatus('❌ Failed')
-            fetchDashboardData()
-            alert('Job failed: ' + (currentJob.errorMessage || 'Unknown error'))
-            setProcessingJobId(null)
-            setProcessingStatus('')
-            return
-          }
-          
-          // Update dashboard data
-          fetchDashboardData()
-        }
-        
-        // Stop after max polls
-        if (pollCount >= maxPolls) {
-          clearInterval(pollInterval)
-          setProcessingStatus('⏱️ Timeout - check job status')
-          setProcessingJobId(null)
-        }
-      }, 3000)
       
     } catch (error) {
       console.error('Error creating job:', error)
       alert('Failed to create job: ' + (error instanceof Error ? error.message : 'Unknown error'))
       setProcessingJobId(null)
       setProcessingStatus('')
+      setCurrentJobId(null)
     } finally {
       setCreating(false)
     }
+  }
+
+  // NEW: Approve image
+  async function handleApproveImage(index: number) {
+    if (!currentJobId) return
+
+    try {
+      const res = await fetch('/api/generate/review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobId: currentJobId,
+          imageIndex: index,
+          action: 'approve',
+        }),
+      })
+
+      if (!res.ok) throw new Error('Failed to approve image')
+
+      const data = await res.json()
+      
+      // Update local state
+      const updated = [...enhancedImages]
+      updated[index].status = 'approved'
+      setEnhancedImages(updated)
+
+      // Check if all approved
+      if (data.allApproved) {
+        alert('✅ ทุกรูปได้รับการอนุมัติแล้ว! คุณสามารถสร้าง Template ได้')
+      }
+    } catch (error) {
+      console.error('Approve error:', error)
+      alert('Failed to approve image')
+    }
+  }
+
+  // NEW: Regenerate image
+  async function handleRegenerateImage(index: number) {
+    if (!currentJobId) return
+
+    setRegeneratingIndex(index)
+
+    try {
+      const res = await fetch('/api/generate/review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobId: currentJobId,
+          imageIndex: index,
+          action: 'regenerate',
+        }),
+      })
+
+      if (!res.ok) throw new Error('Failed to regenerate image')
+
+      const data = await res.json()
+      
+      // Update local state with new URL
+      const updated = [...enhancedImages]
+      updated[index].url = data.newUrl
+      updated[index].status = 'pending'
+      setEnhancedImages(updated)
+
+      alert('✅ รูปถูกสร้างใหม่แล้ว! กรุณาตรวจสอบอีกครั้ง')
+    } catch (error) {
+      console.error('Regenerate error:', error)
+      alert('Failed to regenerate image')
+    } finally {
+      setRegeneratingIndex(null)
+    }
+  }
+
+  // NEW: Finalize template
+  async function handleFinalizeTemplate() {
+    if (!currentJobId) return
+
+    const allApproved = enhancedImages.every(img => img.status === 'approved')
+    if (!allApproved) {
+      alert('⚠️ กรุณาอนุมัติรูปทั้งหมดก่อนสร้าง Template')
+      return
+    }
+
+    setProcessingJobId(currentJobId)
+    setProcessingStatus(`🎨 กำลังสร้าง Template (${templateMode} mode)...`)
+
+    try {
+      const res = await fetch('/api/generate/finalize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: currentJobId }),
+      })
+
+      if (!res.ok) throw new Error('Failed to finalize template')
+
+      const data = await res.json()
+      
+      setFinalImageUrl(data.finalImageUrl)
+      setReviewMode(false)
+      setProcessingStatus('')
+      setProcessingJobId(null)
+      
+      alert('🎉 Template สร้างเสร็จแล้ว!')
+      fetchDashboardData()
+
+    } catch (error) {
+      console.error('Finalize error:', error)
+      alert('Failed to create template')
+      setProcessingStatus('')
+      setProcessingJobId(null)
+    }
+  }
+
+  // NEW: Reset workflow
+  function handleResetWorkflow() {
+    setReviewMode(false)
+    setCurrentJobId(null)
+    setEnhancedImages([])
+    setFinalImageUrl(null)
+    setShowCreateForm(true)
   }
 
   async function handleApproveReject(jobId: string, action: 'approve' | 'reject') {
@@ -673,6 +783,35 @@ export default function DashboardPage() {
                       </tbody>
                     </table>
                   </div>
+                </div>
+              )}
+
+              {/* NEW: Template Configuration */}
+              {selectedImages.length > 0 && (
+                <div className="space-y-6 bg-gradient-to-br from-indigo-50 to-purple-50 p-6 rounded-xl border-2 border-indigo-200">
+                  <h3 className="text-xl font-bold text-indigo-900 mb-4">⚙️ Template Configuration</h3>
+                  
+                  {/* Template Type Selector */}
+                  <TemplateTypeSelector
+                    value={templateType}
+                    onChange={setTemplateType}
+                    maxImages={selectedImages.length}
+                  />
+
+                  {/* Mode Toggle */}
+                  <ModeToggle
+                    value={templateMode}
+                    onChange={setTemplateMode}
+                  />
+
+                  {/* Style Selector (for AI mode) */}
+                  {templateMode === 'ai' && (
+                    <StyleSelector
+                      value={templateStyle}
+                      onChange={setTemplateStyle}
+                      mode={templateMode}
+                    />
+                  )}
                 </div>
               )}
 
@@ -997,10 +1136,150 @@ export default function DashboardPage() {
               {/* Submit Button */}
               <button
                 onClick={createJob}
-                disabled={creating || !selectedSheetRow}
-                className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-semibold disabled:bg-gray-400"
+                disabled={creating || !selectedSheetRow || selectedImages.length === 0}
+                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 rounded-lg hover:from-blue-700 hover:to-indigo-700 font-bold text-lg shadow-lg hover:shadow-xl transition-all disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed"
               >
-                {creating ? 'กำลังสร้าง...' : 'สร้างภาพ'}
+                {creating ? '⏳ กำลังปรับปรุงรูปด้วย AI...' : '🚀 เริ่มสร้างภาพ (Phase 1: Enhancement)'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* NEW: Review Images Section */}
+        {reviewMode && enhancedImages.length > 0 && (
+          <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">📸 Review Enhanced Images</h2>
+                <p className="text-gray-600 mt-1">
+                  ตรวจสอบรูปที่ปรับปรุงแล้ว - อนุมัติหรือสร้างใหม่ตามต้องการ
+                </p>
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-gray-600">
+                  อนุมัติแล้ว: <span className="font-bold text-green-600">
+                    {enhancedImages.filter(img => img.status === 'approved').length} / {enhancedImages.length}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {enhancedImages.map((img, index) => (
+                <div key={index} className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-4 border-2 border-gray-200">
+                  <div className="mb-3">
+                    <h3 className="font-semibold text-gray-900">รูปที่ {index + 1}</h3>
+                    <div className={`inline-block px-2 py-1 rounded text-xs font-medium mt-1 ${
+                      img.status === 'approved' ? 'bg-green-100 text-green-700' :
+                      img.status === 'regenerating' ? 'bg-amber-100 text-amber-700' :
+                      'bg-blue-100 text-blue-700'
+                    }`}>
+                      {img.status === 'approved' ? '✅ อนุมัติแล้ว' :
+                       img.status === 'regenerating' ? '🔄 กำลังสร้างใหม่...' :
+                       '⏳ รอการตรวจสอบ'}
+                    </div>
+                  </div>
+
+                  {/* Enhanced Image */}
+                  <div className="relative aspect-[4/3] rounded-lg overflow-hidden mb-3 border-2 border-gray-300">
+                    <Image
+                      src={img.url}
+                      alt={`Enhanced ${index + 1}`}
+                      fill
+                      className="object-cover"
+                      unoptimized
+                    />
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-2">
+                    {img.status !== 'approved' && (
+                      <button
+                        onClick={() => handleApproveImage(index)}
+                        disabled={regeneratingIndex === index}
+                        className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 font-medium text-sm disabled:bg-gray-400"
+                      >
+                        ✅ อนุมัติ
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleRegenerateImage(index)}
+                      disabled={regeneratingIndex === index}
+                      className="flex-1 bg-amber-600 text-white py-2 rounded-lg hover:bg-amber-700 font-medium text-sm disabled:bg-gray-400"
+                    >
+                      {regeneratingIndex === index ? '⏳ กำลังสร้าง...' : '🔄 สร้างใหม่'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Finalize Button */}
+            <div className="mt-6 pt-6 border-t-2 border-gray-200">
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={handleResetWorkflow}
+                  className="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 font-semibold"
+                >
+                  ← เริ่มใหม่
+                </button>
+                <button
+                  onClick={handleFinalizeTemplate}
+                  disabled={!enhancedImages.every(img => img.status === 'approved')}
+                  className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-8 py-3 rounded-lg hover:from-purple-700 hover:to-indigo-700 font-bold text-lg shadow-lg hover:shadow-xl transition-all disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed"
+                >
+                  {enhancedImages.every(img => img.status === 'approved') 
+                    ? '🎨 สร้าง Template (Phase 3)' 
+                    : '⚠️ กรุณาอนุมัติรูปทั้งหมดก่อน'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* NEW: Final Result Section */}
+        {finalImageUrl && (
+          <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg shadow-lg p-6 mb-8 border-2 border-green-300">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-green-900">🎉 Template สร้างเสร็จแล้ว!</h2>
+                <p className="text-green-700 mt-1">
+                  Mode: {templateMode === 'satori' ? 'Consistent (Satori)' : 'Creative (AI)'} | 
+                  Type: {templateType} | 
+                  {templateMode === 'ai' && ` Style: ${templateStyle}`}
+                </p>
+              </div>
+              <button
+                onClick={handleResetWorkflow}
+                className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-semibold"
+              >
+                ➕ สร้างใหม่
+              </button>
+            </div>
+
+            <div className="relative w-full max-w-4xl mx-auto rounded-xl overflow-hidden shadow-2xl border-4 border-green-400">
+              <Image
+                src={finalImageUrl}
+                alt="Final Template"
+                width={1200}
+                height={630}
+                className="w-full h-auto"
+                unoptimized
+              />
+            </div>
+
+            <div className="mt-6 flex gap-4 justify-center">
+              <button
+                onClick={() => downloadImage(finalImageUrl, `template-${Date.now()}.png`)}
+                className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-semibold"
+              >
+                💾 ดาวน์โหลด
+              </button>
+              <button
+                onClick={() => window.open(finalImageUrl, '_blank')}
+                className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 font-semibold"
+              >
+                🔍 เปิดในแท็บใหม่
               </button>
             </div>
           </div>
