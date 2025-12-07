@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
       }
 
       const enhanceData = await enhanceResponse.json()
-      const newEnhancedUrl = enhanceData.enhancedImageUrl
+      const newEnhancedUrl = enhanceData.imageUrl // Fixed: enhance API returns "imageUrl" not "enhancedImageUrl"
 
       // Update with new URL and mark as pending
       enhancedImages[imageIndex].url = newEnhancedUrl

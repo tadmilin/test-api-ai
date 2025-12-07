@@ -23,15 +23,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 })
     }
 
-    // Check if review is completed
-    if (!job.reviewCompleted) {
-      return NextResponse.json(
-        { error: 'Please review and approve all images first' },
-        { status: 400 }
-      )
-    }
-
-    // Get approved images
+    // Get enhanced images
     const enhancedImages = job.enhancedImageUrls || []
     const approvedImages = enhancedImages
       .filter((img: { status?: string | null }) => img.status === 'approved')
@@ -39,9 +31,31 @@ export async function POST(request: NextRequest) {
 
     if (approvedImages.length === 0) {
       return NextResponse.json(
-        { error: 'No approved images found' },
+        { error: 'No approved images found. Please approve at least one image.' },
         { status: 400 }
       )
+    }
+
+    // Check if all images are approved
+    const allApproved = enhancedImages.every((img: { status?: string | null }) => img.status === 'approved')
+    
+    if (!allApproved) {
+      return NextResponse.json(
+        { error: 'Please approve all images before finalizing' },
+        { status: 400 }
+      )
+    }
+
+    // Auto-set reviewCompleted if all approved but not yet marked
+    if (!job.reviewCompleted && allApproved) {
+      await payload.update({
+        collection: 'jobs',
+        id: jobId,
+        data: {
+          reviewCompleted: true,
+        },
+      })
+      console.log('✅ Auto-set reviewCompleted to true')
     }
 
     const templateType = job.templateType || 'triple'

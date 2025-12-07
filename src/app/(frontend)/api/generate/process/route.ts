@@ -201,13 +201,13 @@ export async function POST(request: NextRequest) {
         
         console.log(`\n✅ Enhanced ${enhancedImageUrls.length} images`)
 
-        // Save enhanced images and update status to completed (will be updated by finalize later)
+        // Save enhanced images and update status to review_pending
         await payload.update({
           collection: 'jobs',
           id: jobId,
           data: {
             enhancedImageUrls: enhancedImageUrls,
-            status: 'completed', // Use 'completed' temporarily, frontend will show review UI
+            status: 'review_pending', // Changed from 'completed' - waiting for user review
           },
         })
 
