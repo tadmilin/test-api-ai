@@ -87,7 +87,7 @@ export default function DashboardPage() {
     total: 0,
   })
   const [recentJobs, setRecentJobs] = useState<Job[]>([])
-  const [userActivities, setUserActivities] = useState<UserActivity[]>([])
+  const [_userActivities, setUserActivities] = useState<UserActivity[]>([])
 
   // Create Job Form
   const [showCreateForm, setShowCreateForm] = useState(false)
@@ -129,7 +129,7 @@ export default function DashboardPage() {
   const [processingJobId, setProcessingJobId] = useState<string | null>(null)
   const [processingStatus, setProcessingStatus] = useState<string>('')
 
-  const [loading, setLoading] = useState(true)
+  const [_loading, setLoading] = useState(true)
 
   const checkAuth = useCallback(async () => {
     try {
@@ -573,7 +573,7 @@ export default function DashboardPage() {
     setShowCreateForm(true)
   }
 
-  async function handleApproveReject(jobId: string, action: 'approve' | 'reject') {
+  async function _handleApproveReject(jobId: string, action: 'approve' | 'reject') {
     try {
       await fetch(`/api/jobs/${jobId}`, {
         method: 'PATCH',

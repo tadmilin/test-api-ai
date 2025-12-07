@@ -58,7 +58,7 @@ Return ONLY the JSON object.`,
       const parsed = JSON.parse(content)
       detectedType = parsed.detectedType
       confidence = parsed.confidence
-    } catch (parseError) {
+    } catch (_parseError) {
       // Fallback: extract JSON using regex
       console.warn('Direct JSON parse failed, attempting regex extraction...')
       try {
@@ -71,7 +71,7 @@ Return ONLY the JSON object.`,
           console.error('No JSON object found in response:', content)
           detectedType = undefined
         }
-      } catch (regexError) {
+      } catch (_regexError) {
         console.error('Failed to parse GPT Vision response:', content)
         detectedType = undefined
       }

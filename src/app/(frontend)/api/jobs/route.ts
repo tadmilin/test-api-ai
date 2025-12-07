@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Build where clause with proper typing
-    const where: any = {}
+    const where: Record<string, { equals: string }> = {}
     if (status) {
       where.status = { equals: status }
     }
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
     // Get jobs with filters
     const jobs = await payload.find({
       collection: 'jobs',
-      where,
+      where: Object.keys(where).length > 0 ? where : undefined,
       page,
       limit,
       sort: '-createdAt',

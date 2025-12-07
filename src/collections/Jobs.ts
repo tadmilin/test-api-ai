@@ -252,7 +252,7 @@ export const Jobs: CollectionConfig = {
               ],
               admin: {
                 description: 'Style for AI-generated template',
-                condition: (data: any) => data.templateMode === 'ai',
+                condition: (data: Record<string, unknown>) => data.templateMode === 'ai',
               },
             },
             {
@@ -279,7 +279,7 @@ export const Jobs: CollectionConfig = {
               ],
               admin: {
                 description: 'Target social media platform format (only for Graphic Design)',
-                condition: (data: any) => !data.useOverlayDesign,
+                condition: (data: Record<string, unknown>) => !data.useOverlayDesign,
               },
             },
             {
@@ -302,7 +302,7 @@ export const Jobs: CollectionConfig = {
               ],
               admin: {
                 description: 'Aspect ratio for overlay design',
-                condition: (data: any) => data.useOverlayDesign === true,
+                condition: (data: Record<string, unknown>) => data.useOverlayDesign === true,
               },
             },
             {
@@ -312,7 +312,7 @@ export const Jobs: CollectionConfig = {
               defaultValue: 0,
               admin: {
                 description: 'Which image to use as the main background (0 = first image, 1 = second, etc.)',
-                condition: (data: any) => data.useOverlayDesign === true,
+                condition: (data: Record<string, unknown>) => data.useOverlayDesign === true,
               },
             },
             {
@@ -327,7 +327,7 @@ export const Jobs: CollectionConfig = {
               ],
               admin: {
                 description: 'Theme style for overlay design',
-                condition: (data: any) => data.useOverlayDesign === true,
+                condition: (data: Record<string, unknown>) => data.useOverlayDesign === true,
               },
             },
             {
@@ -342,7 +342,7 @@ export const Jobs: CollectionConfig = {
               ],
               admin: {
                 description: 'Theme style for graphic design',
-                condition: (data: any) => !data.useOverlayDesign,
+                condition: (data: Record<string, unknown>) => !data.useOverlayDesign,
               },
             },
             {

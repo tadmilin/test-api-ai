@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
       })
 
       // Check if all images are approved
-      const allApproved = enhancedImages.every((img: any) => img.status === 'approved')
+      const allApproved = enhancedImages.every((img: { status?: string | null }) => img.status === 'approved')
 
       if (allApproved) {
         await payload.update({
@@ -157,10 +157,10 @@ export async function POST(request: NextRequest) {
       })
     }
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Review error:', error)
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to process review' },
+      { success: false, error: error instanceof Error ? error.message : 'Failed to process review' },
       { status: 500 }
     )
   }
@@ -188,8 +188,8 @@ export async function GET(request: NextRequest) {
     }
 
     const enhancedImages = job.enhancedImageUrls || []
-    const allApproved = enhancedImages.every((img: any) => img.status === 'approved')
-    const anyRegenerating = enhancedImages.some((img: any) => img.status === 'regenerating')
+    const allApproved = enhancedImages.every((img: { status?: string | null }) => img.status === 'approved')
+    const anyRegenerating = enhancedImages.some((img: { status?: string | null }) => img.status === 'regenerating')
 
     return NextResponse.json({
       success: true,
@@ -199,10 +199,10 @@ export async function GET(request: NextRequest) {
       reviewCompleted: job.reviewCompleted || false,
     })
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Get review status error:', error)
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     )
   }

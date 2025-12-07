@@ -4,7 +4,7 @@ import { NextRequest } from 'next/server';
 export const runtime = 'edge';
 
 // 🎨 ธีมสี
-const THEMES: any = {
+const THEMES: Record<string, { bg: string; border: string }> = {
   modern: {
     bg: '#ffffff',
     border: '#e5e5e5',
@@ -91,6 +91,7 @@ export async function GET(request: NextRequest) {
             >
               <img
                 src={images[0]}
+                alt="Product image"
                 style={{
                   width: '100%',
                   height: '100%',
@@ -128,6 +129,7 @@ export async function GET(request: NextRequest) {
             >
               <img
                 src={images[0]}
+                alt="Product image 1"
                 style={{
                   width: '100%',
                   height: '100%',
@@ -145,6 +147,7 @@ export async function GET(request: NextRequest) {
             >
               <img
                 src={images[1]}
+                alt="Product image 2"
                 style={{
                   width: '100%',
                   height: '100%',
@@ -185,6 +188,7 @@ export async function GET(request: NextRequest) {
           >
             <img
               src={images[0]}
+              alt="Hero product image"
               style={{
                 width: '100%',
                 height: '100%',
@@ -214,6 +218,7 @@ export async function GET(request: NextRequest) {
             >
               <img
                 src={images[1]}
+                alt="Product detail image 1"
                 style={{
                   width: '100%',
                   height: '100%',
@@ -232,6 +237,7 @@ export async function GET(request: NextRequest) {
             >
               <img
                 src={images[2] || images[1]}
+                alt="Product detail image 2"
                 style={{
                   width: '100%',
                   height: '100%',
@@ -244,9 +250,10 @@ export async function GET(request: NextRequest) {
       ),
       { width, height }
     );
-  } catch (e: any) {
-    console.error('Graphic generation error:', e.message);
-    return new Response(`Failed to generate graphic: ${e.message}`, {
+  } catch (e: unknown) {
+    const errorMsg = e instanceof Error ? e.message : 'Unknown error';
+    console.error('Graphic generation error:', errorMsg);
+    return new Response(`Failed to generate graphic: ${errorMsg}`, {
       status: 500,
     });
   }

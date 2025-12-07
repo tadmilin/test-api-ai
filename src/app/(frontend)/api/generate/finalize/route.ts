@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     const job = await payload.findByID({
       collection: 'jobs',
       id: jobId,
-    }) as any
+    })
 
     if (!job) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 })
@@ -34,8 +34,8 @@ export async function POST(request: NextRequest) {
     // Get approved images
     const enhancedImages = job.enhancedImageUrls || []
     const approvedImages = enhancedImages
-      .filter((img: any) => img.status === 'approved')
-      .map((img: any) => img.url)
+      .filter((img: { status?: string | null }) => img.status === 'approved')
+      .map((img: { url?: string | null }) => img.url)
 
     if (approvedImages.length === 0) {
       return NextResponse.json(
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
       if (useOverlayDesign) {
         // Use overlay API
         const params = new URLSearchParams()
-        approvedImages.forEach((url: string) => params.append('image', url))
+        approvedImages.filter((url): url is string => url != null).forEach((url) => params.append('image', url))
         params.append('aspectRatio', overlayAspectRatio)
         params.append('heroIndex', heroImageIndex.toString())
         params.append('style', overlayTheme)
@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
       } else {
         // Use graphic API
         const params = new URLSearchParams()
-        approvedImages.forEach((url: string) => params.append('image', url))
+        approvedImages.filter((url): url is string => typeof url === 'string').forEach((url) => params.append('image', url))
         params.append('format', socialMediaFormat)
         params.append('style', graphicTheme)
 
@@ -209,11 +209,12 @@ export async function POST(request: NextRequest) {
       mode: templateMode,
     })
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Template generation error:', error)
 
     const payload = await getPayload({ config })
     const { jobId } = await request.json()
+    const errorMessage = error instanceof Error ? error.message : 'Template generation failed'
 
     if (jobId) {
       await payload.update({
@@ -229,14 +230,14 @@ export async function POST(request: NextRequest) {
         data: {
           jobId: jobId,
           level: 'error',
-          message: error.message || 'Template generation failed',
+          message: errorMessage,
           timestamp: new Date().toISOString(),
         },
       })
     }
 
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to generate template' },
+      { success: false, error: errorMessage },
       { status: 500 }
     )
   }

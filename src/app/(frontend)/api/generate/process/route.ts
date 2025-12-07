@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPayload } from 'payload'
 import config from '@payload-config'
-import { resolvePhotoType } from '@/utilities/photoTypeClassifier'
 import type { PhotoType } from '@/utilities/photoTypeClassifier'
 
 export async function POST(request: NextRequest) {
@@ -21,7 +20,7 @@ export async function POST(request: NextRequest) {
     const job = await payload.findByID({
       collection: 'jobs',
       id: jobId,
-    }) as any  // Type cast to avoid TypeScript errors for new fields
+    })
 
     if (!job) {
       return NextResponse.json(
@@ -65,13 +64,11 @@ export async function POST(request: NextRequest) {
       // Get base URL for internal API calls
       const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
       
-      const referenceUrls = job.referenceImageUrls?.map((img: any) => img.url).filter(Boolean) || []
+      const referenceUrls = job.referenceImageUrls?.map((img: { url?: string | null }) => img.url).filter(Boolean) || []
       
       console.log(`📊 Processing ${referenceUrls.length} images`)
       
       // PHASE 1: Enhance all images
-      let finalImageUrl: string | null = null
-      
       console.log('🎨 Phase 1: Enhancing images with Nano-Banana Pro...')
       
       const enhancedImageUrls: { url: string; status: 'pending' | 'approved' | 'regenerating'; originalUrl: string }[] = []
@@ -167,7 +164,7 @@ export async function POST(request: NextRequest) {
                 enhancedImageUrls.push({
                   url: imageUrl,
                   status: 'pending' as const,
-                  originalUrl: imageUrl,
+                  originalUrl: typeof imageUrl === 'string' ? imageUrl : '',
                 })
               }
             } else {
@@ -175,7 +172,7 @@ export async function POST(request: NextRequest) {
               enhancedImageUrls.push({
                 url: enhancedUrl,
                 status: 'pending' as const,
-                originalUrl: imageUrl,
+                originalUrl: typeof imageUrl === 'string' ? imageUrl : '',
               })
               console.log(`✅ Image ${i + 1} enhanced:`, enhancedUrl)
               
@@ -236,7 +233,7 @@ export async function POST(request: NextRequest) {
           nextUrl: `/review-images/${jobId}`,
         })
 
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('💥 Processing error:', error)
         
         // Update job status to failed
@@ -245,7 +242,7 @@ export async function POST(request: NextRequest) {
           id: jobId,
           data: {
             status: 'failed',
-            errorMessage: error.message || 'Processing failed',
+            errorMessage: error instanceof Error ? error.message : 'Processing failed',
           },
         })
 
@@ -254,7 +251,7 @@ export async function POST(request: NextRequest) {
           data: {
             jobId: jobId,
             level: 'error',
-            message: error.message || 'Processing failed',
+            message: error instanceof Error ? error.message : 'Processing failed',
             timestamp: new Date().toISOString(),
           },
         })

@@ -28,6 +28,10 @@ const eslintConfig = [
           caughtErrorsIgnorePattern: '^(_|ignore)',
         },
       ],
+      // Disable img warnings for edge runtime (Satori)
+      '@next/next/no-img-element': 'off',
+      'jsx-a11y/alt-text': 'off',
+      '@next/next/no-page-custom-font': 'off',
     },
   },
   {

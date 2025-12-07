@@ -4,7 +4,7 @@ import { NextRequest } from 'next/server';
 export const runtime = 'edge';
 
 // 🎨 ธีมสีสำหรับ Overlay Design
-const THEMES: any = {
+const THEMES: Record<string, { bg: string; accent: string; overlay: string }> = {
   modern: {
     bg: '#1a1a1a',
     accent: '#4F46E5',
@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
     const smallWidth = Math.floor(width * smallPercent);
     const smallHeight = Math.floor(height * smallPercent * 1.1);
     const margin = 50;
-    const spacing = 30;
+    const _spacing = 30;
 
     // คำนวณตำแหน่งรูปเล็ก
     const positions: Array<{ x: number; y: number }> = [];
@@ -98,6 +98,7 @@ export async function GET(request: NextRequest) {
           {/* 1. รูปหลักเต็มจอ */}
           <img
             src={heroImage}
+            alt="Hero background"
             style={{
               width: '100%',
               height: '100%',
@@ -166,6 +167,7 @@ export async function GET(request: NextRequest) {
               >
                 <img
                   src={img}
+                  alt={`Product detail ${idx + 1}`}
                   style={{
                     width: '100%',
                     height: '100%',
@@ -180,8 +182,9 @@ export async function GET(request: NextRequest) {
       { width, height }
     );
 
-  } catch (e: any) {
-    console.error('Overlay generation error:', e.message);
-    return new Response(`Failed to generate overlay image: ${e.message}`, { status: 500 });
+  } catch (e: unknown) {
+    const errorMsg = e instanceof Error ? e.message : 'Unknown error';
+    console.error('Overlay generation error:', errorMsg);
+    return new Response(`Failed to generate overlay image: ${errorMsg}`, { status: 500 });
   }
 }

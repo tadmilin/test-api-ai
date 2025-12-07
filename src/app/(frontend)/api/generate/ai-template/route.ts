@@ -102,12 +102,12 @@ export async function POST(request: NextRequest) {
       predictionId: result.id,
     })
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ AI Template generation error:', error)
     return NextResponse.json(
       { 
         success: false, 
-        error: error.message || 'Failed to generate AI template'
+        error: error instanceof Error ? error.message : 'Failed to generate AI template'
       },
       { status: 500 }
     )
