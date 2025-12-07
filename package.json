@@ -49,7 +49,7 @@
     "googleapis": "^166.0.0",
     "graphql": "^16.8.2",
     "lucide-react": "^0.378.0",
-    "next": "15.4.7",
+    "next": "15.4.8",
     "next-sitemap": "^4.2.3",
     "openai": "^6.9.1",
     "payload": "3.65.0",
