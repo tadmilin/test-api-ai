@@ -765,6 +765,7 @@ export default function DashboardPage() {
               {/* Load Sheet Data Button */}
               {selectedSheetId && (
                 <button
+                  type="button"
                   onClick={fetchSheetData}
                   className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
                 >
@@ -857,6 +858,7 @@ export default function DashboardPage() {
                     className="w-full border border-gray-300 rounded-lg p-2 text-gray-900"
                   />
                   <button
+                    type="button"
                     onClick={loadDriveImages}
                     className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
                   >

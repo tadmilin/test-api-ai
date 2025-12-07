@@ -100,10 +100,49 @@ export async function POST(request: NextRequest) {
         const base64 = buffer.toString('base64')
 
         // Analyze with Gemini Vision
-        const analysisPrompt = `Analyze this hotel/resort photo and classify it into ONE of these categories:
-buffet, food_closeup, dining_room, bedroom, bathroom, lobby, entrance, building_exterior, pool, gym, spa, meeting_room, corridor, balcony, nature_garden, beach_resort, mountain_resort, jungle_resort, generic
+        const analysisPrompt = `You are an expert at analyzing hotel and resort photos. 
 
-Return ONLY the category name, nothing else.`
+Analyze this image and classify it into ONE of these specific categories:
+
+**Room Types:**
+- bedroom: Hotel/resort bedrooms, sleeping areas
+- bathroom: Bathrooms, toilets, shower areas
+- lobby: Hotel lobbies, reception areas
+- meeting_room: Conference rooms, meeting spaces
+
+**Dining & Food:**
+- buffet: Buffet lines, food stations with multiple dishes displayed
+- food_closeup: Close-up photos of individual dishes or plated food
+- dining_room: Restaurant dining areas, eating spaces (but NOT buffet lines)
+
+**Facilities:**
+- pool: Swimming pools, pool areas
+- gym: Fitness centers, exercise areas
+- spa: Spa facilities, massage rooms
+
+**Exterior & Common:**
+- entrance: Building entrances, doorways
+- building_exterior: Outside views of buildings
+- corridor: Hallways, walkways
+- balcony: Balconies, terraces
+
+**Nature & Scenery:**
+- nature_garden: Gardens, landscaping
+- beach_resort: Beach and seaside settings
+- mountain_resort: Mountain and hillside settings
+- jungle_resort: Forest and jungle settings
+
+**Fallback:**
+- generic: If none of the above fit clearly
+
+IMPORTANT RULES:
+1. Focus on the PRIMARY subject/setting of the photo
+2. Ignore decorative elements (e.g., fruit on a table in a bedroom is still a "bedroom")
+3. If there's food SERVING/DISPLAY (buffet line), it's "buffet"
+4. If there's a SINGLE DISH close-up, it's "food_closeup"
+5. If there's a DINING SPACE (tables, chairs) but no buffet line and no food closeup, it's "dining_room"
+
+Return ONLY the category name in lowercase, nothing else.`
 
         const result = await model.generateContent([
           { text: analysisPrompt },
@@ -116,8 +155,22 @@ Return ONLY the category name, nothing else.`
         ])
 
         const responseText = result.response.text().trim().toLowerCase()
-        detectedPhotoType = responseText as PhotoType
-        console.log('✅ Gemini detected photoType:', detectedPhotoType)
+        
+        // Validate response is a valid category
+        const validCategories: PhotoType[] = [
+          'buffet', 'food_closeup', 'dining_room', 'bedroom', 'bathroom', 'lobby', 
+          'entrance', 'building_exterior', 'pool', 'gym', 'spa', 'meeting_room', 
+          'corridor', 'balcony', 'nature_garden', 'beach_resort', 'mountain_resort', 
+          'jungle_resort', 'generic'
+        ]
+        
+        if (validCategories.includes(responseText as PhotoType)) {
+          detectedPhotoType = responseText as PhotoType
+          console.log('✅ Gemini detected photoType:', detectedPhotoType)
+        } else {
+          console.warn('⚠️ Invalid category from Gemini:', responseText)
+          detectedPhotoType = 'generic'
+        }
         
       } catch (error) {
         console.error('⚠️ Gemini Vision analysis failed:', error)
@@ -137,8 +190,20 @@ Return ONLY the category name, nothing else.`
 
     // Get template prompt for this photo type
     const prompt = getNanoBananaPrompt(detectedPhotoType)
-    console.log('✅ Selected template prompt for:', detectedPhotoType)
-    console.log('📝 Prompt:', prompt.substring(0, 100) + '...')
+    
+    console.log('=' .repeat(80))
+    console.log('📊 PHOTO TYPE DETECTION SUMMARY')
+    console.log('=' .repeat(80))
+    console.log('Input:', {
+      productName,
+      photoTypeFromSheet: photoTypeFromSheet || 'not provided',
+      hasImage: !!(referenceImageUrls && referenceImageUrls.length > 0),
+      contentTopic: contentTopic || 'none',
+      contentDescription: contentDescription ? contentDescription.substring(0, 50) + '...' : 'none'
+    })
+    console.log('Detected Type:', detectedPhotoType)
+    console.log('Prompt Preview:', prompt.substring(0, 150) + '...')
+    console.log('=' .repeat(80))
 
     return NextResponse.json({ 
       prompt,
