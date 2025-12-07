@@ -319,7 +319,12 @@ export default function DashboardPage() {
 
       if (res.ok) {
         const data = await res.json()
-        setDriveImages(data.images || [])
+        // Filter out invalid images
+        const validImages = (data.images || []).filter((img: DriveImage) => 
+          img && img.id && img.url && img.thumbnailUrl
+        )
+        setDriveImages(validImages)
+        console.log(`✅ Loaded ${validImages.length} valid images`)
       } else {
         alert('Failed to load images')
       }
@@ -843,8 +848,8 @@ export default function DashboardPage() {
                       </div>
                     </div>
                     <div className="grid grid-cols-3 gap-4">
-                      {driveImages.map((img) => {
-                        const isSelected = selectedImages.find(i => i.id === img.id)
+                      {driveImages.filter(img => img && img.id && img.url).map((img) => {
+                        const isSelected = selectedImages.find(i => i && i.id === img.id)
                         return (
                           <div
                             key={img.id}
