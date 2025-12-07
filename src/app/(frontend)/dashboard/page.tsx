@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import TemplateTypeSelector from '@/components/TemplateTypeSelector'
-import ModeToggle from '@/components/ModeToggle'
 import StyleSelector from '@/components/StyleSelector'
 
 interface CurrentUser {
@@ -100,26 +99,16 @@ export default function DashboardPage() {
   const [selectedImages, setSelectedImages] = useState<DriveImage[]>([])
   const [creating, setCreating] = useState(false)
   
-  // NEW: Template Settings
+  // Template Settings (AI mode only)
   const [templateType, setTemplateType] = useState<'single' | 'dual' | 'triple' | 'quad'>('triple')
-  const [templateMode, setTemplateMode] = useState<'satori' | 'ai'>('satori')
   const [templateStyle, setTemplateStyle] = useState<'minimal' | 'classic' | 'graphic'>('minimal')
   
-  // NEW: Review & Finalize States
+  // Review & Finalize States
   const [currentJobId, setCurrentJobId] = useState<string | null>(null)
   const [enhancedImages, setEnhancedImages] = useState<Array<{url: string, status: string, originalUrl: string}>>([])
   const [reviewMode, setReviewMode] = useState(false)
   const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null)
   const [finalImageUrl, setFinalImageUrl] = useState<string | null>(null)
-  
-  // Overlay Design Options (for Satori mode)
-  const [useOverlayDesign, setUseOverlayDesign] = useState(false)
-  const [overlayAspectRatio, setOverlayAspectRatio] = useState<'3:1' | '2:1'>('3:1')
-  const [heroImageIndex, setHeroImageIndex] = useState(0)
-  const [overlayTheme, setOverlayTheme] = useState<'modern' | 'luxury' | 'resort'>('modern')
-  
-  // Graphic Design Options
-  const [graphicTheme, setGraphicTheme] = useState<'modern' | 'luxury' | 'minimal'>('modern')
 
   // View Generated Images
   const [viewingJob, setViewingJob] = useState<Job | null>(null)
@@ -341,11 +330,23 @@ export default function DashboardPage() {
   }
 
   function toggleImageSelection(image: DriveImage) {
+    // Validate image object
+    if (!image || !image.id || !image.url) {
+      console.error('Invalid image object:', image)
+      return
+    }
+
     setSelectedImages(prev => {
-      const exists = prev.find(img => img.id === image.id)
+      const exists = prev.find(img => img && img.id === image.id)
       if (exists) {
-        return prev.filter(img => img.id !== image.id)
+        return prev.filter(img => img && img.id !== image.id)
       } else {
+        // Limit based on template type
+        const maxImages = templateType === 'single' ? 1 : templateType === 'dual' ? 2 : templateType === 'triple' ? 3 : 4
+        if (prev.length >= maxImages) {
+          alert(`สามารถเลือกได้สูงสุด ${maxImages} รูปสำหรับ Template ${templateType}`)
+          return prev
+        }
         return [...prev, image]
       }
     })
@@ -369,6 +370,13 @@ export default function DashboardPage() {
       return
     }
 
+    // Filter out any undefined images
+    const validImages = selectedImages.filter(img => img && img.id && img.url)
+    if (validImages.length === 0) {
+      alert('ไม่พบรูปภาพที่ถูกต้อง กรุณาเลือกรูปใหม่')
+      return
+    }
+
     setCreating(true)
     setReviewMode(false)
     setFinalImageUrl(null)
@@ -385,21 +393,13 @@ export default function DashboardPage() {
           postTitleHeadline: selectedSheetRow['Post_Title_Headline'] || '',
           contentDescription: selectedSheetRow['Content_Description'] || '',
           photoTypeFromSheet: selectedSheetRow['Photo_Type'] || undefined,
-          referenceImageIds: selectedImages.map((img) => ({ imageId: img.id })),
-          referenceImageUrls: selectedImages.map((img) => ({ url: img.url })),
+          referenceImageIds: validImages.map((img) => ({ imageId: img.id })),
+          referenceImageUrls: validImages.map((img) => ({ url: img.url })),
           
-          // NEW: Template settings
+          // Template settings (AI mode only)
           templateType: templateType,
-          templateMode: templateMode,
-          templateStyle: templateMode === 'ai' ? templateStyle : undefined,
-          
-          // OLD: Satori settings (kept for backward compatibility)
-          useOverlayDesign: templateMode === 'satori' && useOverlayDesign && selectedImages.length > 1,
-          overlayAspectRatio: templateMode === 'satori' && useOverlayDesign && selectedImages.length > 1 ? overlayAspectRatio : undefined,
-          heroImageIndex: templateMode === 'satori' && useOverlayDesign && selectedImages.length > 1 ? heroImageIndex : undefined,
-          overlayTheme: templateMode === 'satori' && useOverlayDesign && selectedImages.length > 1 ? overlayTheme : undefined,
-          graphicTheme: templateMode === 'satori' && (!useOverlayDesign || selectedImages.length === 1) ? graphicTheme : undefined,
-          socialMediaFormat: templateMode === 'satori' && (!useOverlayDesign || selectedImages.length === 1) ? 'facebook_post' : undefined,
+          templateMode: 'ai',
+          templateStyle: templateStyle,
           
           status: 'pending',
         }),
@@ -535,7 +535,7 @@ export default function DashboardPage() {
     }
 
     setProcessingJobId(currentJobId)
-    setProcessingStatus(`🎨 กำลังสร้าง Template (${templateMode} mode)...`)
+    setProcessingStatus('🎨 กำลังสร้าง Template...')
 
     try {
       const res = await fetch('/api/generate/finalize', {
@@ -702,7 +702,7 @@ export default function DashboardPage() {
           <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
             <h2 className="text-xl font-bold mb-4 text-black">สร้างงานสร้างภาพใหม่</h2>
 
-            <div className="space-y-4">
+            <form onSubmit={(e) => { e.preventDefault(); createJob(); }} className="space-y-4">
               {/* Select Google Sheet */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -798,20 +798,12 @@ export default function DashboardPage() {
                     maxImages={selectedImages.length}
                   />
 
-                  {/* Mode Toggle */}
-                  <ModeToggle
-                    value={templateMode}
-                    onChange={setTemplateMode}
+                  {/* Style Selector */}
+                  <StyleSelector
+                    value={templateStyle}
+                    onChange={setTemplateStyle}
+                    mode="ai"
                   />
-
-                  {/* Style Selector (for AI mode) */}
-                  {templateMode === 'ai' && (
-                    <StyleSelector
-                      value={templateStyle}
-                      onChange={setTemplateStyle}
-                      mode={templateMode}
-                    />
-                  )}
                 </div>
               )}
 
@@ -898,254 +890,30 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              {/* Overlay Design Options */}
-              {selectedImages.length > 1 && (
-                <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-xl border-2 border-purple-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-purple-900">🎨 Overlay Design (2+ รูป)</h3>
-                    <label className="flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={useOverlayDesign}
-                        onChange={(e) => setUseOverlayDesign(e.target.checked)}
-                        className="mr-2 w-5 h-5"
-                      />
-                      <span className="font-medium text-purple-900">เปิดใช้งาน</span>
-                    </label>
-                  </div>
-                  
-                  {useOverlayDesign && (
-                  <div className="space-y-4 mt-4">
-                    {/* Theme Selector */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        🎨 เลือกธีม (Theme)
-                      </label>
-                      <div className="grid grid-cols-3 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setOverlayTheme('modern')}
-                          className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
-                            overlayTheme === 'modern'
-                              ? 'bg-purple-600 text-white border-purple-600'
-                              : 'bg-white text-gray-700 border-gray-300 hover:border-purple-400'
-                          }`}
-                        >
-                          <div className="font-bold">Modern</div>
-                          <div className="text-xs mt-1 opacity-80">สมัยใหม่</div>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setOverlayTheme('luxury')}
-                          className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
-                            overlayTheme === 'luxury'
-                              ? 'bg-purple-600 text-white border-purple-600'
-                              : 'bg-white text-gray-700 border-gray-300 hover:border-purple-400'
-                          }`}
-                        >
-                          <div className="font-bold">Luxury</div>
-                          <div className="text-xs mt-1 opacity-80">หรูหรา</div>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setOverlayTheme('resort')}
-                          className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
-                            overlayTheme === 'resort'
-                              ? 'bg-purple-600 text-white border-purple-600'
-                              : 'bg-white text-gray-700 border-gray-300 hover:border-purple-400'
-                          }`}
-                        >
-                          <div className="font-bold">Resort</div>
-                          <div className="text-xs mt-1 opacity-80">รีสอร์ท</div>
-                        </button>
-                      </div>
-                    </div>
-                    
-                    {/* Aspect Ratio Selector */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        📐 อัตราส่วน (Aspect Ratio)
-                      </label>
-                      <div className="grid grid-cols-2 gap-3">
-                        <button
-                          type="button"
-                          onClick={() => setOverlayAspectRatio('3:1')}
-                          className={`p-3 rounded-lg border-2 font-medium transition-all ${
-                            overlayAspectRatio === '3:1'
-                              ? 'bg-purple-600 text-white border-purple-600'
-                              : 'bg-white text-gray-700 border-gray-300 hover:border-purple-400'
-                          }`}
-                        >
-                          3:1 (Wide)
-                          <div className="text-xs mt-1 opacity-80">1800×600px</div>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setOverlayAspectRatio('2:1')}
-                          className={`p-3 rounded-lg border-2 font-medium transition-all ${
-                            overlayAspectRatio === '2:1'
-                              ? 'bg-purple-600 text-white border-purple-600'
-                              : 'bg-white text-gray-700 border-gray-300 hover:border-purple-400'
-                          }`}
-                        >
-                          2:1 (Standard)
-                          <div className="text-xs mt-1 opacity-80">1600×800px</div>
-                        </button>
-                      </div>
-                    </div>
-                    
-                    {/* Hero Image Selector */}
-                    {selectedImages.length > 1 && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          ⭐ เลือกรูปหลัก (Hero Image)
-                        </label>
-                        <div className="grid grid-cols-4 gap-2">
-                          {selectedImages.map((img, index) => (
-                            <button
-                              key={img.id}
-                              type="button"
-                              onClick={() => setHeroImageIndex(index)}
-                              className={`relative rounded-lg overflow-hidden border-3 transition-all ${
-                                heroImageIndex === index
-                                  ? 'border-purple-600 ring-4 ring-purple-200 scale-105'
-                                  : 'border-gray-300 hover:border-purple-400'
-                              }`}
-                            >
-                              <div className="aspect-[4/3] relative">
-                                <Image
-                                  src={img.thumbnailUrl}
-                                  alt={img.name}
-                                  fill
-                                  className="object-cover"
-                                  unoptimized
-                                />
-                              </div>
-                              {heroImageIndex === index && (
-                                <div className="absolute inset-0 bg-purple-600 bg-opacity-40 flex items-center justify-center">
-                                  <span className="text-white font-bold text-2xl">★</span>
-                                </div>
-                              )}
-                              <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-60 text-white text-xs p-1 text-center">
-                                #{index + 1}
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                        <p className="text-xs text-gray-600 mt-2">
-                          💡 รูปหลักจะเป็นพื้นหลังเต็มจอ รูปอื่นจะซ้อนทับด้านบนอย่างสวยงาม
-                        </p>
-                      </div>
-                    )}
-                    
-                    {/* Info */}
-                    <div className="bg-purple-100 p-3 rounded-lg">
-                      <p className="text-sm text-purple-900">
-                        <strong>✨ ระบบ Overlay Design:</strong>
-                      </p>
-                      <ul className="text-xs text-purple-800 mt-2 space-y-1 ml-4 list-disc">
-                        <li>รูปหลักเต็มจอพร้อม Gradient Overlay</li>
-                        <li>รูปเล็กซ้อนทับพร้อมเงา (มุม 4 มุม)</li>
-                        <li>Template Patterns สุ่มอัตโนมัติ (Geometric/Wave/Dots)</li>
-                        <li>ดึงสีจากรูปมาใช้ในการออกแบบ</li>
-                      </ul>
-                    </div>
-                  </div>
-                  )}
-                </div>
-              )}
-              
-              {/* Graphic Design Options (แสดงเมื่อไม่ใช้ Overlay หรือรูปเดียว) */}
-              {(!useOverlayDesign || selectedImages.length === 1) && (
-                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 p-6 rounded-xl border-2 border-blue-200">
-                  <h3 className="text-lg font-semibold text-blue-900 mb-4">🖼️ Graphic Design</h3>
-                  
-                  {/* Theme Selector for Graphic Design */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      🎨 เลือกธีม (Theme)
-                    </label>
-                    <div className="grid grid-cols-3 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setGraphicTheme('modern')}
-                        className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
-                          graphicTheme === 'modern'
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
-                        }`}
-                      >
-                        <div className="font-bold">Modern</div>
-                        <div className="text-xs mt-1 opacity-80">สมัยใหม่</div>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setGraphicTheme('luxury')}
-                        className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
-                          graphicTheme === 'luxury'
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
-                        }`}
-                      >
-                        <div className="font-bold">Luxury</div>
-                        <div className="text-xs mt-1 opacity-80">หรูหรา</div>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setGraphicTheme('minimal')}
-                        className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
-                          graphicTheme === 'minimal'
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
-                        }`}
-                      >
-                        <div className="font-bold">Minimal</div>
-                        <div className="text-xs mt-1 opacity-80">มินิมอล</div>
-                      </button>
-                    </div>
-                  </div>
-                  
-                  {/* Info Box */}
-                  <div className="bg-blue-100 p-3 rounded-lg">
-                    <p className="text-sm text-blue-900">
-                      <strong>✨ ระบบ Graphic Design:</strong>
-                    </p>
-                    <ul className="text-xs text-blue-800 mt-2 space-y-1 ml-4 list-disc">
-                      <li>รูปเดียว: กรอบสวยงามพร้อมพื้นหลัง</li>
-                      <li>สองรูป: แบ่งครึ่งจอแนวตั้ง</li>
-                      <li>สามรูปขึ้นไป: Hero Grid (1 ใหญ่ + อื่นๆ เล็ก)</li>
-                      <li>รองรับ Facebook, Instagram Feed & Story</li>
-                    </ul>
-                  </div>
-                </div>
-              )}
-              
-              {/* Info: Automatic Processing */}
-              {!useOverlayDesign && (
-                <div className="bg-gradient-to-br from-green-50 to-teal-50 p-6 rounded-xl border-2 border-green-200">
-                  <h3 className="text-lg font-semibold text-blue-900 mb-2">✨ ระบบประมวลผลอัตโนมัติ</h3>
-                  <div className="space-y-2 text-sm text-gray-700">
-                    <p>🎯 <strong>Gemini Vision</strong> - วิเคราะห์ประเภทภาพอัตโนมัติ (ห้องพัก, อาหาร, สระว่ายน้ำ...)</p>
-                    <p>🎨 <strong>Nano-Banana AI</strong> - ปรับปรุงภาพให้สวยงามแบบมืออาชีพ</p>
-                    <p>🖼️ <strong>Graphic Designer</strong> - สร้างเลย์เอาต์สวยงามพร้อมกรอบและสีที่เข้ากัน</p>
-                    <p>📐 <strong>รองรับทุกแพลตฟอร์ม</strong> - Facebook (1200×630), Instagram Feed (1080×1080), Instagram Story (1080×1920)</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Submit Button */}
-              <button
-                onClick={createJob}
-                disabled={creating || !selectedSheetRow || selectedImages.length === 0}
-                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 rounded-lg hover:from-blue-700 hover:to-indigo-700 font-bold text-lg shadow-lg hover:shadow-xl transition-all disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed"
-              >
-                {creating ? '⏳ กำลังปรับปรุงรูปด้วย AI...' : '🚀 เริ่มสร้างภาพ (Phase 1: Enhancement)'}
-              </button>
-            </div>
+              {/* Generate Button */}
+              <div className="flex justify-end gap-3 pt-6 border-t">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateForm(false)}
+                  className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={creating || selectedImages.length === 0 || !selectedSheetRow}
+                  className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl"
+                >
+                  {creating ? '🎨 กำลังสร้าง...' : '✨ เริ่มสร้าง Template'}
+                </button>
+              </div>
+            </form>
           </div>
         )}
 
-        {/* NEW: Review Images Section */}
+        {/* ========================================
+            SECTION 2: IMAGE REVIEW
+        ======================================== */}
         {reviewMode && enhancedImages.length > 0 && (
           <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
             <div className="flex items-center justify-between mb-6">
@@ -1244,9 +1012,7 @@ export default function DashboardPage() {
               <div>
                 <h2 className="text-2xl font-bold text-green-900">🎉 Template สร้างเสร็จแล้ว!</h2>
                 <p className="text-green-700 mt-1">
-                  Mode: {templateMode === 'satori' ? 'Consistent (Satori)' : 'Creative (AI)'} | 
-                  Type: {templateType} | 
-                  {templateMode === 'ai' && ` Style: ${templateStyle}`}
+                  Type: {templateType} | Style: {templateStyle}
                 </p>
               </div>
               <button

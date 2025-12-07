@@ -3,7 +3,7 @@ import { getPayload } from 'payload'
 import config from '@payload-config'
 
 // This endpoint is called AFTER user reviews and approves all images
-// It generates the final template based on templateMode (satori or ai)
+// It generates the final template using AI (Nano-Banana Pro)
 export async function POST(request: NextRequest) {
   try {
     const { jobId } = await request.json()
@@ -44,17 +44,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const templateMode = job.templateMode || 'satori'
     const templateType = job.templateType || 'triple'
     const templateStyle = job.templateStyle || 'minimal'
 
-    console.log(`🎨 Generating final template:`)
-    console.log(`  - Mode: ${templateMode}`)
+    console.log(`🎨 Generating AI template:`)
     console.log(`  - Type: ${templateType}`)
+    console.log(`  - Style: ${templateStyle}`)
     console.log(`  - Images: ${approvedImages.length}`)
-    if (templateMode === 'ai') {
-      console.log(`  - Style: ${templateStyle}`)
-    }
 
     // Update status
     await payload.update({
@@ -66,114 +62,37 @@ export async function POST(request: NextRequest) {
     })
 
     const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
-    let finalImageUrl: string | null = null
 
-    if (templateMode === 'ai') {
-      // AI MODE: Use Nano-Banana Pro
-      console.log('🤖 Using AI mode (Nano-Banana Pro)...')
+    // AI MODE: Use Nano-Banana Pro
+    console.log('🤖 Calling AI template generation...')
 
-      const aiResponse = await fetch(`${baseUrl}/api/generate/ai-template`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageUrls: approvedImages,
-          templateStyle: templateStyle,
-          templateType: templateType,
-          jobId: jobId,
-        }),
-      })
+    const aiResponse = await fetch(`${baseUrl}/api/generate/ai-template`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        imageUrls: approvedImages,
+        templateStyle: templateStyle,
+        templateType: templateType,
+        jobId: jobId,
+      }),
+    })
 
-      if (!aiResponse.ok) {
-        throw new Error('AI template generation failed')
-      }
-
-      const aiData = await aiResponse.json()
-      finalImageUrl = aiData.templateUrl
-
-      await payload.create({
-        collection: 'job-logs',
-        data: {
-          jobId: jobId,
-          level: 'info',
-          message: `AI template generated (${templateStyle} style)`,
-          timestamp: new Date().toISOString(),
-        },
-      })
-
-    } else {
-      // SATORI MODE: Use existing overlay/graphic APIs
-      console.log('🎯 Using Satori mode (Consistent)...')
-
-      const useOverlayDesign = job.useOverlayDesign === true && approvedImages.length > 1
-      const overlayAspectRatio = job.overlayAspectRatio || '3:1'
-      const heroImageIndex = job.heroImageIndex || 0
-      const overlayTheme = job.overlayTheme || 'modern'
-      const graphicTheme = job.graphicTheme || 'modern'
-      const socialMediaFormat = job.socialMediaFormat || 'facebook_post'
-
-      if (useOverlayDesign) {
-        // Use overlay API
-        const params = new URLSearchParams()
-        approvedImages.filter((url): url is string => url != null).forEach((url) => params.append('image', url))
-        params.append('aspectRatio', overlayAspectRatio)
-        params.append('heroIndex', heroImageIndex.toString())
-        params.append('style', overlayTheme)
-
-        const overlayUrl = `${baseUrl}/api/generate-overlay?${params.toString()}`
-        const overlayResponse = await fetch(overlayUrl)
-
-        if (overlayResponse.ok) {
-          const imageBuffer = await overlayResponse.arrayBuffer()
-          const imageBlob = new Blob([imageBuffer], { type: 'image/png' })
-
-          const formData = new FormData()
-          formData.append('file', imageBlob, `overlay-${jobId}.png`)
-
-          const uploadResponse = await fetch(`${baseUrl}/api/media`, {
-            method: 'POST',
-            body: formData,
-          })
-
-          if (uploadResponse.ok) {
-            const uploadData = await uploadResponse.json()
-            finalImageUrl = uploadData.doc.url
-          }
-        }
-
-      } else {
-        // Use graphic API
-        const params = new URLSearchParams()
-        approvedImages.filter((url): url is string => typeof url === 'string').forEach((url) => params.append('image', url))
-        params.append('format', socialMediaFormat)
-        params.append('style', graphicTheme)
-
-        const graphicUrl = `${baseUrl}/api/generate-graphic?${params.toString()}`
-        const graphicResponse = await fetch(graphicUrl)
-
-        if (graphicResponse.ok) {
-          const imageBuffer = await graphicResponse.arrayBuffer()
-          const timestamp = Date.now()
-
-          const { put } = await import('@vercel/blob')
-          const blob = await put(`graphics/graphic-${timestamp}.png`, imageBuffer, {
-            access: 'public',
-            contentType: 'image/png',
-          })
-
-          finalImageUrl = blob.url
-        }
-      }
-
-      await payload.create({
-        collection: 'job-logs',
-        data: {
-          jobId: jobId,
-          level: 'info',
-          message: `Satori template generated (${useOverlayDesign ? 'overlay' : 'graphic'})`,
-          timestamp: new Date().toISOString(),
-        },
-      })
+    if (!aiResponse.ok) {
+      throw new Error('AI template generation failed')
     }
+
+    const aiData = await aiResponse.json()
+    const finalImageUrl = aiData.templateUrl
+
+    await payload.create({
+      collection: 'job-logs',
+      data: {
+        jobId: jobId,
+        level: 'info',
+        message: `AI template generated (${templateStyle} style, ${templateType} layout)`,
+        timestamp: new Date().toISOString(),
+      },
+    })
 
     if (!finalImageUrl) {
       throw new Error('Failed to generate template')
@@ -186,7 +105,7 @@ export async function POST(request: NextRequest) {
       data: {
         finalImageUrl: finalImageUrl,
         status: 'completed',
-        generatedPrompt: `Template generated via ${templateMode} mode`,
+        generatedPrompt: `AI template generated: ${templateStyle} style, ${templateType} layout`,
       },
     })
 
@@ -206,7 +125,8 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'Template generated successfully',
       finalImageUrl: finalImageUrl,
-      mode: templateMode,
+      templateStyle: templateStyle,
+      templateType: templateType,
     })
 
   } catch (error: unknown) {
