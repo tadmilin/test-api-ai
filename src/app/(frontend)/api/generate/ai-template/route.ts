@@ -45,14 +45,14 @@ export async function POST(request: NextRequest) {
       throw new Error(`No prompt found for template type: ${templateType}`)
     }
 
-    console.log(`📝 Creating Replicate prediction with FAST settings...`)
+    console.log(`📝 Creating Replicate prediction...`)
     
     const prediction = await replicate.predictions.create({
       model: 'google/nano-banana-pro',
       input: {
         image_input: finalImageUrls,
         prompt: prompt,
-        resolution: '512', // 🚀 Faster: 512 instead of 1K
+        resolution: '1K', // Valid: 1K, 2K, or 4K only
         aspect_ratio: 'match_input_image',
         output_format: 'png',
         safety_filter_level: 'block_only_high',

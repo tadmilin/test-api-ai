@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
       input: {
         image_input: [processedImageUrl],
         prompt: prompt,
-        resolution: '512', // 🚀 Faster: 512 instead of 1K
+        resolution: '1K', // Valid: 1K, 2K, or 4K only
         aspect_ratio: 'match_input_image', // Keep original aspect ratio
         output_format: 'png',
         safety_filter_level: 'block_only_high',
