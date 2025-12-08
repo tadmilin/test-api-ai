@@ -308,17 +308,10 @@ export async function GET(request: NextRequest) {
           cached: false,
         })
       } catch (downloadError) {
-        console.error('❌ Failed to download/upload enhanced image:', downloadError)
-        // Fallback: Return the Replicate URL directly if Blob upload fails
-        return NextResponse.json({
-          success: true,
-          status: 'succeeded',
-          imageUrl: enhancedImageUrl, // Use direct Replicate URL as fallback
-          originalUrl: enhancedImageUrl,
-          predictionId,
-          cached: false,
-          warning: 'Failed to cache image, using direct URL',
-        })
+        console.error('❌ CRITICAL: Failed to download/upload enhanced image:', downloadError)
+        // DON'T fallback to Replicate URL - it expires quickly!
+        // Throw error so client can retry
+        throw new Error(`Failed to cache image: ${downloadError instanceof Error ? downloadError.message : 'Unknown error'}`)
       }
     }
 
