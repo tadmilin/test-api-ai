@@ -82,8 +82,14 @@ export async function GET(request: NextRequest) {
     )
     
     // Update job if any images changed
-    const anyChanged = updatedImages.some((img, i) => img.url !== enhancedImages[i]?.url)
+    const anyChanged = updatedImages.some((img, i) => {
+      const oldUrl = enhancedImages[i]?.url || ''
+      const newUrl = img.url || ''
+      return oldUrl !== newUrl
+    })
+    
     if (anyChanged) {
+      console.log(`💾 Updating job ${jobId} with ${updatedImages.length} images`)
       await payload.update({
         collection: 'jobs',
         id: jobId,
@@ -91,6 +97,9 @@ export async function GET(request: NextRequest) {
           enhancedImageUrls: updatedImages,
         },
       })
+      console.log(`✅ Job updated successfully`)
+    } else {
+      console.log(`⏭️ No changes detected, skipping job update`)
     }
     
     // Count statuses
