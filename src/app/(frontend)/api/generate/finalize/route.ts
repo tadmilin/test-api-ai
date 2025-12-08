@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
       data: {
         finalImageUrl: finalImageUrl,
         status: 'completed',
-        generatedPrompt: `AI template generated: ${templateStyle} style, ${templateType} layout`,
+        generatedPrompt: `AI template generated: ${templateType} layout`,
       },
     })
 
@@ -136,7 +136,6 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'Template generated successfully',
       finalImageUrl: finalImageUrl,
-      templateStyle: templateStyle,
       templateType: templateType,
     })
 
