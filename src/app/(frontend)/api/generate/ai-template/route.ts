@@ -39,16 +39,28 @@ export async function POST(request: NextRequest) {
     if (templateRef) {
       console.log(`📐 Using template reference: ${templateRef}`)
     } else {
-      console.log(`⚠️ No template reference found, using images only`)
+      console.log(`⚠️ No template reference found for type "${templateType}", using images only`)
     }
 
     // Get the appropriate prompt
     const prompt = getTemplatePrompt(templateType as TemplateType)
+    
+    if (!prompt) {
+      throw new Error(`No prompt found for template type: ${templateType}`)
+    }
 
-    console.log(`📝 Prompt length: ${prompt.length} characters`)
+    console.log(`📝 Prompt preview: ${prompt.substring(0, 150)}...`)
+    console.log(`📸 Total images to process: ${finalImageUrls.length}`)
 
     // Call Nano-Banana Pro for creative template generation
-    console.log('🚀 Calling Nano-Banana Pro...')
+    console.log('🚀 Calling Nano-Banana Pro with parameters:')
+    console.log({
+      model: 'google/nano-banana-pro',
+      imageCount: finalImageUrls.length,
+      resolution: '1K',
+      aspect_ratio: 'match_input_image',
+      safety_filter_level: 'block_only_high',
+    })
     
     const prediction = await replicate.predictions.create({
       model: 'google/nano-banana-pro',
@@ -62,12 +74,25 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    console.log(`✅ Prediction created: ${prediction.id}`)
+    console.log(`🔗 Status URL: https://replicate.com/p/${prediction.id}`)
+
     // Wait for completion
-    console.log('⏳ Waiting for Nano-Banana Pro...')
+    console.log('⏳ Waiting for Nano-Banana Pro (this may take 30-90 seconds)...')
     const result = await replicate.wait(prediction)
     
+    console.log('✅ Prediction completed!')
+    console.log('Result status:', result.status)
+    console.log('Has output:', !!result.output)
+    
     if (!result.output) {
-      throw new Error('No output from Nano-Banana Pro')
+      console.error('❌ No output from prediction:', {
+        id: result.id,
+        status: result.status,
+        error: result.error,
+        logs: result.logs,
+      })
+      throw new Error(`No output from Nano-Banana Pro. Status: ${result.status}${result.error ? `, Error: ${result.error}` : ''}`)
     }
 
     const templateUrl = Array.isArray(result.output) ? result.output[0] : result.output as string

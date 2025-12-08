@@ -108,13 +108,38 @@ export async function POST(request: NextRequest) {
         throw new Error('Original image URL not found')
       }
 
+      // First, get the prompt (which includes photoType detection)
+      const promptResponse = await fetch(`${baseUrl}/api/generate/prompt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          referenceImageUrls: [originalImage],
+          productName: job.productName || 'Untitled',
+          contentTopic: job.contentTopic || '',
+          contentDescription: job.contentDescription || '',
+        }),
+      })
+
+      if (!promptResponse.ok) {
+        throw new Error('Failed to generate prompt')
+      }
+
+      const promptData = await promptResponse.json()
+      const prompt = promptData.prompt
+      const photoType = promptData.photoType
+
+      console.log('📝 Generated prompt for regeneration:', prompt.substring(0, 100) + '...')
+      console.log('📸 Detected photo type:', photoType)
+
+      // Now call enhance with the proper prompt
       const enhanceResponse = await fetch(`${baseUrl}/api/generate/enhance`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           jobId: jobId,
           imageUrl: originalImage,
-          photoType: 'generic',
+          prompt: prompt,
+          photoType: photoType,
         }),
       })
 
