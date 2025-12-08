@@ -852,10 +852,6 @@ export interface Job {
    */
   templateType?: ('single' | 'dual' | 'triple' | 'quad') | null;
   /**
-   * Satori = consistent layout, AI = creative dynamic design
-   */
-  templateMode?: ('satori' | 'ai') | null;
-  /**
    * Enhanced images with approval status
    */
   enhancedImageUrls?:
@@ -882,32 +878,6 @@ export interface Job {
    * URL of the final generated template
    */
   finalImageUrl?: string | null;
-  /**
-   * Target social media platform format (only for Graphic Design)
-   */
-  socialMediaFormat?:
-    | ('facebook_post' | 'instagram_feed' | 'instagram_story' | 'custom_16_9' | 'custom_4_3' | 'custom_1_1')
-    | null;
-  /**
-   * Use NEW overlay system: Hero image + smaller overlays + graphic patterns
-   */
-  useOverlayDesign?: boolean | null;
-  /**
-   * Aspect ratio for overlay design
-   */
-  overlayAspectRatio?: ('3:1' | '2:1') | null;
-  /**
-   * Which image to use as the main background (0 = first image, 1 = second, etc.)
-   */
-  heroImageIndex?: number | null;
-  /**
-   * Theme style for overlay design
-   */
-  overlayTheme?: ('modern' | 'luxury' | 'resort') | null;
-  /**
-   * Theme style for graphic design
-   */
-  graphicTheme?: ('modern' | 'luxury' | 'minimal') | null;
   /**
    * How much the AI modifies the image (0.25 = subtle, 0.30 = recommended, 0.40 = noticeable)
    */
@@ -1605,7 +1575,6 @@ export interface JobsSelect<T extends boolean = true> {
         id?: T;
       };
   templateType?: T;
-  templateMode?: T;
   enhancedImageUrls?:
     | T
     | {
@@ -1618,12 +1587,6 @@ export interface JobsSelect<T extends boolean = true> {
   styleSelected?: T;
   templateStyle?: T;
   finalImageUrl?: T;
-  socialMediaFormat?: T;
-  useOverlayDesign?: T;
-  overlayAspectRatio?: T;
-  heroImageIndex?: T;
-  overlayTheme?: T;
-  graphicTheme?: T;
   enhancementStrength?: T;
   generatedPrompt?: T;
   promptGeneratedAt?: T;

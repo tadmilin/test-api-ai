@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
       detectedPhotoType = photoTypeFromSheet as PhotoType
       console.log('📋 Using photoType from Sheet:', detectedPhotoType)
     }
-    // Priority 2: Analyze image with Gemini Vision if available
+    // Priority 2: Analyze image with Gemini Vision if available (skip if quota exceeded)
     else if (referenceImageUrls && referenceImageUrls.length > 0) {
       try {
         console.log('🔍 Analyzing image with Gemini Vision to detect photoType...')
@@ -173,7 +173,14 @@ Return ONLY the category name in lowercase, nothing else.`
         }
         
       } catch (error) {
-        console.error('⚠️ Gemini Vision analysis failed:', error)
+        // Check if it's a quota error
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        if (errorMessage.includes('quota') || errorMessage.includes('429')) {
+          console.warn('⚠️ Gemini API quota exceeded, using simple detection')
+        } else {
+          console.error('⚠️ Gemini Vision analysis failed:', error)
+        }
+        
         // Fallback to simple text detection
         detectedPhotoType = detectPhotoTypeSimple(
           referenceImageUrls[0] || '',

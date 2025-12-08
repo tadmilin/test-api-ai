@@ -160,54 +160,14 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ Nano-Banana enhancement complete:', enhancedImageUrl)
 
-    // ✨ ESRGAN Post-Enhance - เพิ่มความคมชัดและ upscale
-    // Only apply ESRGAN for food photos to avoid oversharpening rooms/buildings
-    console.log('🔍 Step 3: Checking if ESRGAN upscaling needed...')
-    
-    let finalEnhancedUrl = enhancedImageUrl
-    
-    // Check photoType or prompt for food indicators
-    const promptLower = prompt.toLowerCase()
-    const isFoodPhoto = photoType === 'food_closeup' || photoType === 'buffet' ||
-                        promptLower.includes('food') || promptLower.includes('อาหาร') ||
-                        promptLower.includes('buffet') || promptLower.includes('บุฟเฟ่')
-    
-    if (isFoodPhoto) {
-      console.log('🍴 Food photo detected - applying ESRGAN for sharpness...')
-      try {
-        const esrganPrediction = await replicate.predictions.create({
-          version: 'f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa',
-          input: {
-            image: enhancedImageUrl,
-            scale: 2, // upscale 2x
-            face_enhance: false,
-          },
-        })
-        
-        const esrganResult = await replicate.wait(esrganPrediction)
-        finalEnhancedUrl = Array.isArray(esrganResult.output)
-          ? esrganResult.output[0]
-          : esrganResult.output as string
-        
-        console.log('✅ ESRGAN post-enhance complete:', finalEnhancedUrl)
-      } catch (esrganError) {
-        console.error('⚠️ ESRGAN failed, using SDXL output:', esrganError)
-        // ถ้า ESRGAN fail ใช้ SDXL output ตรงๆ
-      }
-    } else {
-      console.log('🏨 Non-food photo - skipping ESRGAN to avoid oversharpening rooms/buildings')
-      console.log('✅ Using SDXL output directly')
-    }
-
-    // ดาวน์โหลดรูปสุดท้าย
-    const finalImageResponse = await fetch(finalEnhancedUrl)
+    // Upload enhanced image to Vercel Blob
+    const finalImageResponse = await fetch(enhancedImageUrl)
     if (!finalImageResponse.ok) {
-      throw new Error('Failed to download final enhanced image')
+      throw new Error('Failed to download enhanced image')
     }
 
     const finalImageBuffer = await finalImageResponse.arrayBuffer()
 
-    // Upload รูปสุดท้ายไป Vercel Blob
     const timestamp = Date.now()
     const randomSuffix = Math.random().toString(36).substring(2, 8)
     const filename = `enhanced-${timestamp}-${randomSuffix}.png`

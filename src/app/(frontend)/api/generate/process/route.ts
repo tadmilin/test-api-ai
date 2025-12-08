@@ -111,11 +111,7 @@ export async function POST(request: NextRequest) {
                   // Store photoType from first image
                   if (i === 0 && !resolvedType) {
                     resolvedType = promptPhotoType
-                    await payload.update({
-                      collection: 'jobs',
-                      id: jobId,
-                      data: { resolvedPhotoType: promptPhotoType },
-                    })
+                    // Note: resolvedPhotoType field removed from schema
                   }
                   
                   console.log(`✅ Detected photoType: ${promptPhotoType}`)
