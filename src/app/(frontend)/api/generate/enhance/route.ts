@@ -89,12 +89,12 @@ export async function POST(request: NextRequest) {
       const imageBuffer = Buffer.from(response.data as ArrayBuffer)
       console.log(`Downloaded from Drive: ${(imageBuffer.byteLength / 1024).toFixed(2)} KB`)
 
-      // Resize if too large for GPU (max ~1.2M pixels for safety)
+      // Resize if too large for GPU (max 1M pixels for stability)
       const sharp = (await import('sharp')).default
       const metadata = await sharp(imageBuffer).metadata()
       console.log(`Original dimensions: ${metadata.width}x${metadata.height}`)
       
-      const maxPixels = 1200000 // 1.2M pixels safe limit
+      const maxPixels = 1000000 // 1M pixels (1024x1024) - safer limit
       const currentPixels = (metadata.width || 0) * (metadata.height || 0)
       
       let processedBuffer = imageBuffer
@@ -144,11 +144,12 @@ export async function POST(request: NextRequest) {
     const nanoBananaPrediction = await replicate.predictions.create({
       model: 'google/nano-banana-pro',
       input: {
-        image_input: [processedImageUrl],  // Must be an array!
+        image_input: [processedImageUrl],
         prompt: prompt,
-        megapixels: '1', // 1K resolution (approximately 1024x1024)
-        // Nano-Banana Pro: Up to 4K resolution, 14 reference images, Google Search grounding, Thinking mode
-        // No strength, negative_prompt, steps, or guidance parameters
+        resolution: '1K', // 1K resolution
+        aspect_ratio: 'match_input_image', // Keep original aspect ratio
+        output_format: 'png',
+        safety_filter_level: 'block_only_high',
       },
     })
 

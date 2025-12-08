@@ -55,11 +55,10 @@ export async function POST(request: NextRequest) {
       input: {
         image_input: finalImageUrls, // Template reference + user images
         prompt: prompt,
-        aspect_ratio: '1:1', // Default, adjust based on templateType
-        megapixels: '1', // 1K resolution (approximately 1024x1024)
+        resolution: '1K', // 1K resolution
+        aspect_ratio: 'match_input_image', // Match first image aspect ratio
         output_format: 'png',
-        output_quality: 95,
-        num_outputs: 1,
+        safety_filter_level: 'block_only_high',
       },
     })
 
