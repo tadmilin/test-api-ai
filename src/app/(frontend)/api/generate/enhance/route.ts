@@ -250,48 +250,69 @@ export async function GET(request: NextRequest) {
 
       // Download and upload to Vercel Blob for permanence (only once)
       console.log('📥 Downloading from Replicate...')
-      const finalImageResponse = await fetch(enhancedImageUrl)
-      if (!finalImageResponse.ok) {
-        throw new Error('Failed to download enhanced image')
-      }
+      try {
+        const finalImageResponse = await fetch(enhancedImageUrl)
+        if (!finalImageResponse.ok) {
+          throw new Error(`Failed to download enhanced image: ${finalImageResponse.statusText}`)
+        }
 
-      const finalImageBuffer = await finalImageResponse.arrayBuffer()
-      const timestamp = Date.now()
-      const randomSuffix = Math.random().toString(36).substring(2, 8)
-      const filename = `enhanced-${timestamp}-${randomSuffix}.png`
+        const finalImageBuffer = await finalImageResponse.arrayBuffer()
+        
+        // Detect correct content type and extension
+        const contentType = finalImageResponse.headers.get('content-type') || 'image/png'
+        let extension = 'png'
+        if (contentType.includes('jpeg') || contentType.includes('jpg')) extension = 'jpg'
+        if (contentType.includes('webp')) extension = 'webp'
+        
+        const timestamp = Date.now()
+        const randomSuffix = Math.random().toString(36).substring(2, 8)
+        const filename = `enhanced-${timestamp}-${randomSuffix}.${extension}`
 
-      // Use jobId if provided, otherwise use 'temp' folder
-      const blobPath = jobId ? `jobs/${jobId}/${filename}` : `temp/${filename}`
-      
-      console.log('📤 Uploading to Blob...')
-      const blob = await put(blobPath, finalImageBuffer, {
-        access: 'public',
-        contentType: 'image/png',
-      })
+        // Use jobId if provided, otherwise use 'temp' folder
+        const blobPath = jobId ? `jobs/${jobId}/${filename}` : `temp/${filename}`
+        
+        console.log(`📤 Uploading to Blob (${contentType})...`)
+        const blob = await put(blobPath, finalImageBuffer, {
+          access: 'public',
+          contentType: contentType, // Use actual content type from Replicate
+        })
 
-      console.log(`📦 Uploaded to Blob: ${blob.url}`)
+        console.log(`📦 Uploaded to Blob: ${blob.url}`)
 
-      if (jobId) {
-        const payload = await getPayload({ config })
-        await payload.create({
-          collection: 'job-logs',
-          data: {
-            jobId,
-            level: 'info',
-            message: 'Image enhancement completed',
-            timestamp: new Date().toISOString(),
-          },
+        if (jobId) {
+          const payload = await getPayload({ config })
+          await payload.create({
+            collection: 'job-logs',
+            data: {
+              jobId,
+              level: 'info',
+              message: 'Image enhancement completed',
+              timestamp: new Date().toISOString(),
+            },
+          })
+        }
+
+        return NextResponse.json({
+          success: true,
+          status: 'succeeded',
+          imageUrl: blob.url,
+          originalUrl: enhancedImageUrl,
+          predictionId,
+          cached: false,
+        })
+      } catch (downloadError) {
+        console.error('❌ Failed to download/upload enhanced image:', downloadError)
+        // Fallback: Return the Replicate URL directly if Blob upload fails
+        return NextResponse.json({
+          success: true,
+          status: 'succeeded',
+          imageUrl: enhancedImageUrl, // Use direct Replicate URL as fallback
+          originalUrl: enhancedImageUrl,
+          predictionId,
+          cached: false,
+          warning: 'Failed to cache image, using direct URL',
         })
       }
-
-      return NextResponse.json({
-        success: true,
-        status: 'succeeded',
-        imageUrl: blob.url,
-        originalUrl: enhancedImageUrl,
-        predictionId,
-        cached: false,
-      })
     }
 
     if (prediction.status === 'failed') {
