@@ -38,8 +38,8 @@ export async function POST(request: NextRequest) {
         }
 
         const genAI = new GoogleGenerativeAI(apiKey)
-        // Use Gemini 2.0 Flash (Experimental) for vision - stable model name
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
+        // Use Gemini 1.5 Flash - stable model for vision (official SDK model name)
+        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
 
         // Download image and convert to base64
         const imageUrl = referenceImageUrls[0]
