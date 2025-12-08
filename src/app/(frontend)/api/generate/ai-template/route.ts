@@ -1,140 +1,180 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Replicate from 'replicate'
-import { put } from '@vercel/blob'
 import { getTemplatePrompt, type TemplateType } from '@/utilities/templatePrompts'
 import { getTemplateReference } from '@/utilities/getTemplateReference'
+import { getPayload } from 'payload'
+import config from '@payload-config'
 
 const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN!,
 })
 
+// POST: Start template generation (returns immediately with prediction ID)
 export async function POST(request: NextRequest) {
   try {
     const { imageUrls, templateType, jobId } = await request.json()
 
     if (!imageUrls || !Array.isArray(imageUrls) || imageUrls.length === 0) {
-      return NextResponse.json(
-        { error: 'imageUrls array is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'imageUrls array is required' }, { status: 400 })
     }
 
     if (!templateType) {
-      return NextResponse.json(
-        { error: 'templateType is required (single, dual, triple, or quad)' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'templateType is required' }, { status: 400 })
     }
 
-    console.log(`🎨 Generating AI template:`)
+    console.log(`🎨 Starting AI template generation:`)
     console.log(`  - Type: ${templateType} (${imageUrls.length} images)`)
     console.log(`  - Job ID: ${jobId}`)
 
-    // Get random template reference for this type
     const templateRef = await getTemplateReference(templateType as TemplateType)
     
-    // Prepare image array - template reference first if available
-    const finalImageUrls = templateRef ? [templateRef, ...imageUrls] : imageUrls
-    
+    // 🚀 OPTIMIZATION: Limit to max 3 images total for faster processing
+    let finalImageUrls: string[]
     if (templateRef) {
-      console.log(`📐 Using template reference: ${templateRef}`)
+      // Template + first 2 user images = 3 total
+      finalImageUrls = [templateRef, ...imageUrls.slice(0, 2)]
+      console.log(`📐 Using template reference + ${imageUrls.slice(0, 2).length} images`)
     } else {
-      console.log(`⚠️ No template reference found for type "${templateType}", using images only`)
+      // Max 3 user images
+      finalImageUrls = imageUrls.slice(0, 3)
+      console.log(`📸 Using ${finalImageUrls.length} images (no template ref)`)
     }
 
-    // Get the appropriate prompt
     const prompt = getTemplatePrompt(templateType as TemplateType)
-    
     if (!prompt) {
       throw new Error(`No prompt found for template type: ${templateType}`)
     }
 
-    console.log(`📝 Prompt preview: ${prompt.substring(0, 150)}...`)
-    console.log(`📸 Total images to process: ${finalImageUrls.length}`)
-
-    // Call Nano-Banana Pro for creative template generation
-    console.log('🚀 Calling Nano-Banana Pro with parameters:')
-    console.log({
-      model: 'google/nano-banana-pro',
-      imageCount: finalImageUrls.length,
-      resolution: '1K',
-      aspect_ratio: 'match_input_image',
-      safety_filter_level: 'block_only_high',
-    })
+    console.log(`📝 Creating Replicate prediction with FAST settings...`)
     
     const prediction = await replicate.predictions.create({
       model: 'google/nano-banana-pro',
       input: {
-        image_input: finalImageUrls, // Template reference + user images
+        image_input: finalImageUrls,
         prompt: prompt,
-        resolution: '1K', // 1K resolution
-        aspect_ratio: 'match_input_image', // Match first image aspect ratio
+        resolution: '512', // 🚀 Faster: 512 instead of 1K
+        aspect_ratio: 'match_input_image',
         output_format: 'png',
         safety_filter_level: 'block_only_high',
       },
     })
 
     console.log(`✅ Prediction created: ${prediction.id}`)
-    console.log(`🔗 Status URL: https://replicate.com/p/${prediction.id}`)
-
-    // Wait for completion
-    console.log('⏳ Waiting for Nano-Banana Pro (this may take 30-90 seconds)...')
-    const result = await replicate.wait(prediction)
+    console.log(`🔗 https://replicate.com/p/${prediction.id}`)
     
-    console.log('✅ Prediction completed!')
-    console.log('Result status:', result.status)
-    console.log('Has output:', !!result.output)
-    
-    if (!result.output) {
-      console.error('❌ No output from prediction:', {
-        id: result.id,
-        status: result.status,
-        error: result.error,
-        logs: result.logs,
-      })
-      throw new Error(`No output from Nano-Banana Pro. Status: ${result.status}${result.error ? `, Error: ${result.error}` : ''}`)
-    }
+    // Store prediction ID in job
+    const payload = await getPayload({ config })
+    await payload.update({
+      collection: 'jobs',
+      id: jobId,
+      data: {
+        status: 'generating_template',
+        generatedPrompt: `replicate:${prediction.id}`, // Store prediction ID
+      },
+    })
 
-    const templateUrl = Array.isArray(result.output) ? result.output[0] : result.output as string
-    console.log('✅ Template generated:', templateUrl)
-
-    // Download and upload to Vercel Blob for permanence
-    console.log('📦 Uploading to Vercel Blob...')
-    const imageResponse = await fetch(templateUrl)
-    if (!imageResponse.ok) {
-      throw new Error('Failed to download template from Replicate')
-    }
-
-    const imageBuffer = await imageResponse.arrayBuffer()
-    const timestamp = Date.now()
-    
-    const blob = await put(
-      `templates/ai-${templateType}-${timestamp}.png`,
-      imageBuffer,
-      {
-        access: 'public',
-        contentType: 'image/png',
-      }
-    )
-
-    console.log('✅ Uploaded to Blob:', blob.url)
-
+    // Return immediately - don't wait!
     return NextResponse.json({
       success: true,
-      templateUrl: blob.url,
-      originalUrl: templateUrl,
-      type: templateType,
-      usedTemplateRef: !!templateRef,
-      predictionId: result.id,
+      predictionId: prediction.id,
+      status: prediction.status,
+      message: 'Template generation started',
     })
 
   } catch (error: unknown) {
-    console.error('❌ AI Template generation error:', error)
+    console.error('❌ Failed to start template generation:', error)
     return NextResponse.json(
-      { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Failed to generate AI template'
-      },
+      { error: error instanceof Error ? error.message : 'Failed to start generation' },
+      { status: 500 }
+    )
+  }
+}
+
+// GET: Check prediction status and finalize when ready
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const predictionId = searchParams.get('predictionId')
+    const jobId = searchParams.get('jobId')
+
+    if (!predictionId) {
+      return NextResponse.json({ error: 'predictionId required' }, { status: 400 })
+    }
+
+    console.log(`🔍 Checking prediction: ${predictionId}`)
+
+    const prediction = await replicate.predictions.get(predictionId)
+    
+    console.log(`Status: ${prediction.status}`)
+
+    if (prediction.status === 'succeeded' && prediction.output) {
+      const templateUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output as string
+      
+      console.log(`✅ Template ready: ${templateUrl}`)
+
+      // If jobId provided, update the job
+      if (jobId) {
+        const payload = await getPayload({ config })
+        await payload.update({
+          collection: 'jobs',
+          id: jobId,
+          data: {
+            finalImageUrl: templateUrl,
+            status: 'completed',
+          },
+        })
+        
+        await payload.create({
+          collection: 'job-logs',
+          data: {
+            jobId,
+            level: 'info',
+            message: 'Template generation completed',
+            timestamp: new Date().toISOString(),
+          },
+        })
+      }
+
+      return NextResponse.json({
+        success: true,
+        status: 'succeeded',
+        templateUrl,
+        predictionId,
+      })
+    }
+
+    if (prediction.status === 'failed') {
+      console.error(`❌ Prediction failed:`, prediction.error)
+      
+      if (jobId) {
+        const payload = await getPayload({ config })
+        await payload.update({
+          collection: 'jobs',
+          id: jobId,
+          data: { status: 'failed' },
+        })
+      }
+
+      return NextResponse.json({
+        success: false,
+        status: 'failed',
+        error: prediction.error || 'Unknown error',
+        predictionId,
+      })
+    }
+
+    // Still processing
+    return NextResponse.json({
+      success: true,
+      status: prediction.status,
+      predictionId,
+      message: 'Still processing...',
+    })
+
+  } catch (error: unknown) {
+    console.error('❌ Error checking prediction:', error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to check status' },
       { status: 500 }
     )
   }

@@ -78,8 +78,8 @@ export async function POST(request: NextRequest) {
 
     const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
 
-    // AI MODE: Use Nano-Banana Pro
-    console.log('🤖 Calling AI template generation...')
+    // AI MODE: Start template generation (async)
+    console.log('🤖 Starting AI template generation...')
 
     const aiResponse = await fetch(`${baseUrl}/api/generate/ai-template`, {
       method: 'POST',
@@ -92,54 +92,17 @@ export async function POST(request: NextRequest) {
     })
 
     if (!aiResponse.ok) {
-      throw new Error('AI template generation failed')
+      throw new Error('Failed to start template generation')
     }
 
     const aiData = await aiResponse.json()
-    const finalImageUrl = aiData.templateUrl
-
-    await payload.create({
-      collection: 'job-logs',
-      data: {
-        jobId: jobId,
-        level: 'info',
-        message: `AI template generated (${templateType} layout)`,
-        timestamp: new Date().toISOString(),
-      },
-    })
-
-    if (!finalImageUrl) {
-      throw new Error('Failed to generate template')
-    }
-
-    // Update job as completed
-    await payload.update({
-      collection: 'jobs',
-      id: jobId,
-      data: {
-        finalImageUrl: finalImageUrl,
-        status: 'completed',
-        generatedPrompt: `AI template generated: ${templateType} layout`,
-      },
-    })
-
-    await payload.create({
-      collection: 'job-logs',
-      data: {
-        jobId: jobId,
-        level: 'info',
-        message: 'Job completed successfully',
-        timestamp: new Date().toISOString(),
-      },
-    })
-
-    console.log('✅ Template generation complete:', finalImageUrl)
-
+    
+    // Return prediction ID for frontend to poll
     return NextResponse.json({
       success: true,
-      message: 'Template generated successfully',
-      finalImageUrl: finalImageUrl,
-      templateType: templateType,
+      message: 'Template generation started',
+      predictionId: aiData.predictionId,
+      jobId: jobId,
     })
 
   } catch (error: unknown) {
@@ -148,26 +111,37 @@ export async function POST(request: NextRequest) {
     const payload = await getPayload({ config })
     const errorMessage = error instanceof Error ? error.message : 'Template generation failed'
 
-    if (jobId) {
-      await payload.update({
-        collection: 'jobs',
-        id: jobId,
-        data: {
-          status: 'failed',
-        },
-      })
+    try {
+      const body = await request.json()
+      const jobId = body.jobId
 
-      await payload.create({
-        collection: 'job-logs',
-        data: {
-          jobId: jobId,
-          level: 'error',
-          message: errorMessage,
-          timestamp: new Date().toISOString(),
-        },
-      })
+      if (jobId) {
+        await payload.update({
+          collection: 'jobs',
+          id: jobId,
+          data: {
+            status: 'failed',
+          },
+        })
+
+        await payload.create({
+          collection: 'job-logs',
+          data: {
+            jobId: jobId,
+            level: 'error',
+            message: errorMessage,
+            timestamp: new Date().toISOString(),
+          },
+        })
+      }
+    } catch {
+      // Ignore if can't read body again
     }
 
+    return NextResponse.json(
+      { success: false, error: errorMessage },
+      { status: 500 }
+    )
     return NextResponse.json(
       { success: false, error: errorMessage },
       { status: 500 }

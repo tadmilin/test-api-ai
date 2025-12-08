@@ -553,7 +553,7 @@ export default function DashboardPage() {
     }
   }
 
-  // NEW: Finalize template
+  // NEW: Finalize template with polling
   async function handleFinalizeTemplate() {
     if (!currentJobId) return
 
@@ -564,9 +564,10 @@ export default function DashboardPage() {
     }
 
     setProcessingJobId(currentJobId)
-    setProcessingStatus('🎨 กำลังสร้าง Template...')
+    setProcessingStatus('🎨 กำลังเริ่มสร้าง Template...')
 
     try {
+      // Start generation
       const res = await fetch('/api/generate/finalize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -575,26 +576,57 @@ export default function DashboardPage() {
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ error: 'Unknown error' }))
-        throw new Error(errorData.error || 'Failed to finalize template')
+        throw new Error(errorData.error || 'Failed to start template generation')
       }
 
       const data = await res.json()
       
-      if (!data.finalImageUrl) {
-        throw new Error('No final image URL in response')
+      if (!data.predictionId) {
+        throw new Error('No prediction ID in response')
       }
+
+      // Poll for completion
+      setProcessingStatus('⏳ กำลังสร้าง Template (ใช้เวลา 1-2 นาที)...')
       
-      setFinalImageUrl(data.finalImageUrl)
-      setReviewMode(false)
-      setProcessingStatus('')
-      setProcessingJobId(null)
-      
-      alert('🎉 Template สร้างเสร็จแล้ว!')
-      fetchDashboardData()
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusRes = await fetch(
+            `/api/generate/ai-template?predictionId=${data.predictionId}&jobId=${currentJobId}`
+          )
+          const statusData = await statusRes.json()
+
+          if (statusData.status === 'succeeded') {
+            clearInterval(pollInterval)
+            setFinalImageUrl(statusData.templateUrl)
+            setReviewMode(false)
+            setProcessingStatus('')
+            setProcessingJobId(null)
+            alert('🎉 Template สร้างเสร็จแล้ว!')
+            fetchDashboardData()
+          } else if (statusData.status === 'failed') {
+            clearInterval(pollInterval)
+            throw new Error(statusData.error || 'Template generation failed')
+          } else {
+            // Still processing
+            setProcessingStatus(`⏳ กำลังสร้าง Template... (${statusData.status})`)
+          }
+        } catch (err) {
+          clearInterval(pollInterval)
+          throw err
+        }
+      }, 3000) // Poll every 3 seconds
+
+      // Timeout after 5 minutes
+      setTimeout(() => {
+        clearInterval(pollInterval)
+        setProcessingStatus('')
+        setProcessingJobId(null)
+        alert('⏱️ Template generation timeout - กรุณาตรวจสอบใน Job logs')
+      }, 300000)
 
     } catch (error) {
       console.error('Finalize error:', error)
-      alert('Failed to create template')
+      alert('Failed to create template: ' + (error instanceof Error ? error.message : 'Unknown error'))
       setProcessingStatus('')
       setProcessingJobId(null)
     }
