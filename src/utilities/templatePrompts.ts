@@ -47,22 +47,5 @@ export function getTemplatePrompt(
   type: TemplateType,
   imageUrls: string[]
 ): string {
-  const basePrompt = templatePrompts[type]
-  
-  // Add image-specific instructions
-  const imageInstructions = `
-
-Images to arrange:
-${imageUrls.map((url, i) => `- Image ${i + 1}: ${url}`).join('\n')}
-
-CRITICAL REQUIREMENTS:
-- Arrange exactly ${imageUrls.length} ${imageUrls.length === 1 ? 'image' : 'images'} from above
-- Each photo must be clearly visible and sharp
-- NO text overlays, NO words, NO letters anywhere
-- Maintain professional hotel/resort aesthetic
-- Photos must NOT overlap or cover each other
-- Keep original photo quality and colors
-- Decorative elements must NOT obscure photos`
-
-  return basePrompt + imageInstructions
+  return templatePrompts[type]
 }
