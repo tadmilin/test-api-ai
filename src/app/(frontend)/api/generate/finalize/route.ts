@@ -108,14 +108,13 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     console.error('❌ Template generation error:', error)
 
-    const payload = await getPayload({ config })
     const errorMessage = error instanceof Error ? error.message : 'Template generation failed'
 
-    try {
-      const body = await request.json()
-      const jobId = body.jobId
-
-      if (jobId) {
+    // Use jobId captured at the start, don't read body again
+    if (jobId) {
+      try {
+        const payload = await getPayload({ config })
+        
         await payload.update({
           collection: 'jobs',
           id: jobId,
@@ -133,15 +132,11 @@ export async function POST(request: NextRequest) {
             timestamp: new Date().toISOString(),
           },
         })
+      } catch (updateError) {
+        console.error('Failed to update job status:', updateError)
       }
-    } catch {
-      // Ignore if can't read body again
     }
 
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    )
     return NextResponse.json(
       { success: false, error: errorMessage },
       { status: 500 }

@@ -63,166 +63,162 @@ export async function POST(request: NextRequest) {
       
       console.log(`📊 Processing ${referenceUrls.length} images`)
       
-      // PHASE 1: Enhance all images
-      console.log('🎨 Phase 1: Enhancing images with Nano-Banana Pro...')
+      // PHASE 1: Enhance all images IN PARALLEL
+      console.log('🎨 Phase 1: Enhancing images with Nano-Banana Pro (parallel)...')
       
-      const enhancedImageUrls: { url: string; status: 'pending' | 'approved' | 'regenerating'; originalUrl: string }[] = []
       let resolvedType: PhotoType | null = null
       
-      // Enhance ทีละรูป
-      for (let i = 0; i < referenceUrls.length; i++) {
-          const imageUrl = referenceUrls[i]
-          console.log(`\n🖼️ Processing image ${i + 1}/${referenceUrls.length}...`)
+      // Process all images in parallel using Promise.all
+      const enhancePromises = referenceUrls.map(async (imageUrl, i) => {
+        console.log(`\n🖼️ Starting image ${i + 1}/${referenceUrls.length}...`)
+        
+        try {
+          // 📝 Get template prompt (Gemini will detect photoType inside prompt API)
+          console.log(`📝 Getting enhancement prompt for image ${i + 1}...`)
+          
+          let enhancementPrompt = 'ปรับปรุงภาพนี้ให้ดูดีขึ้น หรูหราขึ้นแบบโรงแรม"รีสอร์ทสมัยใหม่"Modern Tropical 3-4ดาว แต่สมจริงไม่เวอร์เกินไป ทำให้ดูดีขึ้นหรูหราขึ้นจากภาพเดิมเห็นความแตกต่างโดยยึดองค์ประกอบเดิมจากภาพเดิมทั้งหมด'
+          let promptPhotoType: PhotoType = 'generic'
+          
+          // Get photoType from Sheet if available
+          const photoTypeFromSheet = typeof job.photoTypeFromSheet === 'string' 
+            ? job.photoTypeFromSheet 
+            : undefined
           
           try {
-            // 📝 Get template prompt (Gemini will detect photoType inside prompt API)
-            console.log(`📝 Getting enhancement prompt for image ${i + 1}/${referenceUrls.length}...`)
-            
-            let enhancementPrompt = 'ปรับปรุงภาพนี้ให้ดูดีขึ้น หรูหราขึ้นแบบโรงแรม"รีสอร์ทสมัยใหม่"Modern Tropical 3-4ดาว แต่สมจริงไม่เวอร์เกินไป ทำให้ดูดีขึ้นหรูหราขึ้นจากภาพเดิมเห็นความแตกต่างโดยยึดองค์ประกอบเดิมจากภาพเดิมทั้งหมด'
-            let promptPhotoType: PhotoType = 'generic'
-            
-            // Get photoType from Sheet if available
-            const photoTypeFromSheet = typeof job.photoTypeFromSheet === 'string' 
-              ? job.photoTypeFromSheet 
-              : undefined
-            
-            try {
-              // Call prompt API (Gemini Vision will detect photoType and return template)
-              const promptRes = await fetch(`${baseUrl}/api/generate/prompt`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  productName: typeof job.productName === 'string' ? job.productName : 'Hotel / Resort',
-                  contentTopic: typeof job.contentTopic === 'string' ? job.contentTopic : undefined,
-                  contentDescription: typeof job.contentDescription === 'string' ? job.contentDescription : undefined,
-                  referenceImageUrls: [imageUrl],
-                  photoTypeFromSheet,
-                }),
-              })
-
-              if (promptRes.ok) {
-                const data = await promptRes.json()
-                if (data.prompt && typeof data.prompt === 'string') {
-                  enhancementPrompt = data.prompt
-                  promptPhotoType = (data.photoType as PhotoType) || 'generic'
-                  
-                  // Store photoType from first image
-                  if (i === 0 && !resolvedType) {
-                    resolvedType = promptPhotoType
-                    // Note: resolvedPhotoType field removed from schema
-                  }
-                  
-                  console.log(`✅ Detected photoType: ${promptPhotoType}`)
-                  console.log('✅ Template prompt:', enhancementPrompt.substring(0, 80) + '...')
-                } else {
-                  console.warn('⚠️ No prompt in response, using fallback')
-                }
-              } else {
-                console.warn('⚠️ Prompt API failed, using fallback')
-              }
-            } catch (promptError) {
-              console.error('💥 Prompt error:', promptError)
-            }
-            
-            // Log the prompt selection
-            await payload.create({
-              collection: 'job-logs',
-              data: {
-                jobId: jobId,
-                level: 'info',
-                message: `[Image ${i + 1}] PhotoType: ${promptPhotoType} | Template selected`,
-                timestamp: new Date().toISOString(),
-              },
-            })
-            
-            // ✨ Step: Enhance with Nano-Banana
-            const enhanceResponse = await fetch(`${baseUrl}/api/generate/enhance`, {
+            // Call prompt API (Gemini Vision will detect photoType and return template)
+            const promptRes = await fetch(`${baseUrl}/api/generate/prompt`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                imageUrl,
-                prompt: enhancementPrompt,
-                photoType: promptPhotoType,
-                jobId: jobId,
+                productName: typeof job.productName === 'string' ? job.productName : 'Hotel / Resort',
+                contentTopic: typeof job.contentTopic === 'string' ? job.contentTopic : undefined,
+                contentDescription: typeof job.contentDescription === 'string' ? job.contentDescription : undefined,
+                referenceImageUrls: [imageUrl],
+                photoTypeFromSheet,
               }),
             })
-            
-            if (!enhanceResponse.ok) {
-              const errorText = await enhanceResponse.text()
-              console.error(`⚠️ Enhancement failed for image ${i + 1}:`, errorText)
-              // ถ้า error ใช้รูปต้นฉบับแทน
-              if (typeof imageUrl === 'string' && imageUrl) {
-                enhancedImageUrls.push({
-                  url: imageUrl,
-                  status: 'pending' as const,
-                  originalUrl: typeof imageUrl === 'string' ? imageUrl : '',
-                })
+
+            if (promptRes.ok) {
+              const data = await promptRes.json()
+              if (data.prompt && typeof data.prompt === 'string') {
+                enhancementPrompt = data.prompt
+                promptPhotoType = (data.photoType as PhotoType) || 'generic'
+                
+                // Store photoType from first image
+                if (i === 0 && !resolvedType) {
+                  resolvedType = promptPhotoType
+                }
+                
+                console.log(`✅ Image ${i + 1} detected photoType: ${promptPhotoType}`)
               }
-            } else {
-              const { imageUrl: enhancedUrl } = await enhanceResponse.json()
-              enhancedImageUrls.push({
-                url: enhancedUrl,
-                status: 'pending' as const,
-                originalUrl: typeof imageUrl === 'string' ? imageUrl : '',
-              })
-              console.log(`✅ Image ${i + 1} enhanced:`, enhancedUrl)
-              
-              await payload.create({
-                collection: 'job-logs',
-                data: {
-                  jobId: jobId,
-                  level: 'info',
-                  message: `Enhanced image ${i + 1}/${referenceUrls.length}`,
-                  timestamp: new Date().toISOString(),
-                },
-              })
             }
-          } catch (error) {
-            console.error(`💥 Error enhancing image ${i + 1}:`, error)
-            // ถ้า error ใช้รูปต้นฉบับแทน
-            if (typeof imageUrl === 'string' && imageUrl) {
-              enhancedImageUrls.push({
-                url: imageUrl,
-                status: 'pending' as const,
-                originalUrl: imageUrl,
-              })
+          } catch (promptError) {
+            console.error(`💥 Prompt error for image ${i + 1}:`, promptError)
+          }
+          
+          // Log the prompt selection
+          await payload.create({
+            collection: 'job-logs',
+            data: {
+              jobId: jobId,
+              level: 'info',
+              message: `[Image ${i + 1}] PhotoType: ${promptPhotoType} | Starting enhancement`,
+              timestamp: new Date().toISOString(),
+            },
+          })
+          
+          // ✨ Step: Start enhancement (returns predictionId immediately)
+          const enhanceResponse = await fetch(`${baseUrl}/api/generate/enhance`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              imageUrl,
+              prompt: enhancementPrompt,
+              photoType: promptPhotoType,
+              jobId: jobId,
+            }),
+          })
+          
+          if (!enhanceResponse.ok) {
+            const errorText = await enhanceResponse.text()
+            console.error(`⚠️ Enhancement failed for image ${i + 1}:`, errorText)
+            return {
+              url: typeof imageUrl === 'string' ? imageUrl : '',
+              status: 'pending' as const,
+              originalUrl: typeof imageUrl === 'string' ? imageUrl : '',
+              predictionId: null,
             }
           }
+          
+          const { predictionId } = await enhanceResponse.json()
+          console.log(`✅ Image ${i + 1} enhancement started: ${predictionId}`)
+          
+          return {
+            url: '', // Will be filled after polling
+            status: 'pending' as const,
+            originalUrl: typeof imageUrl === 'string' ? imageUrl : '',
+            predictionId,
+            imageIndex: i,
+          }
+          
+        } catch (error) {
+          console.error(`💥 Error starting enhancement for image ${i + 1}:`, error)
+          return {
+            url: typeof imageUrl === 'string' ? imageUrl : '',
+            status: 'pending' as const,
+            originalUrl: typeof imageUrl === 'string' ? imageUrl : '',
+            predictionId: null,
+          }
         }
-        
-        console.log(`\n✅ Enhanced ${enhancedImageUrls.length} images`)
+      })
+      
+      // Wait for all predictions to start
+      const predictionResults = await Promise.all(enhancePromises)
+      
+      console.log(`\n✅ All ${predictionResults.length} enhancements started in parallel`)
+      
+      // Store prediction IDs in the job for client-side polling
+      const enhancedImageUrls = predictionResults.map(result => ({
+        url: '', // Will be filled after client polls
+        status: 'pending' as const,
+        originalUrl: result.originalUrl,
+        predictionId: result.predictionId,
+      }))
 
-        // Save enhanced images and update status to review_pending
-        await payload.update({
-          collection: 'jobs',
-          id: jobId,
-          data: {
-            enhancedImageUrls: enhancedImageUrls,
-            status: 'review_pending', // Changed from 'completed' - waiting for user review
-          },
-        })
+      // Save prediction IDs immediately - client will poll
+      await payload.update({
+        collection: 'jobs',
+        id: jobId,
+        data: {
+          enhancedImageUrls: enhancedImageUrls,
+          status: 'enhancing', // Processing predictions
+        },
+      })
 
-        await payload.create({
-          collection: 'job-logs',
-          data: {
-            jobId: jobId,
-            level: 'info',
-            message: `Phase 1 complete: ${enhancedImageUrls.length} images enhanced. Waiting for review.`,
-            timestamp: new Date().toISOString(),
-          },
-        })
-
-        console.log('⏸️ PAUSED: Waiting for user to review and approve images')
-        console.log(`📍 Next step: User should visit /review-images/${jobId}`)
-
-        return NextResponse.json({
-          success: true,
-          message: 'Images enhanced. Please review and approve.',
+      await payload.create({
+        collection: 'job-logs',
+        data: {
           jobId: jobId,
-          status: 'review_pending',
-          enhancedImages: enhancedImageUrls,
-          nextUrl: `/review-images/${jobId}`,
-        })
+          level: 'info',
+          message: `Started ${predictionResults.length} image enhancements in parallel. Client should poll status.`,
+          timestamp: new Date().toISOString(),
+        },
+      })
+
+      console.log('🚀 All predictions started - returning immediately')
+      console.log(`📍 Client should poll: GET /api/generate/process/status?jobId=${jobId}`)
+
+      return NextResponse.json({
+        success: true,
+        message: 'Image enhancements started. Poll for status.',
+        jobId: jobId,
+        status: 'enhancing',
+        predictions: predictionResults.map(r => ({
+          predictionId: r.predictionId,
+          originalUrl: r.originalUrl,
+        })),
+        pollUrl: `/api/generate/process/status?jobId=${jobId}`,
+      })
 
       } catch (error: unknown) {
         console.error('💥 Processing error:', error)

@@ -2,7 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import Replicate from 'replicate'
 import { put } from '@vercel/blob'
 import { google } from 'googleapis'
+import { getPayload } from 'payload'
+import config from '@payload-config'
 
+const replicate = new Replicate({
+  auth: process.env.REPLICATE_API_TOKEN!,
+})
+
+// POST: Start image enhancement (returns predictionId immediately)
 export async function POST(request: NextRequest) {
   try {
     const { imageUrl, prompt, jobId, photoType } = await request.json()
@@ -19,22 +26,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'jobId is required' }, { status: 400 })
     }
 
-    console.log('✨ Enhancing image with Nano-Banana...')
+    console.log('✨ Starting image enhancement...')
     console.log('[ENHANCE] imageUrl =', imageUrl)
     console.log('📝 Prompt:', prompt.substring(0, 120) + '...')
     console.log('📸 PhotoType:', photoType || 'not specified')
-    
-    // 🔍 CRITICAL: ยืนยันว่ารูปที่ยิงเข้าโมเดลคือรูปใน Drive จริง
-    console.log('⚠️ VERIFY THIS URL IN BROWSER - Should show original Drive image!')
-    console.log('👉 Open this URL:', imageUrl)
-
-    const apiToken = process.env.REPLICATE_API_TOKEN
-
-    if (!apiToken) {
-      return NextResponse.json({ error: 'Replicate API token not configured' }, { status: 500 })
-    }
-
-    const replicate = new Replicate({ auth: apiToken })
 
     // ตรวจสอบว่าเป็น Google Drive URL หรือไม่
     let processedImageUrl = imageUrl
@@ -137,56 +132,154 @@ export async function POST(request: NextRequest) {
     }
 
     // Nano-Banana enhancement - conversational image editing
-    console.log('✨ Sending to Nano-Banana Pro (Gemini 3 Pro Image)...')
-    console.log('📸 Final image URL sent to model:', processedImageUrl)
-    console.log('📝 Prompt:', prompt)
+    console.log('✨ Creating Nano-Banana prediction...')
+    console.log('📸 Final image URL:', processedImageUrl)
     
     const nanoBananaPrediction = await replicate.predictions.create({
       model: 'google/nano-banana-pro',
       input: {
         image_input: [processedImageUrl],
         prompt: prompt,
-        resolution: '1K', // Valid: 1K, 2K, or 4K only
-        aspect_ratio: 'match_input_image', // Keep original aspect ratio
+        resolution: '1K',
+        aspect_ratio: 'match_input_image',
         output_format: 'png',
         safety_filter_level: 'block_only_high',
       },
     })
 
-    // Wait for completion
-    const nanoBananaResult = await replicate.wait(nanoBananaPrediction)
-    const enhancedImageUrl = Array.isArray(nanoBananaResult.output)
-      ? nanoBananaResult.output[0]
-      : nanoBananaResult.output as string
+    console.log(`✅ Prediction created: ${nanoBananaPrediction.id}`)
+    console.log(`🔗 https://replicate.com/p/${nanoBananaPrediction.id}`)
 
-    console.log('✅ Nano-Banana enhancement complete:', enhancedImageUrl)
-
-    // Upload enhanced image to Vercel Blob
-    const finalImageResponse = await fetch(enhancedImageUrl)
-    if (!finalImageResponse.ok) {
-      throw new Error('Failed to download enhanced image')
-    }
-
-    const finalImageBuffer = await finalImageResponse.arrayBuffer()
-
-    const timestamp = Date.now()
-    const randomSuffix = Math.random().toString(36).substring(2, 8)
-    const filename = `enhanced-${timestamp}-${randomSuffix}.png`
-    
-    const blob = await put(`jobs/${jobId}/${filename}`, finalImageBuffer, {
-      access: 'public',
-      contentType: 'image/png',
+    // Store prediction ID in metadata for polling
+    const payload = await getPayload({ config })
+    await payload.create({
+      collection: 'job-logs',
+      data: {
+        jobId,
+        level: 'info',
+        message: `Enhancement started: ${nanoBananaPrediction.id}`,
+        timestamp: new Date().toISOString(),
+      },
     })
 
+    // Return immediately - don't wait!
     return NextResponse.json({
-      imageUrl: blob.url,
-      prompt: prompt,
+      success: true,
+      predictionId: nanoBananaPrediction.id,
+      status: nanoBananaPrediction.status,
+      message: 'Enhancement started',
     })
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Failed to enhance image'
-    console.error('Error enhancing image:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Failed to start enhancement'
+    console.error('Error starting enhancement:', error)
     return NextResponse.json(
       { error: errorMessage },
+      { status: 500 }
+    )
+  }
+}
+
+// GET: Check enhancement status and finalize when ready
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const predictionId = searchParams.get('predictionId')
+    const jobId = searchParams.get('jobId')
+
+    if (!predictionId) {
+      return NextResponse.json({ error: 'predictionId required' }, { status: 400 })
+    }
+
+    console.log(`🔍 Checking enhancement: ${predictionId}`)
+
+    const prediction = await replicate.predictions.get(predictionId)
+    console.log(`Status: ${prediction.status}`)
+
+    if (prediction.status === 'succeeded' && prediction.output) {
+      const enhancedImageUrl = Array.isArray(prediction.output)
+        ? prediction.output[0]
+        : (prediction.output as string)
+
+      console.log(`✅ Enhancement complete: ${enhancedImageUrl}`)
+
+      // Download and upload to Vercel Blob for permanence
+      const finalImageResponse = await fetch(enhancedImageUrl)
+      if (!finalImageResponse.ok) {
+        throw new Error('Failed to download enhanced image')
+      }
+
+      const finalImageBuffer = await finalImageResponse.arrayBuffer()
+      const timestamp = Date.now()
+      const randomSuffix = Math.random().toString(36).substring(2, 8)
+      const filename = `enhanced-${timestamp}-${randomSuffix}.png`
+
+      // Use jobId if provided, otherwise use 'temp' folder
+      const blobPath = jobId ? `jobs/${jobId}/${filename}` : `temp/${filename}`
+      
+      const blob = await put(blobPath, finalImageBuffer, {
+        access: 'public',
+        contentType: 'image/png',
+      })
+
+      console.log(`📦 Uploaded to Blob: ${blob.url}`)
+
+      if (jobId) {
+        const payload = await getPayload({ config })
+        await payload.create({
+          collection: 'job-logs',
+          data: {
+            jobId,
+            level: 'info',
+            message: 'Image enhancement completed',
+            timestamp: new Date().toISOString(),
+          },
+        })
+      }
+
+      return NextResponse.json({
+        success: true,
+        status: 'succeeded',
+        imageUrl: blob.url,
+        originalUrl: enhancedImageUrl,
+        predictionId,
+      })
+    }
+
+    if (prediction.status === 'failed') {
+      console.error(`❌ Prediction failed:`, prediction.error)
+
+      if (jobId) {
+        const payload = await getPayload({ config })
+        await payload.create({
+          collection: 'job-logs',
+          data: {
+            jobId,
+            level: 'error',
+            message: `Enhancement failed: ${prediction.error || 'Unknown error'}`,
+            timestamp: new Date().toISOString(),
+          },
+        })
+      }
+
+      return NextResponse.json({
+        success: false,
+        status: 'failed',
+        error: prediction.error || 'Unknown error',
+        predictionId,
+      })
+    }
+
+    // Still processing
+    return NextResponse.json({
+      success: true,
+      status: prediction.status,
+      predictionId,
+      message: 'Still processing...',
+    })
+  } catch (error: unknown) {
+    console.error('❌ Error checking prediction:', error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to check status' },
       { status: 500 }
     )
   }
