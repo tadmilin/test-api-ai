@@ -809,6 +809,10 @@ export interface Job {
         url?: string | null;
         status?: ('pending' | 'approved' | 'regenerating') | null;
         originalUrl?: string | null;
+        /**
+         * Used for polling async prediction status
+         */
+        predictionId?: string | null;
         id?: string | null;
       }[]
     | null;
@@ -1455,6 +1459,7 @@ export interface JobsSelect<T extends boolean = true> {
         url?: T;
         status?: T;
         originalUrl?: T;
+        predictionId?: T;
         id?: T;
       };
   reviewCompleted?: T;

@@ -205,6 +205,14 @@ export const Jobs: CollectionConfig = {
                   type: 'text',
                   label: 'Original Image URL',
                 },
+                {
+                  name: 'predictionId',
+                  type: 'text',
+                  label: 'Replicate Prediction ID',
+                  admin: {
+                    description: 'Used for polling async prediction status',
+                  },
+                },
               ],
               admin: {
                 description: 'Enhanced images with approval status',
