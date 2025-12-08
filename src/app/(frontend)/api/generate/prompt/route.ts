@@ -39,7 +39,8 @@ export async function POST(request: NextRequest) {
 
         const genAI = new GoogleGenerativeAI(apiKey)
         // Use Gemini 1.5 Flash - stable, fast, and cost-effective
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+        // Note: Using 'gemini-1.5-flash-latest' to avoid version issues
+        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' })
 
         // Download image and convert to base64
         const imageUrl = referenceImageUrls[0]

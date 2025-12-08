@@ -1111,14 +1111,21 @@ export default function DashboardPage() {
                   </div>
 
                   {/* Enhanced Image */}
-                  <div className="relative aspect-[4/3] rounded-lg overflow-hidden mb-3 border-2 border-gray-300">
-                    <Image
-                      src={img.url}
-                      alt={`Enhanced ${index + 1}`}
-                      fill
-                      className="object-cover"
-                      unoptimized
-                    />
+                  <div className="relative aspect-[4/3] rounded-lg overflow-hidden mb-3 border-2 border-gray-300 bg-gray-100">
+                    {img.url ? (
+                      <Image
+                        src={img.url}
+                        alt={`Enhanced ${index + 1}`}
+                        fill
+                        className="object-cover"
+                        unoptimized
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-gray-400 flex-col gap-2">
+                        <span className="text-2xl">⚠️</span>
+                        <span className="text-xs">ไม่พบรูปภาพ</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Action Buttons */}
