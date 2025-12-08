@@ -202,7 +202,35 @@ export async function GET(request: NextRequest) {
 
       console.log(`✅ Enhancement complete: ${enhancedImageUrl}`)
 
-      // Download and upload to Vercel Blob for permanence
+      // ⚡ OPTIMIZATION: Check if already uploaded to Blob (cached result)
+      if (jobId) {
+        try {
+          const payload = await getPayload({ config })
+          const job = await payload.findByID({ collection: 'jobs', id: jobId })
+          
+          // Check if this prediction already has a Blob URL cached
+          const cachedImage = job.enhancedImageUrls?.find(
+            (img: any) => img.predictionId === predictionId && img.url && img.url.includes('blob.vercel-storage.com')
+          )
+          
+          if (cachedImage) {
+            console.log(`💾 Using cached Blob URL (skip download/upload)`)
+            return NextResponse.json({
+              success: true,
+              status: 'succeeded',
+              imageUrl: cachedImage.url,
+              originalUrl: enhancedImageUrl,
+              predictionId,
+              cached: true,
+            })
+          }
+        } catch (cacheError) {
+          console.log('⚠️ Cache check failed, proceeding with download...')
+        }
+      }
+
+      // Download and upload to Vercel Blob for permanence (only once)
+      console.log('📥 Downloading from Replicate...')
       const finalImageResponse = await fetch(enhancedImageUrl)
       if (!finalImageResponse.ok) {
         throw new Error('Failed to download enhanced image')
@@ -216,6 +244,7 @@ export async function GET(request: NextRequest) {
       // Use jobId if provided, otherwise use 'temp' folder
       const blobPath = jobId ? `jobs/${jobId}/${filename}` : `temp/${filename}`
       
+      console.log('📤 Uploading to Blob...')
       const blob = await put(blobPath, finalImageBuffer, {
         access: 'public',
         contentType: 'image/png',
@@ -242,6 +271,7 @@ export async function GET(request: NextRequest) {
         imageUrl: blob.url,
         originalUrl: enhancedImageUrl,
         predictionId,
+        cached: false,
       })
     }
 

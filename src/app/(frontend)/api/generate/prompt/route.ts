@@ -31,9 +31,9 @@ export async function POST(request: NextRequest) {
       try {
         console.log('🔍 Analyzing image with Gemini Vision to detect photoType...')
         
-        const apiKey = process.env.GOOGLE_GEMINI_API_KEY
+        const apiKey = process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY
         if (!apiKey) {
-          throw new Error('GOOGLE_GEMINI_API_KEY not configured')
+          throw new Error('GOOGLE_AI_API_KEY or GOOGLE_GEMINI_API_KEY not configured')
         }
 
         const genAI = new GoogleGenerativeAI(apiKey)
