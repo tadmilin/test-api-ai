@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
       enhancedImages.map(async (img: any, index: number) => {
         // Check if image is processing (has predictionId but no URL yet)
         // Note: status might be 'pending' or 'processing' or 'regenerating'
-        const isProcessing = (img.status === 'pending' || img.status === 'processing' || img.status === 'regenerating') && img.predictionId && !img.url
+        const isProcessing = img.predictionId && (!img.url || img.url === '')
         
         if (isProcessing) {
           console.log(`📡 Polling prediction ${index + 1}: ${img.predictionId}`)
@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
     
     // Count statuses
     const processing = updatedImages.filter((img: any) => 
-      (img.status === 'pending' || img.status === 'processing' || img.status === 'regenerating') && img.predictionId && !img.url
+      img.predictionId && (!img.url || img.url === '')
     ).length
     
     const completed = updatedImages.filter((img: any) => 
