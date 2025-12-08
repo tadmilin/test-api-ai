@@ -27,6 +27,14 @@ export async function POST(request: NextRequest) {
       detectedPhotoType = photoTypeFromSheet as PhotoType
       console.log('📋 Using photoType from Sheet:', detectedPhotoType)
     }
+    // Priority 2: Use simple text-based detection from content description (MOST RELIABLE)
+    // Gemini Vision disabled temporarily due to API issues
+    else {
+      detectedPhotoType = detectPhotoTypeSimple('', contentDescription || contentTopic || '')
+      console.log('📝 Using simple text detection:', detectedPhotoType)
+    }
+    
+    /* GEMINI VISION DISABLED - API 404 errors
     // Priority 2: Use Gemini Vision to analyze the image
     else if (referenceImageUrls && referenceImageUrls.length > 0) {
       try {
@@ -174,11 +182,14 @@ Reply with ONLY the category name, nothing else.`,
         console.log('📝 Fallback to simple detection:', detectedPhotoType)
       }
     }
+    */
     // Priority 3: Use simple text-based detection from content description
+    /* DISABLED - already handled above
     else {
       detectedPhotoType = detectPhotoTypeSimple('', contentDescription || contentTopic || '')
       console.log('📝 Using simple text detection:', detectedPhotoType)
     }
+    */
 
     // Get template prompt for this photo type
     const prompt = getNanoBananaPrompt(detectedPhotoType)
