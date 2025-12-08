@@ -85,11 +85,22 @@ export async function GET(request: NextRequest) {
     const anyChanged = updatedImages.some((img, i) => {
       const oldUrl = enhancedImages[i]?.url || ''
       const newUrl = img.url || ''
-      return oldUrl !== newUrl
+      const changed = oldUrl !== newUrl
+      if (changed) {
+        console.log(`🔄 Image ${i + 1} changed: "${oldUrl}" -> "${newUrl}"`)
+      }
+      return changed
     })
     
     if (anyChanged) {
       console.log(`💾 Updating job ${jobId} with ${updatedImages.length} images`)
+      console.log('📋 Updated images:', JSON.stringify(updatedImages.map((img, i) => ({
+        index: i + 1,
+        url: img.url?.substring(0, 50) + '...',
+        status: img.status,
+        hasPredictionId: !!img.predictionId
+      })), null, 2))
+      
       await payload.update({
         collection: 'jobs',
         id: jobId,
@@ -100,6 +111,12 @@ export async function GET(request: NextRequest) {
       console.log(`✅ Job updated successfully`)
     } else {
       console.log(`⏭️ No changes detected, skipping job update`)
+      console.log('📋 Current state:', JSON.stringify(updatedImages.map((img, i) => ({
+        index: i + 1,
+        url: img.url?.substring(0, 50) + '...',
+        hasUrl: !!img.url,
+        hasPredictionId: !!img.predictionId
+      })), null, 2))
     }
     
     // Count statuses

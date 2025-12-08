@@ -223,9 +223,12 @@ export async function GET(request: NextRequest) {
 
       // ⚡ OPTIMIZATION: Check if already uploaded to Blob (cached result)
       if (jobId) {
+        console.log('🔍 Checking cache for predictionId:', predictionId)
         try {
           const payload = await getPayload({ config })
           const job = await payload.findByID({ collection: 'jobs', id: jobId })
+          
+          console.log(`📊 Job has ${job.enhancedImageUrls?.length || 0} images`)
           
           // Check if this prediction already has a Blob URL cached
           // Must check: 1) same predictionId, 2) has url, 3) url is Blob storage, 4) status is 'pending' (processed)
@@ -238,7 +241,7 @@ export async function GET(request: NextRequest) {
           )
           
           if (cachedImage?.url) {
-            console.log(`💾 Using cached Blob URL: ${cachedImage.url}`)
+            console.log(`💾 Cache HIT! Using cached Blob URL: ${cachedImage.url}`)
             return NextResponse.json({
               success: true,
               status: 'succeeded',
@@ -249,7 +252,8 @@ export async function GET(request: NextRequest) {
             })
           }
           
-          console.log('🔍 No cache found, proceeding with download...')
+          console.log('❌ Cache MISS - No matching cached image found')
+          console.log('   Looking for:', { predictionId, mustHaveUrl: true, mustBeBlob: true, mustBePending: true })
         } catch (cacheError) {
           console.log('⚠️ Cache check failed, proceeding with download...', cacheError)
         }
