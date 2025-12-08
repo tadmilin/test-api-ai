@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import type { PhotoType } from '@/utilities/photoTypeClassifier'
+import { ensurePublicImage } from '@/utilities/imageProcessing'
 
 export async function POST(request: NextRequest) {
   try {
@@ -57,7 +58,8 @@ export async function POST(request: NextRequest) {
 
     try {
       // Get base URL for internal API calls
-      const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
+      // Use request.nextUrl.origin to get the correct base URL (especially in Vercel)
+      const baseUrl = request.nextUrl.origin || process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
       
       const referenceUrls = job.referenceImageUrls?.map((img: { url?: string | null }) => img.url).filter(Boolean) || []
       
@@ -69,10 +71,17 @@ export async function POST(request: NextRequest) {
       let resolvedType: PhotoType | null = null
       
       // Process all images in parallel using Promise.all
-      const enhancePromises = referenceUrls.map(async (imageUrl, i) => {
+      const enhancePromises = referenceUrls.map(async (rawImageUrl, i) => {
         console.log(`\n🖼️ Starting image ${i + 1}/${referenceUrls.length}...`)
         
+        // Safe cast since we filtered Boolean above
+        const safeRawUrl = rawImageUrl as string
+        
         try {
+          // 0. Ensure Public Image (Parallel inside the loop)
+          // This allows fast images to proceed immediately without waiting for slow ones
+          const imageUrl = await ensurePublicImage(safeRawUrl, jobId, baseUrl)
+          
           // 📝 Get template prompt (Gemini will detect photoType inside prompt API)
           console.log(`📝 Getting enhancement prompt for image ${i + 1}...`)
           
@@ -145,7 +154,7 @@ export async function POST(request: NextRequest) {
             return {
               url: typeof imageUrl === 'string' ? imageUrl : '',
               status: 'pending' as const,
-              originalUrl: typeof imageUrl === 'string' ? imageUrl : '',
+              originalUrl: typeof referenceUrls[i] === 'string' ? referenceUrls[i] : imageUrl, // Keep original Drive URL for reference if needed
               predictionId: null,
             }
           }
@@ -156,7 +165,7 @@ export async function POST(request: NextRequest) {
           return {
             url: '', // Will be filled after polling
             status: 'pending' as const,
-            originalUrl: typeof imageUrl === 'string' ? imageUrl : '',
+            originalUrl: typeof referenceUrls[i] === 'string' ? referenceUrls[i] : imageUrl,
             predictionId,
             imageIndex: i,
           }
@@ -164,9 +173,9 @@ export async function POST(request: NextRequest) {
         } catch (error) {
           console.error(`💥 Error starting enhancement for image ${i + 1}:`, error)
           return {
-            url: typeof imageUrl === 'string' ? imageUrl : '',
+            url: typeof safeRawUrl === 'string' ? safeRawUrl : '',
             status: 'pending' as const,
-            originalUrl: typeof imageUrl === 'string' ? imageUrl : '',
+            originalUrl: typeof referenceUrls[i] === 'string' ? referenceUrls[i] : safeRawUrl,
             predictionId: null,
           }
         }

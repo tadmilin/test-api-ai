@@ -30,7 +30,11 @@ export async function GET(request: NextRequest) {
     // Check each image that's still processing
     const updatedImages = await Promise.all(
       enhancedImages.map(async (img: any, index: number) => {
-        if (img.status === 'processing' && img.predictionId) {
+        // Check if image is processing (has predictionId but no URL yet)
+        // Note: status might be 'pending' or 'processing' or 'regenerating'
+        const isProcessing = (img.status === 'pending' || img.status === 'processing' || img.status === 'regenerating') && img.predictionId && !img.url
+        
+        if (isProcessing) {
           console.log(`📡 Polling prediction ${index + 1}: ${img.predictionId}`)
           // Poll the enhance status endpoint
           try {
@@ -42,23 +46,25 @@ export async function GET(request: NextRequest) {
               const data = await statusRes.json()
               console.log(`   Status: ${data.status}`)
               
-              if (data.status === 'succeeded' && data.imageUrl) {
-                console.log(`   ✅ Image ${index + 1} completed: ${data.imageUrl}`)
+              if (data.status === 'succeeded' && (data.imageUrl || data.output)) {
+                const finalUrl = data.imageUrl || (Array.isArray(data.output) ? data.output[0] : data.output)
+                console.log(`   ✅ Image ${index + 1} completed: ${finalUrl}`)
                 // Update image with completed URL
                 return {
                   ...img,
-                  url: data.imageUrl,
-                  status: 'pending', // Ready for review
+                  url: finalUrl,
+                  status: 'pending', // Ready for review (keep as pending until approved)
                 }
               }
               
-              if (data.status === 'failed') {
+              if (data.status === 'failed' || data.status === 'canceled') {
                 console.error(`   ❌ Image ${index + 1} failed`)
                 // Mark as failed, use original
                 return {
                   ...img,
                   url: img.originalUrl,
-                  status: 'pending',
+                  status: 'pending', // Fallback to original
+                  predictionId: null, // Clear prediction ID
                 }
               }
               
@@ -89,14 +95,19 @@ export async function GET(request: NextRequest) {
     
     // Count statuses
     const processing = updatedImages.filter((img: any) => 
-      img.status === 'processing'
+      (img.status === 'pending' || img.status === 'processing' || img.status === 'regenerating') && img.predictionId && !img.url
     ).length
     
     const completed = updatedImages.filter((img: any) => 
-      img.status === 'pending' && img.url && !img.url.includes('drive.google.com')
+      img.url && img.url.length > 0
     ).length
 
-    const allComplete = processing === 0 && completed === updatedImages.length
+    const failed = updatedImages.filter((img: any) => 
+      (!img.url || img.url.length === 0) && !img.predictionId
+    ).length
+
+    // We are done if nothing is processing (either completed or failed)
+    const allComplete = processing === 0
     
     // Update job status if all complete
     if (allComplete && job.status === 'enhancing') {
@@ -116,6 +127,7 @@ export async function GET(request: NextRequest) {
       total: updatedImages.length,
       processing,
       completed,
+      failed,
       allComplete,
       images: updatedImages,
     })

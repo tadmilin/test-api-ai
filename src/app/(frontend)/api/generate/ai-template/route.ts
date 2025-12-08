@@ -4,6 +4,7 @@ import { getTemplatePrompt, type TemplateType } from '@/utilities/templatePrompt
 import { getTemplateReference } from '@/utilities/getTemplateReference'
 import { getPayload } from 'payload'
 import config from '@payload-config'
+import { ensurePublicImage } from '@/utilities/imageProcessing'
 
 const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN!,
@@ -39,6 +40,15 @@ export async function POST(request: NextRequest) {
       finalImageUrls = imageUrls.slice(0, 3)
       console.log(`📸 Using ${finalImageUrls.length} images (no template ref)`)
     }
+
+    // Ensure all images are public (especially the template from Media)
+    const baseUrl = request.nextUrl.origin || process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
+    console.log('🚀 Ensuring all template images are public...')
+    
+    finalImageUrls = await Promise.all(
+      finalImageUrls.map(url => ensurePublicImage(url, jobId, baseUrl))
+    )
+    console.log('✅ All template images are public')
 
     const prompt = getTemplatePrompt(templateType as TemplateType)
     if (!prompt) {
