@@ -181,19 +181,6 @@ export const Jobs: CollectionConfig = {
               },
             },
             {
-              name: 'templateMode',
-              type: 'select',
-              label: 'Template Generation Mode',
-              defaultValue: 'satori',
-              options: [
-                { label: 'Consistent (Satori - Pixel Perfect)', value: 'satori' },
-                { label: 'Creative (AI - Dynamic & Unique)', value: 'ai' },
-              ],
-              admin: {
-                description: 'Satori = consistent layout, AI = creative dynamic design',
-              },
-            },
-            {
               name: 'enhancedImageUrls',
               type: 'array',
               label: 'Enhanced Images',
@@ -252,7 +239,6 @@ export const Jobs: CollectionConfig = {
               ],
               admin: {
                 description: 'Style for AI-generated template',
-                condition: (data: Record<string, unknown>) => data.templateMode === 'ai',
               },
             },
             {
@@ -262,87 +248,6 @@ export const Jobs: CollectionConfig = {
               admin: {
                 description: 'URL of the final generated template',
                 readOnly: true,
-              },
-            },
-            {
-              name: 'socialMediaFormat',
-              type: 'select',
-              label: 'Output Format',
-              defaultValue: 'facebook_post',
-              options: [
-                { label: 'Facebook Post (1200x630px)', value: 'facebook_post' },
-                { label: 'Instagram Feed (1080x1080px)', value: 'instagram_feed' },
-                { label: 'Instagram Story (1080x1920px)', value: 'instagram_story' },
-                { label: 'Custom 16:9 (1920x1080px)', value: 'custom_16_9' },
-                { label: 'Custom 4:3 (1600x1200px)', value: 'custom_4_3' },
-                { label: 'Custom 1:1 (1200x1200px)', value: 'custom_1_1' },
-              ],
-              admin: {
-                description: 'Target social media platform format (only for Graphic Design)',
-                condition: (data: Record<string, unknown>) => !data.useOverlayDesign,
-              },
-            },
-            {
-              name: 'useOverlayDesign',
-              type: 'checkbox',
-              label: 'Use Overlay Design',
-              defaultValue: false,
-              admin: {
-                description: 'Use NEW overlay system: Hero image + smaller overlays + graphic patterns',
-              },
-            },
-            {
-              name: 'overlayAspectRatio',
-              type: 'select',
-              label: 'Overlay Aspect Ratio',
-              defaultValue: '3:1',
-              options: [
-                { label: '3:1 (Wide - 1800x600px)', value: '3:1' },
-                { label: '2:1 (Standard - 1600x800px)', value: '2:1' },
-              ],
-              admin: {
-                description: 'Aspect ratio for overlay design',
-                condition: (data: Record<string, unknown>) => data.useOverlayDesign === true,
-              },
-            },
-            {
-              name: 'heroImageIndex',
-              type: 'number',
-              label: 'Hero Image Index',
-              defaultValue: 0,
-              admin: {
-                description: 'Which image to use as the main background (0 = first image, 1 = second, etc.)',
-                condition: (data: Record<string, unknown>) => data.useOverlayDesign === true,
-              },
-            },
-            {
-              name: 'overlayTheme',
-              type: 'select',
-              label: 'Overlay Theme',
-              defaultValue: 'modern',
-              options: [
-                { label: 'Modern', value: 'modern' },
-                { label: 'Luxury', value: 'luxury' },
-                { label: 'Resort', value: 'resort' },
-              ],
-              admin: {
-                description: 'Theme style for overlay design',
-                condition: (data: Record<string, unknown>) => data.useOverlayDesign === true,
-              },
-            },
-            {
-              name: 'graphicTheme',
-              type: 'select',
-              label: 'Graphic Theme',
-              defaultValue: 'modern',
-              options: [
-                { label: 'Modern', value: 'modern' },
-                { label: 'Luxury', value: 'luxury' },
-                { label: 'Minimal', value: 'minimal' },
-              ],
-              admin: {
-                description: 'Theme style for graphic design',
-                condition: (data: Record<string, unknown>) => !data.useOverlayDesign,
               },
             },
             {

@@ -405,9 +405,8 @@ export default function DashboardPage() {
           referenceImageIds: validImages.map((img) => ({ imageId: img.id })),
           referenceImageUrls: validImages.map((img) => ({ url: img.url })),
           
-          // Template settings (AI mode only)
+          // Template settings (AI mode)
           templateType: templateType,
-          templateMode: 'ai',
           templateStyle: templateStyle,
           
           status: 'pending',
@@ -848,7 +847,6 @@ export default function DashboardPage() {
                   <StyleSelector
                     value={templateStyle}
                     onChange={setTemplateStyle}
-                    mode="ai"
                   />
                 </div>
               )}
@@ -1010,7 +1008,6 @@ export default function DashboardPage() {
               <StyleSelector
                 value={templateStyle}
                 onChange={setTemplateStyle}
-                mode="ai"
               />
             </div>
 

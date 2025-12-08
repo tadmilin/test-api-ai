@@ -146,6 +146,7 @@ export async function POST(request: NextRequest) {
       input: {
         image_input: [processedImageUrl],  // Must be an array!
         prompt: prompt,
+        megapixels: '1', // 1K resolution (approximately 1024x1024)
         // Nano-Banana Pro: Up to 4K resolution, 14 reference images, Google Search grounding, Thinking mode
         // No strength, negative_prompt, steps, or guidance parameters
       },

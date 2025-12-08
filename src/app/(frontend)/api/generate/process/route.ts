@@ -29,16 +29,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get template settings
-    const templateMode = (typeof job.templateMode === 'string' ? job.templateMode : 'satori') as 'satori' | 'ai'
+    // Get template settings (AI mode only)
     const templateType = (typeof job.templateType === 'string' ? job.templateType : 'triple') as string
     const templateStyle = (typeof job.templateStyle === 'string' ? job.templateStyle : 'minimal') as string
 
-    console.log(`🎯 Template Mode: ${templateMode}`)
+    console.log(`🎯 Template Mode: AI (Nano-Banana Pro)`)
     console.log(`📐 Template Type: ${templateType}`)
-    if (templateMode === 'ai') {
-      console.log(`🎨 Template Style: ${templateStyle}`)
-    }
+    console.log(`🎨 Template Style: ${templateStyle}`)
 
     // Update job status to enhancing
     await payload.update({
@@ -55,7 +52,7 @@ export async function POST(request: NextRequest) {
       data: {
         jobId: jobId,
         level: 'info',
-        message: `Started processing job (Mode: ${templateMode})`,
+        message: 'Started processing job (Mode: AI - Nano-Banana Pro)',
         timestamp: new Date().toISOString(),
       },
     })

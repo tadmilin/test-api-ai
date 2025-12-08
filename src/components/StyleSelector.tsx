@@ -3,36 +3,29 @@
 interface StyleSelectorProps {
   value: 'minimal' | 'classic' | 'graphic'
   onChange: (value: 'minimal' | 'classic' | 'graphic') => void
-  mode: 'satori' | 'ai'
 }
 
-export default function StyleSelector({ value, onChange, mode }: StyleSelectorProps) {
+export default function StyleSelector({ value, onChange }: StyleSelectorProps) {
   const styles = [
     {
       value: 'minimal' as const,
       label: 'Minimal',
       emoji: '⬜',
-      description: mode === 'ai' 
-        ? 'Clean white background, thin borders, no decorations'
-        : 'White theme with simple borders',
+      description: 'Clean white background, thin borders, no decorations',
       colors: ['#ffffff', '#e5e5e5', '#f9fafb'],
     },
     {
       value: 'classic' as const,
       label: 'Classic',
       emoji: '👑',
-      description: mode === 'ai'
-        ? 'Luxury marble texture, gold accents, elegant corners'
-        : 'Gold and dark green luxury theme',
+      description: 'Luxury marble texture, gold accents, elegant corners',
       colors: ['#f5f1ea', '#d4af37', '#1C3823'],
     },
     {
       value: 'graphic' as const,
       label: 'Graphic',
       emoji: '🎨',
-      description: mode === 'ai'
-        ? 'Botanical elements, geometric shapes, creative layout'
-        : 'Light gray minimal theme',
+      description: 'Botanical elements, geometric shapes, creative layout',
       colors: ['#f8f6f3', '#a8d5ba', '#ffd6a5'],
     },
   ]
@@ -40,7 +33,7 @@ export default function StyleSelector({ value, onChange, mode }: StyleSelectorPr
   return (
     <div className="space-y-2">
       <label className="block text-sm font-medium text-gray-700">
-        Template Style {mode === 'ai' && <span className="text-purple-600">(AI Mode)</span>}
+        Template Style <span className="text-purple-600">(AI Generated)</span>
       </label>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {styles.map((style) => {

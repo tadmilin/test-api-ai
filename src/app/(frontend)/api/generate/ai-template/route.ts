@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
         image_input: imageUrls, // Multiple reference images
         prompt: prompt,
         aspect_ratio: '1:1', // Default, adjust based on templateType
+        megapixels: '1', // 1K resolution (approximately 1024x1024)
         output_format: 'png',
         output_quality: 95,
         num_outputs: 1,
