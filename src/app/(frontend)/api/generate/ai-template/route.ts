@@ -43,10 +43,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the appropriate prompt
-    const prompt = getTemplatePrompt(
-      templateType as TemplateType,
-      imageUrls
-    )
+    const prompt = getTemplatePrompt(templateType as TemplateType)
 
     console.log(`📝 Prompt length: ${prompt.length} characters`)
 

@@ -59,11 +59,9 @@ export async function POST(request: NextRequest) {
     }
 
     const templateType = job.templateType || 'triple'
-    const templateStyle = job.templateStyle || 'minimal'
 
     console.log(`🎨 Generating AI template:`)
     console.log(`  - Type: ${templateType}`)
-    console.log(`  - Style: ${templateStyle}`)
     console.log(`  - Images: ${approvedImages.length}`)
 
     // Update status
@@ -85,7 +83,6 @@ export async function POST(request: NextRequest) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         imageUrls: approvedImages,
-        templateStyle: templateStyle,
         templateType: templateType,
         jobId: jobId,
       }),
@@ -103,7 +100,7 @@ export async function POST(request: NextRequest) {
       data: {
         jobId: jobId,
         level: 'info',
-        message: `AI template generated (${templateStyle} style, ${templateType} layout)`,
+        message: `AI template generated (${templateType} layout)`,
         timestamp: new Date().toISOString(),
       },
     })
