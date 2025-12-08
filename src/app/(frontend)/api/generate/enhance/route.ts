@@ -34,7 +34,13 @@ export async function POST(request: NextRequest) {
     // ตรวจสอบว่าเป็น Google Drive URL หรือไม่
     let processedImageUrl = imageUrl
     
-    if (imageUrl.includes('drive.google.com')) {
+    // SKIP IMAGE PROCESSING IF NOT GOOGLE DRIVE
+    // ถ้าไม่ใช่ Google Drive URL ให้ใช้ URL เดิมส่งไป Replicate เลย (เพื่อความเร็ว)
+    // ยกเว้นว่า URL นั้น Replicate เข้าถึงไม่ได้ (เช่น localhost)
+    const isGoogleDrive = imageUrl.includes('drive.google.com')
+    const isLocalhost = imageUrl.includes('localhost') || imageUrl.includes('127.0.0.1')
+    
+    if (isGoogleDrive) {
       console.log('🔄 Detected Google Drive URL, downloading and uploading to Blob...')
       
       // Extract file ID from various Google Drive URL formats
@@ -116,19 +122,32 @@ export async function POST(request: NextRequest) {
       console.log('✅ Uploaded to Blob:', processedImageUrl)
       console.log('🔍 VERIFY Blob URL - Should contain Drive image content!')
       console.log('👉 Open this Blob URL:', processedImageUrl)
-    } else {
-      // ถ้าเป็น URL ปกติ (เช่น Blob URL) ดาวน์โหลดและตรวจสอบขนาด
-      console.log('📥 Downloading image from URL...')
-      const checkImageResponse = await fetch(imageUrl)
-      if (!checkImageResponse.ok) {
-        console.error('❌ FAILED to fetch image from:', imageUrl)
-        throw new Error('Failed to fetch image')
-      }
+    } else if (isLocalhost) {
+      // ถ้าเป็น Localhost ต้อง Upload ขึ้น Blob ก่อน เพราะ Replicate เข้าถึงไม่ได้
+      console.log('🏠 Detected Localhost URL, uploading to Blob for Replicate access...')
       
-      const checkImageBuffer = await checkImageResponse.arrayBuffer()
-      const imageSizeKB = checkImageBuffer.byteLength / 1024
-      console.log(`Image size: ${imageSizeKB.toFixed(2)} KB`)
-      console.log('✅ Image downloaded successfully')
+      const checkImageResponse = await fetch(imageUrl)
+      if (!checkImageResponse.ok) throw new Error('Failed to fetch local image')
+      
+      const imageBuffer = await checkImageResponse.arrayBuffer()
+      
+      // Upload to Vercel Blob
+      const timestamp = Date.now()
+      const sourceBlob = await put(`jobs/${jobId}/source-local-${timestamp}.png`, imageBuffer, {
+        access: 'public',
+        contentType: 'image/png',
+      })
+      
+      processedImageUrl = sourceBlob.url
+      console.log('✅ Uploaded Localhost image to Blob:', processedImageUrl)
+      
+    } else {
+      // ถ้าเป็น Public URL ปกติ (เช่น AWS S3, Cloudinary, หรือ Blob ที่มีอยู่แล้ว)
+      // ให้ข้ามขั้นตอน Download/Resize/Upload ไปเลย เพื่อความเร็วสูงสุด!
+      console.log('🚀 Public URL detected! Skipping image processing step for speed.')
+      console.log('⏩ Using original URL directly:', imageUrl)
+      
+      // Optional: Check if accessible (Head request) but skipping for speed
     }
 
     // Nano-Banana enhancement - conversational image editing

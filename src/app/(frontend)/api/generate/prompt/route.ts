@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getNanoBananaPrompt, detectPhotoTypeSimple, type PhotoType } from '@/utilities/nanoBananaPrompts'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { google } from 'googleapis'
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,21 +38,75 @@ export async function POST(request: NextRequest) {
         }
 
         const genAI = new GoogleGenerativeAI(apiKey)
-        // Using Gemini 2.0 Flash (Experimental) - latest vision model with better accuracy
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
+        // Use Gemini 1.5 Flash - stable, fast, and cost-effective
+        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
 
         // Download image and convert to base64
         const imageUrl = referenceImageUrls[0]
-        const imageResponse = await fetch(imageUrl)
-        if (!imageResponse.ok) {
-          throw new Error('Failed to fetch image')
+        let imageBuffer: Buffer
+
+        // Check if it's a Google Drive URL
+        if (imageUrl.includes('drive.google.com')) {
+          console.log('🔄 Detected Google Drive URL in Prompt API, downloading via API...')
+          
+          // Extract file ID
+          let fileId = null
+          if (imageUrl.includes('id=')) {
+            const match = imageUrl.match(/[?&]id=([^&]+)/)
+            fileId = match ? match[1] : null
+          } else if (imageUrl.includes('/file/d/')) {
+            const match = imageUrl.match(/\/file\/d\/([^/]+)/)
+            fileId = match ? match[1] : null
+          }
+          
+          if (!fileId) {
+            throw new Error('Could not extract file ID from Google Drive URL')
+          }
+
+          // Setup Google Drive API
+          const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
+          const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
+
+          if (serviceAccountEmail && privateKey) {
+            const auth = new google.auth.GoogleAuth({
+              credentials: {
+                client_email: serviceAccountEmail,
+                private_key: privateKey.replace(/\\n/gm, '\n').replace(/^"|"$/g, ''),
+              },
+              scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+            })
+
+            const drive = google.drive({ version: 'v3', auth })
+
+            // Download image from Google Drive
+            const response = await drive.files.get(
+              { fileId, alt: 'media', supportsAllDrives: true },
+              { responseType: 'arraybuffer' }
+            )
+            
+            imageBuffer = Buffer.from(response.data as ArrayBuffer)
+            console.log(`✅ Downloaded from Drive for Prompt: ${(imageBuffer.byteLength / 1024).toFixed(2)} KB`)
+          } else {
+            console.warn('⚠️ Google Service Account not configured, trying fetch fallback...')
+            const imageResponse = await fetch(imageUrl)
+            if (!imageResponse.ok) throw new Error('Failed to fetch image from Drive URL')
+            const arrayBuffer = await imageResponse.arrayBuffer()
+            imageBuffer = Buffer.from(arrayBuffer)
+          }
+        } else {
+          // Normal URL
+          const imageResponse = await fetch(imageUrl)
+          if (!imageResponse.ok) {
+            throw new Error('Failed to fetch image')
+          }
+          const arrayBuffer = await imageResponse.arrayBuffer()
+          imageBuffer = Buffer.from(arrayBuffer)
         }
 
-        const imageBuffer = await imageResponse.arrayBuffer()
-        const base64Image = Buffer.from(imageBuffer).toString('base64')
+        const base64Image = imageBuffer.toString('base64')
         
-        // Get image mime type
-        const contentType = imageResponse.headers.get('content-type') || 'image/jpeg'
+        // Get image mime type (default to jpeg if unknown)
+        const contentType = 'image/jpeg' // Simplified for base64 injection
 
         const result = await model.generateContent([
           {
