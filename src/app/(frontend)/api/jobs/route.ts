@@ -80,7 +80,6 @@ export async function POST(request: NextRequest) {
       referenceImageIds,
       referenceImageUrls,
       templateType,
-      templateStyle,
       status = 'pending',
     } = body
 
@@ -124,7 +123,6 @@ export async function POST(request: NextRequest) {
         referenceImageIds: referenceImageIds || [],
         referenceImageUrls: referenceImageUrls || [],
         templateType: templateType || 'triple',
-        templateStyle: templateStyle || 'minimal',
         status,
         createdBy: currentUser?.id || undefined,
       },
