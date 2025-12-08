@@ -5,8 +5,11 @@ import config from '@payload-config'
 // This endpoint is called AFTER user reviews and approves all images
 // It generates the final template using AI (Nano-Banana Pro)
 export async function POST(request: NextRequest) {
+  let jobId: string | null = null
+  
   try {
-    const { jobId } = await request.json()
+    const body = await request.json()
+    jobId = body.jobId
 
     if (!jobId) {
       return NextResponse.json({ error: 'jobId is required' }, { status: 400 })
@@ -143,7 +146,6 @@ export async function POST(request: NextRequest) {
     console.error('❌ Template generation error:', error)
 
     const payload = await getPayload({ config })
-    const { jobId } = await request.json()
     const errorMessage = error instanceof Error ? error.message : 'Template generation failed'
 
     if (jobId) {
