@@ -346,10 +346,10 @@ export default function DashboardPage() {
       if (exists) {
         return prev.filter(img => img && img.id !== image.id)
       } else {
-        // Limit based on template type
-        const maxImages = templateType === 'single' ? 1 : templateType === 'dual' ? 2 : templateType === 'triple' ? 3 : 4
-        if (prev.length >= maxImages) {
-          alert(`สามารถเลือกได้สูงสุด ${maxImages} รูปสำหรับ Template ${templateType}`)
+        // Allow maximum 4 images (not limited by templateType)
+        const MAX_IMAGES = 4
+        if (prev.length >= MAX_IMAGES) {
+          alert(`❌ สามารถเลือกได้สูงสุด ${MAX_IMAGES} รูปเท่านั้น`)
           return prev
         }
         return [...prev, image]
@@ -371,7 +371,7 @@ export default function DashboardPage() {
     // Validate template type matches selected images
     const requiredImages = templateType === 'single' ? 1 : templateType === 'dual' ? 2 : templateType === 'triple' ? 3 : 4
     if (selectedImages.length < requiredImages) {
-      alert(`❌ กรุณาเลือกรูปอย่างน้อย ${requiredImages} รูปสำหรับ Template ${templateType}`)
+      alert(`❌ Template "${templateType}" ต้องการรูปอย่างน้อย ${requiredImages} รูป\n\nคุณเลือกไว้: ${selectedImages.length} รูป\n\n💡 โปรดเลือกรูปเพิ่ม หรือเปลี่ยน Template Type ให้เหมาะสม`)
       return
     }
 
@@ -882,11 +882,17 @@ export default function DashboardPage() {
                       <div>
                         <h3 className="text-lg font-semibold text-gray-900">รูปอ้างอิง</h3>
                         <p className="text-sm text-gray-600 mt-1">
-                          คลิกรูปเพื่อเลือก/ยกเลิกสำหรับวิเคราะห์ด้วย AI
+                          คลิกรูปเพื่อเลือก/ยกเลิกสำหรับวิเคราะห์ด้วย AI (สูงสุด 4 รูป)
                         </p>
                       </div>
-                      <div className="bg-blue-100 text-blue-700 px-4 py-2 rounded-lg font-semibold">
-                        {selectedImages.length} เลือกแล้ว
+                      <div className={`px-4 py-2 rounded-lg font-semibold ${
+                        selectedImages.length === 4 
+                          ? 'bg-green-100 text-green-700' 
+                          : selectedImages.length > 0 
+                            ? 'bg-blue-100 text-blue-700' 
+                            : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        {selectedImages.length}/4 เลือกแล้ว
                       </div>
                     </div>
                     <div className="grid grid-cols-3 gap-4">
