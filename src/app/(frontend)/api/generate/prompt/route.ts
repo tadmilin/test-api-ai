@@ -27,15 +27,7 @@ export async function POST(request: NextRequest) {
       detectedPhotoType = photoTypeFromSheet as PhotoType
       console.log('📋 Using photoType from Sheet:', detectedPhotoType)
     }
-    // Priority 2: Use simple text-based detection from content description (MOST RELIABLE)
-    // Gemini Vision disabled temporarily due to API issues
-    else {
-      detectedPhotoType = detectPhotoTypeSimple('', contentDescription || contentTopic || '')
-      console.log('📝 Using simple text detection:', detectedPhotoType)
-    }
-    
-    /* GEMINI VISION DISABLED - API 404 errors
-    // Priority 2: Use Gemini Vision to analyze the image
+    // Priority 2: Use Gemini Vision to analyze the image (CRITICAL for multi-image detection)
     else if (referenceImageUrls && referenceImageUrls.length > 0) {
       try {
         console.log('🔍 Analyzing image with Gemini Vision to detect photoType...')
@@ -46,8 +38,8 @@ export async function POST(request: NextRequest) {
         }
 
         const genAI = new GoogleGenerativeAI(apiKey)
-        // Use Gemini 1.5 Flash - stable model for vision (official SDK model name)
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+        // Try gemini-1.5-flash-001 (versioned stable model)
+        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-001' })
 
         // Download image and convert to base64
         const imageUrl = referenceImageUrls[0]
@@ -182,14 +174,11 @@ Reply with ONLY the category name, nothing else.`,
         console.log('📝 Fallback to simple detection:', detectedPhotoType)
       }
     }
-    */
     // Priority 3: Use simple text-based detection from content description
-    /* DISABLED - already handled above
     else {
       detectedPhotoType = detectPhotoTypeSimple('', contentDescription || contentTopic || '')
       console.log('📝 Using simple text detection:', detectedPhotoType)
     }
-    */
 
     // Get template prompt for this photo type
     const prompt = getNanoBananaPrompt(detectedPhotoType)
