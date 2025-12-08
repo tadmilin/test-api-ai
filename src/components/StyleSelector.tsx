@@ -82,16 +82,14 @@ export default function StyleSelector({ value, onChange }: StyleSelectorProps) {
         })}
       </div>
 
-      {mode === 'ai' && (
-        <div className="mt-3 p-3 bg-purple-50 border border-purple-200 rounded-lg text-xs text-purple-700">
-          <div className="font-medium mb-1">🤖 AI will generate:</div>
-          <ul className="space-y-0.5">
-            <li>• Unique decorative elements for each style</li>
-            <li>• Dynamic layouts that never repeat</li>
-            <li>• Professional hotel advertisement aesthetic</li>
-          </ul>
-        </div>
-      )}
+      <div className="mt-3 p-3 bg-purple-50 border border-purple-200 rounded-lg text-xs text-purple-700">
+        <div className="font-medium mb-1">🤖 AI will generate:</div>
+        <ul className="space-y-0.5">
+          <li>• Unique decorative elements for each style</li>
+          <li>• Dynamic layouts that never repeat</li>
+          <li>• Professional hotel advertisement aesthetic</li>
+        </ul>
+      </div>
     </div>
   )
 }
