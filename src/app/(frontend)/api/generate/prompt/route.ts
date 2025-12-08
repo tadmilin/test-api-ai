@@ -95,15 +95,21 @@ export async function POST(request: NextRequest) {
           }
         } else {
           // Normal URL
+          console.log('🌐 Fetching image from URL:', imageUrl.substring(0, 100) + '...')
           const imageResponse = await fetch(imageUrl)
+          console.log('📥 Fetch response status:', imageResponse.status, imageResponse.statusText)
+          
           if (!imageResponse.ok) {
-            throw new Error('Failed to fetch image')
+            throw new Error(`Failed to fetch image: ${imageResponse.status} ${imageResponse.statusText}`)
           }
           const arrayBuffer = await imageResponse.arrayBuffer()
           imageBuffer = Buffer.from(arrayBuffer)
+          console.log(`✅ Downloaded from URL: ${(imageBuffer.byteLength / 1024).toFixed(2)} KB`)
         }
 
         const base64Image = imageBuffer.toString('base64')
+        const base64Length = base64Image.length
+        console.log(`📊 Base64 length: ${base64Length.toLocaleString()} chars (${(base64Length / 1024).toFixed(2)} KB)`)
         
         // Detect actual mime type from buffer
         let mimeType = 'image/jpeg' // default
@@ -113,19 +119,23 @@ export async function POST(request: NextRequest) {
         else if (header.startsWith('52494646')) mimeType = 'image/webp'
         else if (header.startsWith('ffd8ff')) mimeType = 'image/jpeg'
         
-        console.log(`📸 Detected image type: ${mimeType}`)
+        console.log(`📸 Detected image type: ${mimeType} (header: ${header})`)
 
-        const result = await model.generateContent([
-          {
-            inlineData: {
-              mimeType: mimeType,
-              data: base64Image, // Already clean base64 without data URI prefix
-            },
-          },
-          {
-            text: `Analyze this hotel/resort image and classify it into ONE of these categories:
+        console.log('🤖 Calling Gemini Vision API via REST...')
+        
+        // Use REST API directly - SDK has compatibility issues
+        const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`
+        
+        const geminiResponse = await fetch(geminiApiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { inlineData: { mimeType, data: base64Image } },
+                { text: `Analyze this hotel/resort image and classify it into ONE of these categories:
 - bedroom (ห้องนอน/ห้องพัก)
-- bathroom (ห้องน้ำ)
+- bathroom (ห้องน้ำ)  
 - dining_room (ห้องอาหาร)
 - buffet (บุฟเฟต์)
 - food_closeup (อาหาร close-up)
@@ -144,11 +154,22 @@ export async function POST(request: NextRequest) {
 - jungle_resort (รีสอร์ทป่า)
 - generic (อื่นๆ)
 
-Reply with ONLY the category name, nothing else.`,
-          },
-        ])
+Reply with ONLY the category name, nothing else.` }
+              ]
+            }]
+          })
+        })
 
-        const responseText = result.response.text().trim().toLowerCase().replace(/[^a-z_]/g, '')
+        if (!geminiResponse.ok) {
+          const errorText = await geminiResponse.text()
+          throw new Error(`Gemini API ${geminiResponse.status}: ${errorText}`)
+        }
+
+        const result = await geminiResponse.json()
+        console.log('✅ Gemini API call successful')
+        
+        const responseText = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim().toLowerCase().replace(/[^a-z_]/g, '') || ''
+        console.log('📝 Gemini response:', responseText)
         
         const validCategories: PhotoType[] = [
           'bedroom', 'bathroom', 'dining_room', 'buffet', 'food_closeup',
