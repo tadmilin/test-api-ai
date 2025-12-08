@@ -38,9 +38,8 @@ export async function POST(request: NextRequest) {
         }
 
         const genAI = new GoogleGenerativeAI(apiKey)
-        // Use Gemini 1.5 Flash - stable, fast, and cost-effective
-        // Note: Using 'gemini-1.5-flash-latest' to avoid version issues
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' })
+        // Use Gemini 2.0 Flash (Experimental) for vision - stable model name
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
 
         // Download image and convert to base64
         const imageUrl = referenceImageUrls[0]
@@ -106,14 +105,21 @@ export async function POST(request: NextRequest) {
 
         const base64Image = imageBuffer.toString('base64')
         
-        // Get image mime type (default to jpeg if unknown)
-        const contentType = 'image/jpeg' // Simplified for base64 injection
+        // Detect actual mime type from buffer
+        let mimeType = 'image/jpeg' // default
+        const header = imageBuffer.toString('hex', 0, 4)
+        if (header.startsWith('89504e47')) mimeType = 'image/png'
+        else if (header.startsWith('47494638')) mimeType = 'image/gif'
+        else if (header.startsWith('52494646')) mimeType = 'image/webp'
+        else if (header.startsWith('ffd8ff')) mimeType = 'image/jpeg'
+        
+        console.log(`📸 Detected image type: ${mimeType}`)
 
         const result = await model.generateContent([
           {
             inlineData: {
-              mimeType: contentType,
-              data: base64Image,
+              mimeType: mimeType,
+              data: base64Image, // Already clean base64 without data URI prefix
             },
           },
           {

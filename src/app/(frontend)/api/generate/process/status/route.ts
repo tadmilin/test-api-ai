@@ -57,8 +57,8 @@ export async function GET(request: NextRequest) {
                 }
               }
               
-              if (data.status === 'failed' || data.status === 'canceled') {
-                console.error(`   ❌ Image ${index + 1} failed`)
+              if (data.status === 'failed' || data.status === 'canceled' || data.status === 'error') {
+                console.error(`   ❌ Image ${index + 1} ${data.status}:`, data.error || 'Unknown error')
                 // Mark as failed, use original
                 return {
                   ...img,
@@ -71,6 +71,13 @@ export async function GET(request: NextRequest) {
               console.log(`   ⏳ Image ${index + 1} still ${data.status}`)
             } else {
               console.error(`   ❌ Failed to poll: ${statusRes.status}`)
+              // If API error, try to parse error message
+              try {
+                const errorData = await statusRes.json()
+                console.error(`   Error details:`, errorData)
+              } catch (e) {
+                // Ignore parse error
+              }
             }
           } catch (pollError) {
             console.error(`   💥 Poll error:`, pollError)

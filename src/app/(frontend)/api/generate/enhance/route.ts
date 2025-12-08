@@ -211,8 +211,20 @@ export async function GET(request: NextRequest) {
 
     console.log(`🔍 Checking enhancement: ${predictionId}`)
 
-    const prediction = await replicate.predictions.get(predictionId)
-    console.log(`Status: ${prediction.status}`)
+    let prediction
+    try {
+      prediction = await replicate.predictions.get(predictionId)
+      console.log(`Status: ${prediction.status}`)
+    } catch (replicateError) {
+      console.error('❌ Replicate API error:', replicateError)
+      // Return a special status so client can retry
+      return NextResponse.json({
+        success: false,
+        status: 'error',
+        error: replicateError instanceof Error ? replicateError.message : 'Failed to check prediction status',
+        predictionId,
+      }, { status: 500 })
+    }
 
     if (prediction.status === 'succeeded' && prediction.output) {
       const enhancedImageUrl = Array.isArray(prediction.output)
