@@ -189,7 +189,7 @@ export async function POST(request: NextRequest) {
       // Store prediction IDs in the job for client-side polling
       const enhancedImageUrls = predictionResults.map(result => ({
         url: '', // Will be filled after client polls
-        status: 'pending' as const,
+        status: 'pending' as const, // Valid status for schema (will be updated when complete)
         originalUrl: result.originalUrl,
         predictionId: result.predictionId,
       }))

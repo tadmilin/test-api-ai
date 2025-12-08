@@ -228,12 +228,17 @@ export async function GET(request: NextRequest) {
           const job = await payload.findByID({ collection: 'jobs', id: jobId })
           
           // Check if this prediction already has a Blob URL cached
+          // Must check: 1) same predictionId, 2) has url, 3) url is Blob storage, 4) status is 'pending' (processed)
           const cachedImage = job.enhancedImageUrls?.find(
-            (img: any) => img.predictionId === predictionId && img.url && img.url.includes('blob.vercel-storage.com')
+            (img: any) => 
+              img.predictionId === predictionId && 
+              img.url && 
+              img.url.includes('blob.vercel-storage.com') &&
+              img.status === 'pending'  // Must be processed, not 'processing'
           )
           
-          if (cachedImage) {
-            console.log(`💾 Using cached Blob URL (skip download/upload)`)
+          if (cachedImage?.url) {
+            console.log(`💾 Using cached Blob URL: ${cachedImage.url}`)
             return NextResponse.json({
               success: true,
               status: 'succeeded',
@@ -243,8 +248,10 @@ export async function GET(request: NextRequest) {
               cached: true,
             })
           }
+          
+          console.log('🔍 No cache found, proceeding with download...')
         } catch (cacheError) {
-          console.log('⚠️ Cache check failed, proceeding with download...')
+          console.log('⚠️ Cache check failed, proceeding with download...', cacheError)
         }
       }
 
