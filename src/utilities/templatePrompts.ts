@@ -9,77 +9,41 @@ interface TemplatePromptConfig {
 
 export const templatePrompts: TemplatePromptConfig = {
   minimal: {
-    single: `Create a hotel advertisement template with 1 photo:
+    single: `เอารูปนี้มาทำคอลลาจโฆษณารีสอร์ต/โรงแรม
+สไตล์ Canva photo collage แบบ scrapbook เหมือนรูปโพลารอยด์ติดเทปกาว
+ใช้พื้นหลังสีครีมกับฟ้าอ่อน เนื้อกระดาษนิด ๆ
+ให้รูปทั้งสามใบเหมือนรูปโพลารอยด์ มีขอบขาว และหมุนเอียงคนละมุม
+เพิ่มลูกเล่นพวกเทปกาว กระดาษแปะ รูปทรงกระดาษเหลี่ยม ๆ และจุดฮาล์ฟโทนเล็กน้อย
+(ถ้าอยากได้ดอกไม้เล็ก ๆ มุมนิดหน่อยก็ได้)
+ให้เห็นทั้งสามรูปชัดเจน ใช้รูปแต่ละใบแค่ 1 ครั้ง
+ห้ามใส่ตัวหนังสือ โลโก้ หรือไอคอนสไตล์ scrapbook กระดาษฉีก มีพื้นผิวผ้าลินินและลายเส้น doodle เบา ๆ ดูอบอุ่นเป็นกันเอง`,
 
-Layout:
-- 1 large photo centered (90% of canvas)
-- White background (#ffffff)
-- Thin gray border (2px, #e5e5e5)
-- Equal padding 20px on all sides
-- NO text, NO words, NO letters, NO decorative elements
-- Clean, modern, minimalist style
-- Maintain photo quality and sharpness
+    dual: `เอารูป 2 รูปนี้มาทำคอลลาจโฆษณารีสอร์ต/โรงแรม
+สไตล์ Canva photo collage แบบ scrapbook เหมือนรูปโพลารอยด์ติดเทปกาว
+ใช้พื้นหลังสีครีมกับฟ้าอ่อน เนื้อกระดาษนิด ๆ
+ให้รูปทั้งสามใบเหมือนรูปโพลารอยด์ มีขอบขาว และหมุนเอียงคนละมุม
+เพิ่มลูกเล่นพวกเทปกาว กระดาษแปะ รูปทรงกระดาษเหลี่ยม ๆ และจุดฮาล์ฟโทนเล็กน้อย
+(ถ้าอยากได้ดอกไม้เล็ก ๆ มุมนิดหน่อยก็ได้)
+ให้เห็นทั้งสามรูปชัดเจน ใช้รูปแต่ละใบแค่ 1 ครั้ง
+ห้ามใส่ตัวหนังสือ โลโก้ หรือไอคอนสไตล์ scrapbook กระดาษฉีก มีพื้นผิวผ้าลินินและลายเส้น doodle เบา ๆ ดูอบอุ่นเป็นกันเอง`,
 
-Requirements:
-- Photo must be sharp and clear
-- Border must be consistent
-- Keep original photo colors
-- Professional hotel advertisement look
-- NO overlapping elements`,
+    triple: `เอารูป 3 รูปนี้มาทำคอลลาจโฆษณารีสอร์ต/โรงแรม
+สไตล์ Canva photo collage แบบ scrapbook เหมือนรูปโพลารอยด์ติดเทปกาว
+ใช้พื้นหลังสีครีมกับฟ้าอ่อน เนื้อกระดาษนิด ๆ
+ให้รูปทั้งสามใบเหมือนรูปโพลารอยด์ มีขอบขาว และหมุนเอียงคนละมุม
+เพิ่มลูกเล่นพวกเทปกาว กระดาษแปะ รูปทรงกระดาษเหลี่ยม ๆ และจุดฮาล์ฟโทนเล็กน้อย
+(ถ้าอยากได้ดอกไม้เล็ก ๆ มุมนิดหน่อยก็ได้)
+ให้เห็นทั้งสามรูปชัดเจน ใช้รูปแต่ละใบแค่ 1 ครั้ง
+ห้ามใส่ตัวหนังสือ โลโก้ หรือไอคอนสไตล์ scrapbook กระดาษฉีก มีพื้นผิวผ้าลินินและลายเส้น doodle เบา ๆ ดูอบอุ่นเป็นกันเอง`,
 
-    dual: `Create a hotel advertisement template with 2 photos:
-
-Layout:
-- 2 photos side by side (50% each)
-- White background (#ffffff)
-- Thin gray borders (2px, #e5e5e5) around each photo
-- 20px gap between photos
-- Equal padding 20px on all sides
-- NO text, NO words, NO letters, NO decorative elements
-- Clean, modern, minimalist style
-
-Requirements:
-- Photos must NOT overlap
-- Spacing must be exactly equal
-- Border thickness must be equal
-- Keep original photo colors
-- Professional hotel advertisement look`,
-
-    triple: `Create a hotel advertisement template with 3 photos:
-
-Layout:
-- Hero grid: 1 large photo left (60% width), 2 stacked photos right (40% width)
-- White background (#ffffff)
-- Thin gray borders (2px, #e5e5e5) around each photo
-- 20px gap between all photos
-- Equal padding 20px on all sides
-- NO text, NO words, NO letters, NO decorative elements
-- Clean, modern, minimalist style
-
-Requirements:
-- Photos must NOT overlap
-- Spacing must be exactly equal (20px everywhere)
-- All borders must be same thickness
-- Keep original photo colors and quality
-- Professional hotel advertisement look`,
-
-    quad: `Create a hotel advertisement template with 4 photos:
-
-Layout:
-- 2x2 grid layout (equal sized photos)
-- White background (#ffffff)
-- Thin gray borders (2px, #e5e5e5) around each photo
-- 20px gap between all photos
-- Equal padding 20px on all sides
-- NO text, NO words, NO letters, NO decorative elements
-- Clean, modern, minimalist style
-
-Requirements:
-- Perfect grid alignment
-- All photos same size
-- Photos must NOT overlap
-- Equal spacing everywhere (20px)
-- Professional hotel advertisement look`,
+    quad: `เอารูป 4 รูปนี้มาทำคอลลาจโฆษณารีสอร์ต/โรงแรม
+สไตล์ Canva photo collage แบบ scrapbook เหมือนรูปโพลารอยด์ติดเทปกาว
+ใช้พื้นหลังสีครีมกับฟ้าอ่อน เนื้อกระดาษนิด ๆ
+ให้รูปทั้งสามใบเหมือนรูปโพลารอยด์ มีขอบขาว และหมุนเอียงคนละมุม
+เพิ่มลูกเล่นพวกเทปกาว กระดาษแปะ รูปทรงกระดาษเหลี่ยม ๆ และจุดฮาล์ฟโทนเล็กน้อย
+(ถ้าอยากได้ดอกไม้เล็ก ๆ มุมนิดหน่อยก็ได้)
+ให้เห็นทั้งสามรูปชัดเจน ใช้รูปแต่ละใบแค่ 1 ครั้ง
+ห้ามใส่ตัวหนังสือ โลโก้ หรือไอคอนสไตล์ scrapbook กระดาษฉีก มีพื้นผิวผ้าลินินและลายเส้น doodle เบา ๆ ดูอบอุ่นเป็นกันเอง`,
   },
 
   classic: {
