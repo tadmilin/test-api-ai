@@ -37,7 +37,22 @@ export async function getTemplateReference(
     console.log(`   Type: ${type}`)
     console.log(`   Total available: ${templates.docs.length}`)
 
-    return selectedTemplate.url || null
+    // Convert relative URL to absolute URL
+    const relativeUrl = selectedTemplate.url
+    if (!relativeUrl) return null
+    
+    // If already absolute URL, return as-is
+    if (relativeUrl.startsWith('http://') || relativeUrl.startsWith('https://')) {
+      return relativeUrl
+    }
+    
+    // Convert to absolute URL
+    const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
+    const absoluteUrl = `${baseUrl}${relativeUrl.startsWith('/') ? relativeUrl : '/' + relativeUrl}`
+    
+    console.log(`   URL: ${absoluteUrl}`)
+    
+    return absoluteUrl
   } catch (error) {
     console.error('Error getting template reference:', error)
     return null
