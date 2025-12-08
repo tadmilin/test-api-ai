@@ -31,11 +31,9 @@ export async function POST(request: NextRequest) {
 
     // Get template settings (AI mode only)
     const templateType = (typeof job.templateType === 'string' ? job.templateType : 'triple') as string
-    const templateStyle = (typeof job.templateStyle === 'string' ? job.templateStyle : 'minimal') as string
 
     console.log(`🎯 Template Mode: AI (Nano-Banana Pro)`)
     console.log(`📐 Template Type: ${templateType}`)
-    console.log(`🎨 Template Style: ${templateStyle}`)
 
     // Update job status to enhancing
     await payload.update({

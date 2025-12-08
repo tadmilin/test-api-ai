@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Replicate from 'replicate'
 import { put } from '@vercel/blob'
-import { getTemplatePrompt, type TemplateStyle, type TemplateType } from '@/utilities/templatePrompts'
+import { getTemplatePrompt, type TemplateType } from '@/utilities/templatePrompts'
+import { getTemplateReference } from '@/utilities/getTemplateReference'
 
 const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN!,
@@ -9,18 +10,11 @@ const replicate = new Replicate({
 
 export async function POST(request: NextRequest) {
   try {
-    const { imageUrls, templateStyle, templateType, jobId } = await request.json()
+    const { imageUrls, templateType, jobId } = await request.json()
 
     if (!imageUrls || !Array.isArray(imageUrls) || imageUrls.length === 0) {
       return NextResponse.json(
         { error: 'imageUrls array is required' },
-        { status: 400 }
-      )
-    }
-
-    if (!templateStyle) {
-      return NextResponse.json(
-        { error: 'templateStyle is required (minimal, classic, or graphic)' },
         { status: 400 }
       )
     }
@@ -34,12 +28,22 @@ export async function POST(request: NextRequest) {
 
     console.log(`🎨 Generating AI template:`)
     console.log(`  - Type: ${templateType} (${imageUrls.length} images)`)
-    console.log(`  - Style: ${templateStyle}`)
     console.log(`  - Job ID: ${jobId}`)
+
+    // Get random template reference for this type
+    const templateRef = await getTemplateReference(templateType as TemplateType)
+    
+    // Prepare image array - template reference first if available
+    const finalImageUrls = templateRef ? [templateRef, ...imageUrls] : imageUrls
+    
+    if (templateRef) {
+      console.log(`📐 Using template reference: ${templateRef}`)
+    } else {
+      console.log(`⚠️ No template reference found, using images only`)
+    }
 
     // Get the appropriate prompt
     const prompt = getTemplatePrompt(
-      templateStyle as TemplateStyle,
       templateType as TemplateType,
       imageUrls
     )
@@ -52,7 +56,7 @@ export async function POST(request: NextRequest) {
     const prediction = await replicate.predictions.create({
       model: 'google/nano-banana-pro',
       input: {
-        image_input: imageUrls, // Multiple reference images
+        image_input: finalImageUrls, // Template reference + user images
         prompt: prompt,
         aspect_ratio: '1:1', // Default, adjust based on templateType
         megapixels: '1', // 1K resolution (approximately 1024x1024)
@@ -84,7 +88,7 @@ export async function POST(request: NextRequest) {
     const timestamp = Date.now()
     
     const blob = await put(
-      `templates/ai-${templateStyle}-${templateType}-${timestamp}.png`,
+      `templates/ai-${templateType}-${timestamp}.png`,
       imageBuffer,
       {
         access: 'public',
@@ -98,8 +102,8 @@ export async function POST(request: NextRequest) {
       success: true,
       templateUrl: blob.url,
       originalUrl: templateUrl,
-      style: templateStyle,
       type: templateType,
+      usedTemplateRef: !!templateRef,
       predictionId: result.id,
     })
 

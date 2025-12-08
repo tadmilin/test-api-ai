@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import TemplateTypeSelector from '@/components/TemplateTypeSelector'
-import StyleSelector from '@/components/StyleSelector'
 
 interface CurrentUser {
   id: string
@@ -101,7 +100,6 @@ export default function DashboardPage() {
   
   // Template Settings (AI mode only)
   const [templateType, setTemplateType] = useState<'single' | 'dual' | 'triple' | 'quad'>('triple')
-  const [templateStyle, setTemplateStyle] = useState<'minimal' | 'classic' | 'graphic'>('minimal')
   
   // Review & Finalize States
   const [currentJobId, setCurrentJobId] = useState<string | null>(null)
@@ -384,7 +382,7 @@ export default function DashboardPage() {
 
     console.log('🚀 Starting job creation...')
     console.log('📊 Valid images:', validImages.length)
-    console.log('📐 Template:', templateType, '|', templateStyle)
+    console.log('📐 Template:', templateType)
 
     setCreating(true)
     setReviewMode(false)
@@ -407,7 +405,6 @@ export default function DashboardPage() {
           
           // Template settings (AI mode)
           templateType: templateType,
-          templateStyle: templateStyle,
           
           status: 'pending',
         }),
@@ -842,12 +839,6 @@ export default function DashboardPage() {
                     onChange={setTemplateType}
                     maxImages={selectedImages.length}
                   />
-
-                  {/* Style Selector */}
-                  <StyleSelector
-                    value={templateStyle}
-                    onChange={setTemplateStyle}
-                  />
                 </div>
               )}
 
@@ -1003,12 +994,6 @@ export default function DashboardPage() {
                   maxImages={enhancedImages.length}
                 />
               </div>
-
-              {/* Style Selector */}
-              <StyleSelector
-                value={templateStyle}
-                onChange={setTemplateStyle}
-              />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1097,7 +1082,7 @@ export default function DashboardPage() {
               <div>
                 <h2 className="text-2xl font-bold text-green-900">🎉 Template สร้างเสร็จแล้ว!</h2>
                 <p className="text-green-700 mt-1">
-                  Type: {templateType} | Style: {templateStyle}
+                  Type: {templateType}
                 </p>
               </div>
               <button

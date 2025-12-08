@@ -297,6 +297,14 @@ export interface Media {
     };
     [k: string]: unknown;
   } | null;
+  /**
+   * Mark this image as a template reference for AI generation
+   */
+  isTemplate?: boolean | null;
+  /**
+   * How many images this template is designed for
+   */
+  templateType?: ('single' | 'dual' | 'triple' | 'quad') | null;
   folder?: (string | null) | FolderInterface;
   updatedAt: string;
   createdAt: string;
@@ -871,10 +879,6 @@ export interface Job {
    */
   styleSelected?: boolean | null;
   /**
-   * Style for AI-generated template
-   */
-  templateStyle?: ('minimal' | 'classic' | 'graphic') | null;
-  /**
    * URL of the final generated template
    */
   finalImageUrl?: string | null;
@@ -1414,6 +1418,8 @@ export interface PostsSelect<T extends boolean = true> {
 export interface MediaSelect<T extends boolean = true> {
   alt?: T;
   caption?: T;
+  isTemplate?: T;
+  templateType?: T;
   folder?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -1585,7 +1591,6 @@ export interface JobsSelect<T extends boolean = true> {
       };
   reviewCompleted?: T;
   styleSelected?: T;
-  templateStyle?: T;
   finalImageUrl?: T;
   enhancementStrength?: T;
   generatedPrompt?: T;

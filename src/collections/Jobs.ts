@@ -229,19 +229,6 @@ export const Jobs: CollectionConfig = {
               },
             },
             {
-              name: 'templateStyle',
-              type: 'select',
-              label: 'Template Style (AI Mode)',
-              options: [
-                { label: 'Minimal (Clean & Simple)', value: 'minimal' },
-                { label: 'Classic (Elegant & Luxury)', value: 'classic' },
-                { label: 'Graphic (Creative & Artistic)', value: 'graphic' },
-              ],
-              admin: {
-                description: 'Style for AI-generated template',
-              },
-            },
-            {
               name: 'finalImageUrl',
               type: 'text',
               label: 'Final Template URL',
