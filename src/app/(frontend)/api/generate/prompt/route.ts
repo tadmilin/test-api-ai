@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { GoogleGenerativeAI } from '@google/generative-ai'
-import { google } from 'googleapis'
 import { getNanoBananaPrompt, detectPhotoTypeSimple, type PhotoType } from '@/utilities/nanoBananaPrompts'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,18 +19,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const apiKey = process.env.GOOGLE_AI_API_KEY
-
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: 'Google AI API key not configured' },
-        { status: 500 }
-      )
-    }
-
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
-
     let detectedPhotoType: PhotoType = 'generic'
     
     // Priority 1: Use photoType from Google Sheet if provided
@@ -39,129 +26,73 @@ export async function POST(request: NextRequest) {
       detectedPhotoType = photoTypeFromSheet as PhotoType
       console.log('📋 Using photoType from Sheet:', detectedPhotoType)
     }
-    // Priority 2: Analyze image with Gemini Vision if available (skip if quota exceeded)
+    // Priority 2: Use Gemini Vision to analyze the image
     else if (referenceImageUrls && referenceImageUrls.length > 0) {
       try {
         console.log('🔍 Analyzing image with Gemini Vision to detect photoType...')
         
-        // Download first image from Google Drive
-        const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
-        const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
-
-        if (!serviceAccountEmail || !privateKey) {
-          return NextResponse.json(
-            { error: 'Google Service Account credentials not configured' },
-            { status: 500 }
-          )
+        const apiKey = process.env.GOOGLE_GEMINI_API_KEY
+        if (!apiKey) {
+          throw new Error('GOOGLE_GEMINI_API_KEY not configured')
         }
 
-        const auth = new google.auth.GoogleAuth({
-          credentials: {
-            client_email: serviceAccountEmail,
-            private_key: privateKey.replace(/\\n/gm, '\n').replace(/^"|"$/g, ''),
-          },
-          scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-        })
+        const genAI = new GoogleGenerativeAI(apiKey)
+        // Using Gemini 2.0 Flash (Experimental) - latest vision model with better accuracy
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
 
-        const drive = google.drive({ version: 'v3', auth })
+        // Download image and convert to base64
+        const imageUrl = referenceImageUrls[0]
+        const imageResponse = await fetch(imageUrl)
+        if (!imageResponse.ok) {
+          throw new Error('Failed to fetch image')
+        }
 
-        // Extract file ID from first URL
-        const firstUrl = referenceImageUrls[0]
-        let fileId = null
+        const imageBuffer = await imageResponse.arrayBuffer()
+        const base64Image = Buffer.from(imageBuffer).toString('base64')
         
-        if (firstUrl.includes('id=')) {
-          const match = firstUrl.match(/[?&]id=([^&]+)/)
-          fileId = match ? match[1] : null
-        } else if (firstUrl.includes('/file/d/')) {
-          const match = firstUrl.match(/\/file\/d\/([^/]+)/)
-          fileId = match ? match[1] : null
-        }
-        
-        if (!fileId) {
-          throw new Error('Could not extract file ID from Google Drive URL')
-        }
-
-        // Get file metadata
-        const metadata = await drive.files.get({
-          fileId,
-          fields: 'mimeType',
-          supportsAllDrives: true,
-        })
-
-        const mimeType = metadata.data.mimeType || 'image/jpeg'
-
-        // Download file
-        const response = await drive.files.get(
-          { fileId, alt: 'media', supportsAllDrives: true },
-          { responseType: 'arraybuffer' }
-        )
-
-        const buffer = Buffer.from(response.data as ArrayBuffer)
-        const base64 = buffer.toString('base64')
-
-        // Analyze with Gemini Vision
-        const analysisPrompt = `You are an expert at analyzing hotel and resort photos. 
-
-Analyze this image and classify it into ONE of these specific categories:
-
-**Room Types:**
-- bedroom: Hotel/resort bedrooms, sleeping areas
-- bathroom: Bathrooms, toilets, shower areas
-- lobby: Hotel lobbies, reception areas
-- meeting_room: Conference rooms, meeting spaces
-
-**Dining & Food:**
-- buffet: Buffet lines, food stations with multiple dishes displayed
-- food_closeup: Close-up photos of individual dishes or plated food
-- dining_room: Restaurant dining areas, eating spaces (but NOT buffet lines)
-
-**Facilities:**
-- pool: Swimming pools, pool areas
-- gym: Fitness centers, exercise areas
-- spa: Spa facilities, massage rooms
-
-**Exterior & Common:**
-- entrance: Building entrances, doorways
-- building_exterior: Outside views of buildings
-- corridor: Hallways, walkways
-- balcony: Balconies, terraces
-
-**Nature & Scenery:**
-- nature_garden: Gardens, landscaping
-- beach_resort: Beach and seaside settings
-- mountain_resort: Mountain and hillside settings
-- jungle_resort: Forest and jungle settings
-
-**Fallback:**
-- generic: If none of the above fit clearly
-
-IMPORTANT RULES:
-1. Focus on the PRIMARY subject/setting of the photo
-2. Ignore decorative elements (e.g., fruit on a table in a bedroom is still a "bedroom")
-3. If there's food SERVING/DISPLAY (buffet line), it's "buffet"
-4. If there's a SINGLE DISH close-up, it's "food_closeup"
-5. If there's a DINING SPACE (tables, chairs) but no buffet line and no food closeup, it's "dining_room"
-
-Return ONLY the category name in lowercase, nothing else.`
+        // Get image mime type
+        const contentType = imageResponse.headers.get('content-type') || 'image/jpeg'
 
         const result = await model.generateContent([
-          { text: analysisPrompt },
           {
             inlineData: {
-              mimeType: mimeType as string,
-              data: base64
-            }
-          }
+              mimeType: contentType,
+              data: base64Image,
+            },
+          },
+          {
+            text: `Analyze this hotel/resort image and classify it into ONE of these categories:
+- bedroom (ห้องนอน/ห้องพัก)
+- bathroom (ห้องน้ำ)
+- dining_room (ห้องอาหาร)
+- buffet (บุฟเฟต์)
+- food_closeup (อาหาร close-up)
+- lobby (ล็อบบี้)
+- pool (สระว่ายน้ำ)
+- gym (ฟิตเนส)
+- spa (สปา)
+- meeting_room (ห้องประชุม)
+- corridor (ทางเดิน)
+- balcony (ระเบียง)
+- entrance (ทางเข้า)
+- building_exterior (ภายนอกอาคาร)
+- nature_garden (สวน/ธรรมชาติ)
+- beach_resort (รีสอร์ทชายหาด)
+- mountain_resort (รีสอร์ทภูเขา)
+- jungle_resort (รีสอร์ทป่า)
+- generic (อื่นๆ)
+
+Reply with ONLY the category name, nothing else.`,
+          },
         ])
 
-        const responseText = result.response.text().trim().toLowerCase()
+        const responseText = result.response.text().trim().toLowerCase().replace(/[^a-z_]/g, '')
         
-        // Validate response is a valid category
         const validCategories: PhotoType[] = [
-          'buffet', 'food_closeup', 'dining_room', 'bedroom', 'bathroom', 'lobby', 
-          'entrance', 'building_exterior', 'pool', 'gym', 'spa', 'meeting_room', 
-          'corridor', 'balcony', 'nature_garden', 'beach_resort', 'mountain_resort', 
-          'jungle_resort', 'generic'
+          'bedroom', 'bathroom', 'dining_room', 'buffet', 'food_closeup',
+          'lobby', 'pool', 'gym', 'spa', 'meeting_room', 'corridor',
+          'balcony', 'entrance', 'building_exterior', 'nature_garden',
+          'beach_resort', 'mountain_resort', 'jungle_resort', 'generic'
         ]
         
         if (validCategories.includes(responseText as PhotoType)) {
@@ -169,27 +100,19 @@ Return ONLY the category name in lowercase, nothing else.`
           console.log('✅ Gemini detected photoType:', detectedPhotoType)
         } else {
           console.warn('⚠️ Invalid category from Gemini:', responseText)
-          detectedPhotoType = 'generic'
+          detectedPhotoType = detectPhotoTypeSimple('', contentDescription || contentTopic || '')
+          console.log('📝 Fallback to simple detection:', detectedPhotoType)
         }
         
       } catch (error) {
-        // Check if it's a quota error
-        const errorMessage = error instanceof Error ? error.message : String(error)
-        if (errorMessage.includes('quota') || errorMessage.includes('429')) {
-          console.warn('⚠️ Gemini API quota exceeded, using simple detection')
-        } else {
-          console.error('⚠️ Gemini Vision analysis failed:', error)
-        }
+        console.error('⚠️ Gemini Vision analysis failed:', error)
         
         // Fallback to simple text detection
-        detectedPhotoType = detectPhotoTypeSimple(
-          referenceImageUrls[0] || '',
-          contentDescription || contentTopic || ''
-        )
+        detectedPhotoType = detectPhotoTypeSimple('', contentDescription || contentTopic || '')
         console.log('📝 Fallback to simple detection:', detectedPhotoType)
       }
     }
-    // Priority 3: Fallback to simple text-based detection
+    // Priority 3: Use simple text-based detection from content description
     else {
       detectedPhotoType = detectPhotoTypeSimple('', contentDescription || contentTopic || '')
       console.log('📝 Using simple text detection:', detectedPhotoType)

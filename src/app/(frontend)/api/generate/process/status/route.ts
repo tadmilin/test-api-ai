@@ -25,10 +25,13 @@ export async function GET(request: NextRequest) {
     const enhancedImages = job.enhancedImageUrls || []
     const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
     
+    console.log(`🔍 Checking ${enhancedImages.length} images for job ${jobId}`)
+    
     // Check each image that's still processing
     const updatedImages = await Promise.all(
-      enhancedImages.map(async (img: any) => {
+      enhancedImages.map(async (img: any, index: number) => {
         if (img.status === 'processing' && img.predictionId) {
+          console.log(`📡 Polling prediction ${index + 1}: ${img.predictionId}`)
           // Poll the enhance status endpoint
           try {
             const statusRes = await fetch(
@@ -37,8 +40,10 @@ export async function GET(request: NextRequest) {
             
             if (statusRes.ok) {
               const data = await statusRes.json()
+              console.log(`   Status: ${data.status}`)
               
               if (data.status === 'succeeded' && data.imageUrl) {
+                console.log(`   ✅ Image ${index + 1} completed: ${data.imageUrl}`)
                 // Update image with completed URL
                 return {
                   ...img,
@@ -48,6 +53,7 @@ export async function GET(request: NextRequest) {
               }
               
               if (data.status === 'failed') {
+                console.error(`   ❌ Image ${index + 1} failed`)
                 // Mark as failed, use original
                 return {
                   ...img,
@@ -55,9 +61,13 @@ export async function GET(request: NextRequest) {
                   status: 'pending',
                 }
               }
+              
+              console.log(`   ⏳ Image ${index + 1} still ${data.status}`)
+            } else {
+              console.error(`   ❌ Failed to poll: ${statusRes.status}`)
             }
           } catch (pollError) {
-            console.error(`Failed to poll prediction ${img.predictionId}:`, pollError)
+            console.error(`   💥 Poll error:`, pollError)
           }
         }
         

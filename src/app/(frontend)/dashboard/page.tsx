@@ -448,39 +448,69 @@ export default function DashboardPage() {
       
       // New async flow: poll for completion
       if (processData.status === 'enhancing' && processData.predictions) {
-        setProcessingStatus('⏳ กำลังประมวลผลรูปทั้งหมด...')
+        setProcessingStatus('⏳ กำลังเริ่มประมวลผลรูป...')
         
-        // Poll until all images complete
-        const maxPolls = 60 // 3 minutes max
+        console.log('🔄 Starting polling for', processData.predictions.length, 'predictions')
+        
+        // Poll until all images complete - extend to 10 minutes
+        const maxPolls = 120 // 10 minutes (120 * 5s = 600s)
         let polls = 0
+        let lastCompleted = 0
         
         while (polls < maxPolls) {
-          await new Promise(resolve => setTimeout(resolve, 3000)) // Wait 3s
-          
-          const statusRes = await fetch(`/api/generate/process/status?jobId=${jobId}`)
-          if (!statusRes.ok) {
-            throw new Error('Failed to check processing status')
-          }
-          
-          const statusData = await statusRes.json()
-          
-          setProcessingStatus(`⏳ ประมวลผลแล้ว ${statusData.completed}/${statusData.total} รูป...`)
-          
-          if (statusData.allComplete) {
-            // All done - show review UI
-            setProcessingStatus('')
-            setProcessingJobId(null)
-            setEnhancedImages(statusData.images || [])
-            setReviewMode(true)
-            alert('✅ รูปทั้งหมดถูกปรับปรุงแล้ว! กรุณาตรวจสอบและอนุมัติรูป')
-            break
-          }
-          
+          await new Promise(resolve => setTimeout(resolve, 5000)) // Wait 5s (increased from 3s)
           polls++
+          
+          console.log(`📊 Poll ${polls}/${maxPolls}: Checking status...`)
+          
+          try {
+            const statusRes = await fetch(`/api/generate/process/status?jobId=${jobId}`)
+            if (!statusRes.ok) {
+              console.error('❌ Status check failed:', statusRes.status, statusRes.statusText)
+              continue // Skip this poll, try again
+            }
+            
+            const statusData = await statusRes.json()
+            console.log(`✅ Status: ${statusData.completed}/${statusData.total} complete, ${statusData.processing} processing`)
+            
+            // Update status message
+            const progress = `${statusData.completed}/${statusData.total}`
+            const elapsed = Math.floor(polls * 5 / 60) // minutes
+            setProcessingStatus(`⏳ ประมวลผลแล้ว ${progress} รูป (${polls * 5}s / ${elapsed}นาที)`)
+            
+            // Show progress if any image completed
+            if (statusData.completed > lastCompleted) {
+              console.log(`🎉 Image ${statusData.completed}/${statusData.total} completed`)
+              lastCompleted = statusData.completed
+            }
+            
+            if (statusData.allComplete) {
+              // All done - show review UI
+              setProcessingStatus('')
+              setProcessingJobId(null)
+              setEnhancedImages(statusData.images || [])
+              setReviewMode(true)
+              alert('✅ รูปทั้งหมดถูกปรับปรุงแล้ว! กรุณาตรวจสอบและอนุมัติรูป')
+              break
+            }
+          } catch (pollError) {
+            console.error('Poll error:', pollError)
+            // Continue polling even if one poll fails
+          }
         }
         
+        // Check if timeout or completed
         if (polls >= maxPolls) {
-          throw new Error('Processing timed out. Please check job logs.')
+          setProcessingStatus('')
+          setProcessingJobId(null)
+          const message = `⚠️ การประมวลผลใช้เวลานานกว่าปกติ\n\n` +
+            `Job ID: ${jobId}\n\n` +
+            `กรุณา:\n` +
+            `1. เช็คสถานะที่ Admin Panel > Jobs > ${jobId}\n` +
+            `2. ดูรายละเอียดที่ Job Logs\n` +
+            `3. หากรูปเสร็จแล้ว ให้ refresh หน้านี้\n\n` +
+            `หากรอนาน ลอง refresh หน้านี้ อาจเสร็จแล้ว`
+          alert(message)
         }
       } else if (processData.status === 'review_pending') {
         // Legacy: immediate completion (shouldn't happen with new flow)
