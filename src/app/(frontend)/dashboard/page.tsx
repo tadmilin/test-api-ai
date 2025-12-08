@@ -446,8 +446,44 @@ export default function DashboardPage() {
 
       const processData = await processRes.json()
       
-      if (processData.status === 'review_pending') {
-        // Phase 1 complete - show review UI
+      // New async flow: poll for completion
+      if (processData.status === 'enhancing' && processData.predictions) {
+        setProcessingStatus('⏳ กำลังประมวลผลรูปทั้งหมด...')
+        
+        // Poll until all images complete
+        const maxPolls = 60 // 3 minutes max
+        let polls = 0
+        
+        while (polls < maxPolls) {
+          await new Promise(resolve => setTimeout(resolve, 3000)) // Wait 3s
+          
+          const statusRes = await fetch(`/api/generate/process/status?jobId=${jobId}`)
+          if (!statusRes.ok) {
+            throw new Error('Failed to check processing status')
+          }
+          
+          const statusData = await statusRes.json()
+          
+          setProcessingStatus(`⏳ ประมวลผลแล้ว ${statusData.completed}/${statusData.total} รูป...`)
+          
+          if (statusData.allComplete) {
+            // All done - show review UI
+            setProcessingStatus('')
+            setProcessingJobId(null)
+            setEnhancedImages(statusData.images || [])
+            setReviewMode(true)
+            alert('✅ รูปทั้งหมดถูกปรับปรุงแล้ว! กรุณาตรวจสอบและอนุมัติรูป')
+            break
+          }
+          
+          polls++
+        }
+        
+        if (polls >= maxPolls) {
+          throw new Error('Processing timed out. Please check job logs.')
+        }
+      } else if (processData.status === 'review_pending') {
+        // Legacy: immediate completion (shouldn't happen with new flow)
         setProcessingStatus('')
         setProcessingJobId(null)
         setEnhancedImages(processData.enhancedImages || [])

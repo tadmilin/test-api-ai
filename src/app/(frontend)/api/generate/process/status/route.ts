@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPayload } from 'payload'
 import config from '@payload-config'
 
-// GET: Check status of all image enhancements for a job
+// GET: Check status of all image enhancements for a job and poll Replicate if needed
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -23,27 +23,91 @@ export async function GET(request: NextRequest) {
     }
 
     const enhancedImages = job.enhancedImageUrls || []
+    const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
     
-    // Check how many are still processing
-    const processing = enhancedImages.filter((img: any) => 
-      img.status === 'processing' && img.predictionId
+    // Check each image that's still processing
+    const updatedImages = await Promise.all(
+      enhancedImages.map(async (img: any) => {
+        if (img.status === 'processing' && img.predictionId) {
+          // Poll the enhance status endpoint
+          try {
+            const statusRes = await fetch(
+              `${baseUrl}/api/generate/enhance?predictionId=${img.predictionId}&jobId=${jobId}`
+            )
+            
+            if (statusRes.ok) {
+              const data = await statusRes.json()
+              
+              if (data.status === 'succeeded' && data.imageUrl) {
+                // Update image with completed URL
+                return {
+                  ...img,
+                  url: data.imageUrl,
+                  status: 'pending', // Ready for review
+                }
+              }
+              
+              if (data.status === 'failed') {
+                // Mark as failed, use original
+                return {
+                  ...img,
+                  url: img.originalUrl,
+                  status: 'pending',
+                }
+              }
+            }
+          } catch (pollError) {
+            console.error(`Failed to poll prediction ${img.predictionId}:`, pollError)
+          }
+        }
+        
+        return img // No change
+      })
+    )
+    
+    // Update job if any images changed
+    const anyChanged = updatedImages.some((img, i) => img.url !== enhancedImages[i]?.url)
+    if (anyChanged) {
+      await payload.update({
+        collection: 'jobs',
+        id: jobId,
+        data: {
+          enhancedImageUrls: updatedImages,
+        },
+      })
+    }
+    
+    // Count statuses
+    const processing = updatedImages.filter((img: any) => 
+      img.status === 'processing'
     ).length
     
-    const completed = enhancedImages.filter((img: any) => 
-      img.status === 'pending' && img.url
+    const completed = updatedImages.filter((img: any) => 
+      img.status === 'pending' && img.url && !img.url.includes('drive.google.com')
     ).length
 
-    const allComplete = processing === 0 && completed === enhancedImages.length
+    const allComplete = processing === 0 && completed === updatedImages.length
+    
+    // Update job status if all complete
+    if (allComplete && job.status === 'enhancing') {
+      await payload.update({
+        collection: 'jobs',
+        id: jobId,
+        data: {
+          status: 'review_pending',
+        },
+      })
+    }
 
     return NextResponse.json({
       success: true,
       jobId,
-      status: job.status,
-      total: enhancedImages.length,
+      status: allComplete ? 'review_pending' : 'enhancing',
+      total: updatedImages.length,
       processing,
       completed,
       allComplete,
-      images: enhancedImages,
+      images: updatedImages,
     })
 
   } catch (error: unknown) {
