@@ -226,8 +226,15 @@ export default function DashboardPage() {
         
         const statusData = await statusRes.json()
         
+        // Merge with existing metadata
         if (statusData.images && statusData.images.length > 0) {
-          setEnhancedImages(statusData.images)
+          setEnhancedImages(prevImages => {
+            if (prevImages.length === 0) return statusData.images
+            return statusData.images.map((newImg: any, index: number) => ({
+              ...prevImages[index], // Keep existing metadata
+              ...newImg, // Update with new data
+            }))
+          })
         }
         
         const progress = `${statusData.completed}/${statusData.total}`
@@ -602,6 +609,19 @@ export default function DashboardPage() {
 
       const processData = await processRes.json()
       
+      // Initialize enhanced images with metadata immediately
+      const initialEnhancedImages = allImages.map((img, index) => ({
+        url: '',
+        status: 'pending' as const,
+        originalUrl: img.url,
+        predictionId: processData.predictions?.[index] || null,
+        photoType: sheetRows[index]?.photoType || '',
+        contentTopic: sheetRows[index]?.contentTopic || '',
+        postTitleHeadline: sheetRows[index]?.postTitleHeadline || '',
+      }))
+      setEnhancedImages(initialEnhancedImages)
+      setReviewMode(true) // Show review mode immediately with metadata
+      
       // New async flow: poll for completion
       if (processData.status === 'enhancing' && processData.predictions) {
         setProcessingStatus('⏳ กำลังเริ่มประมวลผลรูป...')
@@ -630,8 +650,14 @@ export default function DashboardPage() {
             console.log(`✅ Status: ${statusData.completed}/${statusData.total} complete, ${statusData.processing} processing`)
             
             // Update images in real-time (show completed images immediately)
+            // Merge with existing metadata to preserve contentTopic and postTitleHeadline
             if (statusData.images && statusData.images.length > 0) {
-              setEnhancedImages(statusData.images)
+              setEnhancedImages(prevImages => {
+                return statusData.images.map((newImg: any, index: number) => ({
+                  ...prevImages[index], // Keep existing metadata
+                  ...newImg, // Update with new data (url, status, etc)
+                }))
+              })
               // Show review mode immediately when first image completes
               if (statusData.completed > 0 && !reviewMode) {
                 setReviewMode(true)
