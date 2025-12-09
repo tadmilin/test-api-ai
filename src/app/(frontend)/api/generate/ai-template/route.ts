@@ -66,25 +66,74 @@ export async function POST(request: NextRequest) {
       throw new Error(`No prompt found for template type: ${templateType}`)
     }
 
-    console.log(`📝 Creating Replicate prediction...`)
+    console.log(`📝 Creating Replicate prediction for template...`)
+    console.log(`📊 Total images: ${finalImageUrls.length}`)
+    console.log(`📝 Prompt length: ${prompt.length} chars`)
     
-    const prediction = await replicate.predictions.create({
-      model: 'google/nano-banana-pro',
-      input: {
-        image_input: finalImageUrls,
-        prompt: prompt,
-        resolution: '1K', // Valid: 1K, 2K, or 4K only
-        aspect_ratio: 'match_input_image',
-        output_format: 'png',
-        safety_filter_level: 'block_only_high',
-      },
-    })
-
-    console.log(`✅ Prediction created: ${prediction.id}`)
-    console.log(`🔗 https://replicate.com/p/${prediction.id}`)
+    // Get payload instance for logging
+    const payload = await getPayload({ config })
+    
+    // Retry logic for E6716 timeout errors (same as enhance)
+    const MAX_RETRIES = 2
+    const RETRY_DELAYS = [2000, 5000] // 2s, 5s
+    
+    let prediction
+    let lastError
+    
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        console.log(`🎯 Creating template prediction (attempt ${attempt + 1}/${MAX_RETRIES + 1})...`)
+        
+        prediction = await replicate.predictions.create({
+          model: 'google/nano-banana-pro',
+          input: {
+            image_input: finalImageUrls,
+            prompt: prompt,
+            resolution: '1K', // Valid: 1K, 2K, or 4K only
+            aspect_ratio: 'match_input_image',
+            output_format: 'png',
+            safety_filter_level: 'block_only_high',
+          },
+        })
+        
+        console.log(`✅ Prediction created: ${prediction.id}`)
+        console.log(`🔗 https://replicate.com/p/${prediction.id}`)
+        break // Success! Exit retry loop
+        
+      } catch (error: any) {
+        lastError = error
+        const errorMsg = error?.message || String(error)
+        
+        // Check if it's E6716 timeout error
+        if (errorMsg.includes('E6716') && attempt < MAX_RETRIES) {
+          const delay = RETRY_DELAYS[attempt]
+          console.log(`⏳ E6716 timeout detected, retrying in ${delay/1000}s... (attempt ${attempt + 1}/${MAX_RETRIES + 1})`)
+          
+          await payload.create({
+            collection: 'job-logs',
+            data: {
+              jobId,
+              level: 'warning',
+              message: `Template E6716 timeout on attempt ${attempt + 1}, retrying in ${delay/1000}s...`,
+              timestamp: new Date().toISOString(),
+            },
+          })
+          
+          await new Promise(resolve => setTimeout(resolve, delay))
+          continue
+        }
+        
+        // Not E6716 or max retries reached - throw error
+        console.error(`❌ Failed to create template prediction:`, error)
+        throw error
+      }
+    }
+    
+    if (!prediction) {
+      throw new Error(`Template generation failed after ${MAX_RETRIES + 1} attempts: ${lastError}`)
+    }
     
     // Store prediction ID in job
-    const payload = await getPayload({ config })
     await payload.update({
       collection: 'jobs',
       id: jobId,
