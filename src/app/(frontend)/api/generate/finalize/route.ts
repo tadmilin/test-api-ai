@@ -63,10 +63,35 @@ export async function POST(request: NextRequest) {
 
     const templateType = job.templateType || 'triple'
 
-    console.log(`🎨 Generating AI template:`)
+    console.log(`🎨 Template generation requested:`)
     console.log(`  - Type: ${templateType}`)
     console.log(`  - Images: ${approvedImages.length}`)
+    console.log(`⚠️ Template generation is currently disabled`)
 
+    // FEATURE DISABLED: Template generation
+    // Client requested to disable template generation feature
+    // Code is preserved for future re-enablement
+    
+    // Update status to completed (skip template generation)
+    await payload.update({
+      collection: 'jobs',
+      id: jobId,
+      data: {
+        status: 'completed',
+        reviewCompleted: true,
+      },
+    })
+    
+    console.log('✅ Job marked as completed (template generation skipped)')
+
+    return NextResponse.json({
+      success: true,
+      message: 'Job completed successfully (template generation disabled)',
+      jobId: jobId,
+      templateDisabled: true,
+    })
+
+    /* TEMPLATE GENERATION CODE - DISABLED
     // Update status
     await payload.update({
       collection: 'jobs',
@@ -104,6 +129,7 @@ export async function POST(request: NextRequest) {
       predictionId: aiData.predictionId,
       jobId: jobId,
     })
+    */
 
   } catch (error: unknown) {
     console.error('❌ Template generation error:', error)
