@@ -37,6 +37,12 @@ interface Job {
     instagram_feed?: { url: string; width: number; height: number }
     instagram_story?: { url: string; width: number; height: number }
   }
+  enhancedImageUrls?: Array<{
+    url?: string
+    status?: string
+    predictionId?: string
+    originalUrl?: string
+  }>
 }
 
 interface UserActivity {
@@ -92,6 +98,8 @@ export default function DashboardPage() {
   const [selectedSheetId, setSelectedSheetId] = useState<string>('')
   const [sheetData, setSheetData] = useState<SheetData[]>([])
   const [selectedSheetRow, setSelectedSheetRow] = useState<SheetData | null>(null)
+  const [driveFolders, setDriveFolders] = useState<{ id: string; name: string }[]>([])
+  const [selectedFolderId, setSelectedFolderId] = useState<string>('')
   const [driveFolderId, setDriveFolderId] = useState<string>('')
   const [driveImages, setDriveImages] = useState<DriveImage[]>([])
   const [selectedImages, setSelectedImages] = useState<DriveImage[]>([])
@@ -139,6 +147,10 @@ export default function DashboardPage() {
     if (currentUser) {
       fetchDashboardData()
       fetchSpreadsheets()
+      fetchDriveFolders()
+      
+      // Auto-resume processing jobs
+      resumeProcessingJobs()
     }
   }, [currentUser])
 
@@ -148,6 +160,70 @@ export default function DashboardPage() {
       router.push('/login')
     } catch (error) {
       console.error('Logout error:', error)
+    }
+  }
+
+  // Resume processing for any jobs stuck in processing/enhancing state
+  async function resumeProcessingJobs() {
+    try {
+      const jobsRes = await fetch('/api/jobs?status=processing')
+      const jobsData = await jobsRes.json()
+      const processingJobs = jobsData.jobs || []
+      
+      // Find jobs with predictions that might still be running
+      for (const job of processingJobs) {
+        if (job.enhancedImageUrls && job.enhancedImageUrls.length > 0) {
+          const hasIncomplete = job.enhancedImageUrls.some(
+            (img: any) => !img.url || img.status === 'processing'
+          )
+          
+          if (hasIncomplete) {
+            console.log(`🔄 Resuming job ${job.id}...`)
+            setProcessingJobId(job.id)
+            setCurrentJobId(job.id)
+            setEnhancedImages(job.enhancedImageUrls)
+            setReviewMode(true)
+            
+            // Start polling
+            pollJobStatus(job.id)
+            break // Only resume one job at a time
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error resuming jobs:', error)
+    }
+  }
+  
+  async function pollJobStatus(jobId: string) {
+    const maxPolls = 120
+    let polls = 0
+    
+    while (polls < maxPolls) {
+      await new Promise(resolve => setTimeout(resolve, 5000))
+      polls++
+      
+      try {
+        const statusRes = await fetch(`/api/generate/process/status?jobId=${jobId}`)
+        if (!statusRes.ok) continue
+        
+        const statusData = await statusRes.json()
+        
+        if (statusData.images && statusData.images.length > 0) {
+          setEnhancedImages(statusData.images)
+        }
+        
+        const progress = `${statusData.completed}/${statusData.total}`
+        setProcessingStatus(`⏳ ประมวลผลแล้ว ${progress} รูป`)
+        
+        if (statusData.allComplete) {
+          setProcessingStatus('')
+          setProcessingJobId(null)
+          break
+        }
+      } catch (error) {
+        console.error('Poll error:', error)
+      }
     }
   }
 
@@ -280,6 +356,18 @@ export default function DashboardPage() {
     }
   }
 
+  async function fetchDriveFolders() {
+    try {
+      const res = await fetch('/api/drive/list-folders')
+      if (res.ok) {
+        const data = await res.json()
+        setDriveFolders(data.folders || [])
+      }
+    } catch (error) {
+      console.error('Error fetching drive folders:', error)
+    }
+  }
+
   async function fetchSheetData() {
     if (!selectedSheetId) return
     
@@ -295,21 +383,19 @@ export default function DashboardPage() {
   }
 
   async function loadDriveImages() {
+    const folderId = selectedFolderId || driveFolderId
+    
+    if (!folderId) {
+      alert('กรุณาเลือกโฟลเดอร์ก่อน')
+      return
+    }
+    
     try {
-      let url = '/api/drive/list-all-images'
-      let options: RequestInit = {}
-
-      // ถ้ามี Folder ID ให้ใช้ list-folder แทน
-      if (driveFolderId) {
-        url = '/api/drive/list-folder'
-        options = {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ folderId: driveFolderId }),
-        }
-      }
-
-      const res = await fetch(url, options)
+      const res = await fetch('/api/drive/list-folder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderId }),
+      })
 
       if (res.ok) {
         const data = await res.json()
@@ -318,9 +404,10 @@ export default function DashboardPage() {
           img && img.id && img.url && img.thumbnailUrl
         )
         setDriveImages(validImages)
-        console.log(`✅ Loaded ${validImages.length} valid images`)
+        console.log(`✅ Loaded ${validImages.length} valid images from folder`)
       } else {
-        alert('Failed to load images')
+        const errorData = await res.json().catch(() => ({}))
+        alert(`Failed to load images: ${errorData.error || 'Unknown error'}`)
       }
     } catch (error) {
       console.error('Error loading drive images:', error)
@@ -896,21 +983,49 @@ export default function DashboardPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   รูปอ้างอิงจาก Google Drive
                 </label>
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    placeholder="ID โฟลเดอร์ (ไม่บังคับ - ว่างไว้เพื่อโหลดรูปทั้งหมด)"
-                    value={driveFolderId}
-                    onChange={(e) => setDriveFolderId(e.target.value)}
+                <div className="space-y-3">
+                  {/* Dropdown Select Folder */}
+                  <select
                     className="w-full border border-gray-300 rounded-lg p-2 text-gray-900"
-                  />
-                  <button
-                    type="button"
-                    onClick={loadDriveImages}
-                    className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                    value={selectedFolderId}
+                    onChange={(e) => {
+                      setSelectedFolderId(e.target.value)
+                      setDriveImages([])
+                      setSelectedImages([])
+                    }}
                   >
-                    📂 {driveFolderId ? 'โหลดรูปจากโฟลเดอร์' : 'โหลดรูปทั้งหมด'}
-                  </button>
+                    <option value="">-- เลือกโฟลเดอร์ --</option>
+                    {driveFolders.map((folder) => (
+                      <option key={folder.id} value={folder.id}>
+                        📁 {folder.name}
+                      </option>
+                    ))}
+                  </select>
+                  
+                  {/* Manual Folder ID Input (Optional) */}
+                  <details className="text-sm">
+                    <summary className="cursor-pointer text-gray-600 hover:text-gray-900">
+                      หรือใส่ Folder ID เอง
+                    </summary>
+                    <input
+                      type="text"
+                      placeholder="Folder ID (ถ้าไม่มีในรายการด้านบน)"
+                      value={driveFolderId}
+                      onChange={(e) => setDriveFolderId(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg p-2 text-gray-900 mt-2"
+                    />
+                  </details>
+                  
+                  {/* Load Button */}
+                  {(selectedFolderId || driveFolderId) && (
+                    <button
+                      type="button"
+                      onClick={loadDriveImages}
+                      className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 w-full font-medium"
+                    >
+                      📂 โหลดรูปจากโฟลเดอร์
+                    </button>
+                  )}
                 </div>
 
                 {/* Image Gallery */}
@@ -1126,7 +1241,7 @@ export default function DashboardPage() {
         {/* View Generated Images Modal */}
         {viewingJob && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6">
                 <div className="flex justify-between items-start mb-4">
                   <div>
@@ -1141,86 +1256,102 @@ export default function DashboardPage() {
                   </button>
                 </div>
 
-                {/* Prompt Display */}
-                {viewingJob.generatedPrompt && (
-                  <div className="bg-gray-50 p-4 rounded-lg mb-4">
-                    <h3 className="font-semibold mb-2">Prompt ที่สร้าง:</h3>
-                    <p className="text-sm text-gray-700">{viewingJob.generatedPrompt}</p>
+                {/* Show Enhanced Images if available */}
+                {viewingJob.enhancedImageUrls && viewingJob.enhancedImageUrls.length > 0 ? (
+                  <div>
+                    <h3 className="font-semibold mb-4 text-lg">🎨 รูปที่ปรับปรุงด้วย Nano-Banana Pro</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {viewingJob.enhancedImageUrls.map((img, index) => (
+                        img.url ? (
+                          <div key={index} className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200">
+                            <div className="relative aspect-[4/3] rounded-lg overflow-hidden mb-3">
+                              <Image
+                                src={img.url}
+                                alt={`Enhanced ${index + 1}`}
+                                fill
+                                className="object-cover"
+                                unoptimized
+                              />
+                            </div>
+                            <button
+                              onClick={() => downloadImage(img.url!, `${viewingJob.productName}_enhanced_${index + 1}.jpg`)}
+                              className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-medium text-sm flex items-center justify-center gap-2"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                              ดาวน์โหลดรูปที่ {index + 1}
+                            </button>
+                          </div>
+                        ) : null
+                      ))}
+                    </div>
                   </div>
-                )}
-
-                {/* Platform Selector */}
-                <div className="flex gap-2 mb-4">
-                  {Object.entries(IMAGE_SIZES).map(([key, size]) => {
-                    const hasImage = viewingJob.generatedImages?.[key as keyof typeof IMAGE_SIZES]
-                    return (
-                      <button
-                        key={key}
-                        onClick={() => setSelectedPlatform(key as keyof typeof IMAGE_SIZES)}
-                        disabled={!hasImage}
-                        className={`px-4 py-2 rounded-lg font-medium ${
-                          selectedPlatform === key
-                            ? 'bg-blue-600 text-white'
-                            : hasImage
-                              ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                              : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        }`}
-                      >
-                        {size.label}
-                        <div className="text-xs mt-1">
-                          {size.width}×{size.height}
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-
-                {/* Image Display */}
-                {viewingJob.generatedImages?.[selectedPlatform] ? (
-                  <div className="space-y-4">
-                    <div className="relative border-2 border-gray-200 rounded-lg overflow-hidden">
-                      <Image
-                        src={viewingJob.generatedImages[selectedPlatform]!.url}
-                        alt={`${IMAGE_SIZES[selectedPlatform].label} Image`}
-                        width={IMAGE_SIZES[selectedPlatform].width}
-                        height={IMAGE_SIZES[selectedPlatform].height}
-                        className="w-full h-auto"
-                        unoptimized
-                      />
+                ) : viewingJob.generatedImages ? (
+                  <div>
+                    <h3 className="font-semibold mb-4 text-lg">📱 รูปตามขนาดแพลตฟอร์ม (Template)</h3>
+                    {/* Platform Selector */}
+                    <div className="flex gap-2 mb-4">
+                      {Object.entries(IMAGE_SIZES).map(([key, size]) => {
+                        const hasImage = viewingJob.generatedImages?.[key as keyof typeof IMAGE_SIZES]
+                        return (
+                          <button
+                            key={key}
+                            onClick={() => setSelectedPlatform(key as keyof typeof IMAGE_SIZES)}
+                            disabled={!hasImage}
+                            className={`px-4 py-2 rounded-lg font-medium ${
+                              selectedPlatform === key
+                                ? 'bg-blue-600 text-white'
+                                : hasImage
+                                  ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                  : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            }`}
+                          >
+                            {size.label}
+                            <div className="text-xs mt-1">
+                              {size.width}×{size.height}
+                            </div>
+                          </button>
+                        )
+                      })}
                     </div>
 
-                    {/* Download Button */}
-                    <button
-                      onClick={() =>
-                        downloadImage(
-                          viewingJob.generatedImages![selectedPlatform]!.url,
-                          `${viewingJob.productName}_${selectedPlatform}_${IMAGE_SIZES[selectedPlatform].width}x${IMAGE_SIZES[selectedPlatform].height}.png`,
-                        )
-                      }
-                      className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 font-semibold flex items-center justify-center gap-2"
-                    >
-                      <svg
-                        className="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                        />
-                      </svg>
-                      ดาวน์โหลด {IMAGE_SIZES[selectedPlatform].label} (
-                      {IMAGE_SIZES[selectedPlatform].width}×{IMAGE_SIZES[selectedPlatform].height}
-                      )
-                    </button>
+                    {/* Image Display */}
+                    {viewingJob.generatedImages[selectedPlatform] ? (
+                      <div className="space-y-4">
+                        <div className="relative border-2 border-gray-200 rounded-lg overflow-hidden">
+                          <Image
+                            src={viewingJob.generatedImages[selectedPlatform]!.url}
+                            alt={`${IMAGE_SIZES[selectedPlatform].label} Image`}
+                            width={IMAGE_SIZES[selectedPlatform].width}
+                            height={IMAGE_SIZES[selectedPlatform].height}
+                            className="w-full h-auto"
+                            unoptimized
+                          />
+                        </div>
+
+                        {/* Download Button */}
+                        <button
+                          onClick={() =>
+                            downloadImage(
+                              viewingJob.generatedImages![selectedPlatform]!.url,
+                              `${viewingJob.productName}_${selectedPlatform}_${IMAGE_SIZES[selectedPlatform].width}x${IMAGE_SIZES[selectedPlatform].height}.png`,
+                            )
+                          }
+                          className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 font-semibold flex items-center justify-center gap-2"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                          ดาวน์โหลด {IMAGE_SIZES[selectedPlatform].label} ({IMAGE_SIZES[selectedPlatform].width}×{IMAGE_SIZES[selectedPlatform].height})
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-gray-500">ไม่มีภาพสำหรับแพลตฟอร์มนี้</div>
+                    )}
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    ไม่มีภาพสำหรับแพลตฟอร์มนี้
-                  </div>
+                  <div className="text-center py-8 text-gray-500">ไม่มีรูปภาพ</div>
                 )}
               </div>
             </div>
@@ -1326,10 +1457,24 @@ export default function DashboardPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
+                        {job.status === 'processing' && job.enhancedImageUrls && job.enhancedImageUrls.length > 0 && (
+                          <button
+                            onClick={() => {
+                              setCurrentJobId(job.id)
+                              setProcessingJobId(job.id)
+                              setEnhancedImages(job.enhancedImageUrls || [])
+                              setReviewMode(true)
+                              pollJobStatus(job.id)
+                            }}
+                            className="text-blue-600 hover:text-blue-900 font-medium"
+                          >
+                            🔄 ดูความคืบหน้า
+                          </button>
+                        )}
                         {(job.status === 'completed' ||
                           job.status === 'approved' ||
                           job.status === 'rejected') &&
-                          job.generatedImages && (
+                          (job.generatedImages || job.enhancedImageUrls) && (
                             <button
                               onClick={() => setViewingJob(job)}
                               className="text-purple-600 hover:text-purple-900 font-medium"
