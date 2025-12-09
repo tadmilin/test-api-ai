@@ -69,6 +69,11 @@ interface DriveImage {
   url: string
 }
 
+interface ImageSet {
+  sheetRow: SheetData
+  images: DriveImage[]
+}
+
 const IMAGE_SIZES = {
   facebook: { label: 'โพสต์ Facebook', width: 1200, height: 630 },
   instagram_feed: { label: 'ฟีด Instagram', width: 1080, height: 1080 },
@@ -100,12 +105,13 @@ export default function DashboardPage() {
   const [spreadsheets, setSpreadsheets] = useState<{ id: string; name: string }[]>([])
   const [selectedSheetId, setSelectedSheetId] = useState<string>('')
   const [sheetData, setSheetData] = useState<SheetData[]>([])
-  const [selectedSheetRows, setSelectedSheetRows] = useState<SheetData[]>([])
+  const [currentSheetRow, setCurrentSheetRow] = useState<SheetData | null>(null)
   const [driveFolders, setDriveFolders] = useState<{ id: string; name: string }[]>([])
   const [selectedFolderId, setSelectedFolderId] = useState<string>('')
   const [driveFolderId, setDriveFolderId] = useState<string>('')
   const [driveImages, setDriveImages] = useState<DriveImage[]>([])
-  const [selectedImages, setSelectedImages] = useState<DriveImage[]>([])
+  const [currentImages, setCurrentImages] = useState<DriveImage[]>([])
+  const [imageSets, setImageSets] = useState<ImageSet[]>([])
   const [creating, setCreating] = useState(false)
   
   // Review & Finalize States
@@ -433,15 +439,25 @@ export default function DashboardPage() {
       return
     }
 
-    setSelectedImages(prev => {
+    // Check if image already used in other sets
+    const alreadyUsed = imageSets.some(set => 
+      set.images.some(img => img.id === image.id)
+    )
+    if (alreadyUsed) {
+      alert('❌ รูปนี้ถูกเลือกไปแล้วในชุดอื่น')
+      return
+    }
+
+    setCurrentImages(prev => {
       const exists = prev.find(img => img && img.id === image.id)
       if (exists) {
         return prev.filter(img => img && img.id !== image.id)
       } else {
-        // Allow maximum 14 images
+        // Check total limit including current sets
+        const totalImagesInSets = imageSets.reduce((sum, set) => sum + set.images.length, 0)
         const MAX_IMAGES = 14
-        if (prev.length >= MAX_IMAGES) {
-          alert(`❌ สามารถเลือกได้สูงสุด ${MAX_IMAGES} รูปเท่านั้น`)
+        if (totalImagesInSets + prev.length >= MAX_IMAGES) {
+          alert(`❌ สามารถเลือกได้สูงสุด ${MAX_IMAGES} รูปเท่านั้น (เหลืออีก ${MAX_IMAGES - totalImagesInSets} รูป)`)
           return prev
         }
         return [...prev, image]
@@ -449,44 +465,87 @@ export default function DashboardPage() {
     })
   }
 
-  async function createJob() {
-    // Validation for multi-row selection
-    if (selectedSheetRows.length === 0) {
-      alert('❌ กรุณาเลือกข้อมูลจาก Google Sheet อย่างน้อย 1 แถว')
+  function addImageSet() {
+    if (!currentSheetRow) {
+      alert('❌ กรุณาเลือกข้อมูลจาก Google Sheet ก่อน')
       return
     }
     
-    if (selectedImages.length === 0) {
+    if (currentImages.length === 0) {
       alert('❌ กรุณาเลือกรูปอย่างน้อย 1 รูป')
       return
     }
 
-    // Match images to sheet rows (1 row = 1 image)
-    if (selectedImages.length !== selectedSheetRows.length) {
-      alert(`❌ จำนวนรูปและข้อมูล Sheet ไม่ตรงกัน\n- รูปที่เลือก: ${selectedImages.length} รูป\n- ข้อมูล Sheet: ${selectedSheetRows.length} แถว\n\nกรุณาเลือกให้ตรงกัน (1 แถว = 1 รูป)`)
+    // Add to sets
+    setImageSets(prev => [...prev, {
+      sheetRow: currentSheetRow,
+      images: [...currentImages]
+    }])
+
+    // Clear current selection
+    setCurrentSheetRow(null)
+    setCurrentImages([])
+    
+    alert(`✅ เพิ่มชุดสำเร็จ: ${currentImages.length} รูป`)
+  }
+
+  function removeImageSet(index: number) {
+    setImageSets(prev => prev.filter((_, i) => i !== index))
+  }
+
+  function getTotalImageCount(): number {
+    return imageSets.reduce((sum, set) => sum + set.images.length, 0)
+  }
+
+  async function createJob() {
+    // Validation for set-based selection
+    if (imageSets.length === 0) {
+      alert('❌ กรุณาเพิ่มชุดรูปอย่างน้อย 1 ชุด')
       return
     }
 
-    // Filter out any undefined images
-    const validImages = selectedImages.filter(img => img && img.id && img.url)
-    if (validImages.length === 0) {
-      alert('❌ ไม่พบรูปภาพที่ถูกต้อง กรุณาเลือกรูปใหม่')
+    const totalImages = getTotalImageCount()
+    if (totalImages === 0) {
+      alert('❌ ไม่พบรูปภาพในชุดที่เพิ่ม')
       return
     }
 
     console.log('🚀 Starting job creation...')
-    console.log('📊 Valid images:', validImages.length)
-    console.log('📋 Sheet rows:', selectedSheetRows.length)
+    console.log('📦 Image sets:', imageSets.length)
+    console.log('📊 Total images:', totalImages)
 
     setCreating(true)
     setReviewMode(false)
     setFinalImageUrl(null)
 
     try {
-      // Use first row for job-level metadata, images will have individual metadata
-      const firstRow = selectedSheetRows[0]
+      // Flatten imageSets into arrays for API
+      const allImages: DriveImage[] = []
+      const sheetRows: Array<{
+        productName: string
+        photoType: string
+        contentTopic: string
+        postTitleHeadline: string
+      }> = []
+
+      imageSets.forEach(set => {
+        set.images.forEach(img => {
+          allImages.push(img)
+          sheetRows.push({
+            productName: set.sheetRow['Product Name'] || '',
+            photoType: set.sheetRow['Photo_Type'] || '',
+            contentTopic: set.sheetRow['Content_Topic'] || '',
+            postTitleHeadline: set.sheetRow['Post_Title_Headline'] || '',
+          })
+        })
+      })
+
+      console.log('📋 Mapped sheet rows:', sheetRows.length)
+
+      // Use first set's row for job-level metadata
+      const firstRow = imageSets[0].sheetRow
       
-      // Create job with multi-row data
+      // Create job with flattened data
       const jobRes = await fetch('/api/jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -497,16 +556,11 @@ export default function DashboardPage() {
           postTitleHeadline: firstRow['Post_Title_Headline'] || '',
           contentDescription: firstRow['Content_Description'] || '',
           photoTypeFromSheet: firstRow['Photo_Type'] || undefined,
-          referenceImageIds: validImages.map((img) => ({ imageId: img.id })),
-          referenceImageUrls: validImages.map((img) => ({ url: img.url })),
+          referenceImageIds: allImages.map((img) => ({ imageId: img.id })),
+          referenceImageUrls: allImages.map((img) => ({ url: img.url })),
           
           // Pass all sheet rows for per-image metadata
-          sheetRows: selectedSheetRows.map(row => ({
-            productName: row['Product Name'] || '',
-            photoType: row['Photo_Type'] || '',
-            contentTopic: row['Content_Topic'] || '',
-            postTitleHeadline: row['Post_Title_Headline'] || '',
-          })),
+          sheetRows: sheetRows,
           
           status: 'pending',
         }),
@@ -951,7 +1005,7 @@ export default function DashboardPage() {
                   value={selectedSheetId}
                   onChange={(e) => {
                     setSelectedSheetId(e.target.value)
-                    setSelectedSheetRows([])
+                    setCurrentSheetRow(null)
                     setSheetData([])
                   }}
                 >
@@ -975,144 +1029,61 @@ export default function DashboardPage() {
                 </button>
               )}
 
-              {/* Select from Google Sheets - Multi-row checkbox selection */}
+              {/* Step 1: Select Sheet Row (Single Selection) */}
               {sheetData.length > 0 && (
                 <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <label className="block text-sm font-medium text-gray-700">
-                      เลือกสินค้าจาก Google Sheets ({selectedSheetRows.length} แถว)
-                    </label>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedSheetRows([...sheetData])}
-                        className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200"
-                      >
-                        เลือกทั้งหมด
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedSheetRows([])}
-                        className="text-xs bg-gray-100 text-gray-700 px-3 py-1 rounded hover:bg-gray-200"
-                      >
-                        ล้างทั้งหมด
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <div className="max-h-96 overflow-y-auto border border-gray-300 rounded-lg">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50 sticky top-0">
-                        <tr>
-                          <th className="px-4 py-3 text-left">
-                            <input
-                              type="checkbox"
-                              checked={selectedSheetRows.length === sheetData.length}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedSheetRows([...sheetData])
-                                } else {
-                                  setSelectedSheetRows([])
-                                }
-                              }}
-                              className="w-4 h-4"
-                            />
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">ชื่อสินค้า</th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">ประเภทภาพ</th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">หัวข้อเนื้อหา</th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">หัวข้อโพสต์</th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {sheetData.map((row, index) => {
-                          const isSelected = selectedSheetRows.includes(row)
-                          return (
-                            <tr 
-                              key={index}
-                              className={`hover:bg-gray-50 cursor-pointer ${isSelected ? 'bg-blue-50' : ''}`}
-                              onClick={() => {
-                                if (isSelected) {
-                                  setSelectedSheetRows(selectedSheetRows.filter(r => r !== row))
-                                } else {
-                                  setSelectedSheetRows([...selectedSheetRows, row])
-                                }
-                              }}
-                            >
-                              <td className="px-4 py-3">
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  onChange={() => {}}
-                                  className="w-4 h-4"
-                                />
-                              </td>
-                              <td className="px-4 py-3 text-sm text-gray-900">
-                                {row['Product Name'] || `Row ${index + 1}`}
-                              </td>
-                              <td className="px-4 py-3 text-sm text-gray-900">
-                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                                  {row['Photo_Type'] || '-'}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-sm text-gray-700">
-                                {row['Content_Topic'] || '-'}
-                              </td>
-                              <td className="px-4 py-3 text-sm text-gray-700">
-                                {row['Post_Title_Headline'] || '-'}
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {/* Show selected sheet rows details */}
-              {selectedSheetRows.length > 0 && (
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl border-2 border-blue-200">
-                  <h3 className="font-bold text-lg mb-4 text-blue-900">📋 ข้อมูลที่เลือก: {selectedSheetRows.length} แถว</h3>
-                  
-                  <div className="space-y-3 max-h-64 overflow-y-auto">
-                    {selectedSheetRows.map((row, idx) => (
-                      <div key={idx} className="bg-white p-4 rounded-lg shadow-sm border border-blue-100">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <h4 className="font-semibold text-gray-900 mb-2">
-                              {idx + 1}. {row['Product Name'] || 'Untitled'}
-                            </h4>
-                            <div className="grid grid-cols-2 gap-2 text-sm">
-                              <div>
-                                <span className="text-gray-600">ประเภท: </span>
-                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
-                                  {row['Photo_Type'] || '-'}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-gray-600">หัวข้อ: </span>
-                                <span className="text-gray-900">{row['Content_Topic'] || '-'}</span>
-                              </div>
-                            </div>
-                            {row['Post_Title_Headline'] && (
-                              <div className="mt-2 text-sm">
-                                <span className="text-gray-600">หัวข้อโพสต์: </span>
-                                <span className="text-gray-900">{row['Post_Title_Headline']}</span>
-                              </div>
-                            )}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedSheetRows(selectedSheetRows.filter(r => r !== row))}
-                            className="ml-3 text-red-500 hover:text-red-700 text-sm"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      </div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    1️⃣ เลือกข้อมูลจาก Google Sheet
+                  </label>
+                  <select
+                    className="w-full border border-gray-300 rounded-lg p-2 text-gray-900"
+                    value={sheetData.indexOf(currentSheetRow!) >= 0 ? sheetData.indexOf(currentSheetRow!) : ''}
+                    onChange={(e) => {
+                      const index = parseInt(e.target.value)
+                      setCurrentSheetRow(isNaN(index) ? null : sheetData[index])
+                    }}
+                  >
+                    <option value="">-- เลือกข้อมูล --</option>
+                    {sheetData.map((row, index) => (
+                      <option key={index} value={index}>
+                        {row['Product Name'] || `Row ${index + 1}`} 
+                        {row['Photo_Type'] && ` | ${row['Photo_Type']}`}
+                        {row['Content_Topic'] && ` | ${row['Content_Topic']}`}
+                      </option>
                     ))}
-                  </div>
+                  </select>
+
+                  {/* Show Selected Row Details */}
+                  {currentSheetRow && (
+                    <div className="mt-3 bg-gradient-to-br from-purple-50 to-blue-50 p-4 rounded-lg border-2 border-purple-200">
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <span className="text-gray-600 font-medium">ชื่อสินค้า:</span>
+                          <div className="text-gray-900 font-semibold">{currentSheetRow['Product Name'] || '-'}</div>
+                        </div>
+                        <div>
+                          <span className="text-gray-600 font-medium">ประเภทภาพ:</span>
+                          <div>
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-purple-600 text-white mt-1">
+                              📷 {currentSheetRow['Photo_Type'] || '-'}
+                            </span>
+                          </div>
+                        </div>
+                        {currentSheetRow['Content_Topic'] && (
+                          <div>
+                            <span className="text-gray-600 font-medium">หัวข้อเนื้อหา:</span>
+                            <div className="text-gray-900">{currentSheetRow['Content_Topic']}</div>
+                          </div>
+                        )}
+                        {currentSheetRow['Post_Title_Headline'] && (
+                          <div>
+                            <span className="text-gray-600 font-medium">หัวข้อโพสต์:</span>
+                            <div className="text-gray-900">{currentSheetRow['Post_Title_Headline']}</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1129,7 +1100,7 @@ export default function DashboardPage() {
                     onChange={(e) => {
                       setSelectedFolderId(e.target.value)
                       setDriveImages([])
-                      setSelectedImages([])
+                      setCurrentImages([])
                     }}
                   >
                     <option value="">-- เลือกโฟลเดอร์ --</option>
@@ -1171,32 +1142,33 @@ export default function DashboardPage() {
                   <div className="mt-6 bg-gradient-to-br from-gray-50 to-gray-100 p-6 rounded-xl border border-gray-200">
                     <div className="flex items-center justify-between mb-4">
                       <div>
-                        <h3 className="text-lg font-semibold text-gray-900">รูปอ้างอิง</h3>
+                        <h3 className="text-lg font-semibold text-gray-900">2️⃣ เลือกรูปสำหรับชุดนี้</h3>
                         <p className="text-sm text-gray-600 mt-1">
-                          คลิกรูปเพื่อเลือก/ยกเลิกสำหรับปรับปรุงด้วย AI (สูงสุด 14 รูป)
+                          คลิกรูปเพื่อเลือก (สูงสุด {14 - getTotalImageCount()} รูป เหลือจาก 14 รูป)
                         </p>
                       </div>
                       <div className={`px-4 py-2 rounded-lg font-semibold ${
-                        selectedImages.length === 14 
-                          ? 'bg-green-100 text-green-700' 
-                          : selectedImages.length > 0 
-                            ? 'bg-blue-100 text-blue-700' 
-                            : 'bg-gray-100 text-gray-600'
+                        currentImages.length > 0
+                          ? 'bg-blue-100 text-blue-700' 
+                          : 'bg-gray-100 text-gray-600'
                       }`}>
-                        {selectedImages.length}/14 เลือกแล้ว
+                        {currentImages.length} รูปในชุดนี้
                       </div>
                     </div>
                     <div className="grid grid-cols-3 gap-4">
                       {driveImages.filter(img => img && img.id && img.url).map((img) => {
-                        const isSelected = selectedImages.find(i => i && i.id === img.id)
+                        const isSelected = currentImages.find(i => i && i.id === img.id)
+                        const alreadyUsed = imageSets.some(set => set.images.some(i => i.id === img.id))
                         return (
                           <div
                             key={img.id}
-                            onClick={() => toggleImageSelection(img)}
-                            className={`group relative cursor-pointer rounded-xl overflow-hidden transition-all duration-300 ${
-                              isSelected
-                                ? 'ring-4 ring-blue-500 shadow-xl scale-[1.02]'
-                                : 'ring-2 ring-gray-300 hover:ring-gray-400 hover:shadow-lg'
+                            onClick={() => !alreadyUsed && toggleImageSelection(img)}
+                            className={`group relative rounded-xl overflow-hidden transition-all duration-300 ${
+                              alreadyUsed
+                                ? 'opacity-40 cursor-not-allowed ring-2 ring-gray-200'
+                                : isSelected
+                                  ? 'ring-4 ring-blue-500 shadow-xl scale-[1.02] cursor-pointer'
+                                  : 'ring-2 ring-gray-300 hover:ring-gray-400 hover:shadow-lg cursor-pointer'
                             }`}
                           >
                             <div className="aspect-[4/3] relative bg-gray-200">
@@ -1212,10 +1184,18 @@ export default function DashboardPage() {
                             <div className={`absolute inset-0 transition-opacity duration-300 ${
                               isSelected 
                                 ? 'bg-blue-500/20' 
-                                : 'bg-black/0 group-hover:bg-black/10'
+                                : alreadyUsed
+                                  ? 'bg-gray-900/60'
+                                  : 'bg-black/0 group-hover:bg-black/10'
                             }`} />
+                            {/* Already Used Badge */}
+                            {alreadyUsed && (
+                              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gray-800 text-white px-3 py-1.5 rounded-full text-xs font-bold">
+                                ✓ ใช้แล้ว
+                              </div>
+                            )}
                             {/* Checkmark */}
-                            {isSelected && (
+                            {isSelected && !alreadyUsed && (
                               <div className="absolute top-3 right-3 bg-blue-500 text-white rounded-full w-10 h-10 flex items-center justify-center shadow-lg animate-in zoom-in duration-200">
                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -1230,9 +1210,93 @@ export default function DashboardPage() {
                         )
                       })}
                     </div>
+
+                    {/* Add Set Button */}
+                    {currentSheetRow && currentImages.length > 0 && (
+                      <div className="mt-6 pt-6 border-t border-gray-300">
+                        <button
+                          type="button"
+                          onClick={addImageSet}
+                          className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white py-4 rounded-lg hover:from-green-700 hover:to-emerald-700 font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-3"
+                        >
+                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                          </svg>
+                          ➕ เพิ่มชุดนี้เข้างาน ({currentImages.length} รูป)
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
+
+              {/* Added Sets Display */}
+              {imageSets.length > 0 && (
+                <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-xl border-2 border-green-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-bold text-lg text-green-900">
+                      ✅ ชุดที่เพิ่มแล้ว: {imageSets.length} ชุด ({getTotalImageCount()}/14 รูป)
+                    </h3>
+                    <div className="text-sm text-green-700 font-medium">
+                      พร้อมสร้างงาน
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {imageSets.map((set, index) => (
+                      <div key={index} className="bg-white p-4 rounded-lg shadow-sm border border-green-100 hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <span className="bg-green-600 text-white text-xs font-bold px-2 py-1 rounded-full">
+                                ชุดที่ {index + 1}
+                              </span>
+                              <h4 className="font-semibold text-gray-900">
+                                {set.sheetRow['Product Name'] || 'Untitled'}
+                              </h4>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-2 text-sm mb-2">
+                              <div>
+                                <span className="text-gray-600">ประเภท: </span>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-purple-100 text-purple-800">
+                                  📷 {set.sheetRow['Photo_Type'] || '-'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">จำนวนรูป: </span>
+                                <span className="font-semibold text-gray-900">{set.images.length} รูป</span>
+                              </div>
+                            </div>
+                            
+                            {set.sheetRow['Content_Topic'] && (
+                              <div className="text-xs text-gray-600">
+                                <span className="font-medium">หัวข้อ:</span> {set.sheetRow['Content_Topic']}
+                              </div>
+                            )}
+                            {set.sheetRow['Post_Title_Headline'] && (
+                              <div className="text-xs text-gray-600">
+                                <span className="font-medium">โพสต์:</span> {set.sheetRow['Post_Title_Headline']}
+                              </div>
+                            )}
+                          </div>
+                          
+                          <button
+                            type="button"
+                            onClick={() => removeImageSet(index)}
+                            className="ml-3 text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition-colors"
+                            title="ลบชุดนี้"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Generate Button */}
               <div className="flex justify-end gap-3 pt-6 border-t">
@@ -1245,10 +1309,19 @@ export default function DashboardPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={creating || selectedImages.length === 0 || selectedSheetRows.length === 0 || selectedImages.length !== selectedSheetRows.length}
-                  className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl"
+                  disabled={creating || imageSets.length === 0}
+                  className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl flex items-center gap-2"
                 >
-                  {creating ? '🎨 กำลังสร้าง...' : '✨ เริ่มปรับปรุงรูป'}
+                  {creating ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      🎨 กำลังสร้าง...
+                    </>
+                  ) : (
+                    <>
+                      ✨ เริ่มปรับปรุงรูป ({getTotalImageCount()} รูป)
+                    </>
+                  )}
                 </button>
               </div>
             </form>
