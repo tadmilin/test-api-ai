@@ -93,18 +93,10 @@ export const Jobs: CollectionConfig = {
             },
             {
               name: 'photoTypeFromSheet',
-              type: 'select',
+              type: 'text',
               label: 'Photo Type (from Sheet)',
-              options: [
-                { label: 'Bedroom', value: 'bedroom' },
-                { label: 'Dining / Restaurant', value: 'dining' },
-                { label: 'Lobby', value: 'lobby' },
-                { label: 'Pool', value: 'pool' },
-                { label: 'Bathroom', value: 'bathroom' },
-                { label: 'Generic', value: 'generic' },
-              ],
               admin: {
-                description: 'Photo type classified from sheet content (auto-detected)',
+                description: 'Photo type from Google Sheet (any value allowed)',
                 readOnly: true,
               },
             },
