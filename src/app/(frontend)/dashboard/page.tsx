@@ -107,7 +107,7 @@ export default function DashboardPage() {
   
   // Review & Finalize States
   const [currentJobId, setCurrentJobId] = useState<string | null>(null)
-  const [enhancedImages, setEnhancedImages] = useState<Array<{url: string, status: string, originalUrl: string}>>([])
+  const [enhancedImages, setEnhancedImages] = useState<Array<{url?: string, status?: string, originalUrl?: string, predictionId?: string}>>([])
   const [reviewMode, setReviewMode] = useState(false)
   const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null)
   const [finalImageUrl, setFinalImageUrl] = useState<string | null>(null)
@@ -1192,7 +1192,7 @@ export default function DashboardPage() {
                   <div className="flex gap-2">
                     {img.url && img.url.trim() !== '' ? (
                       <button
-                        onClick={() => downloadImage(img.url, `enhanced-${index + 1}-${Date.now()}.png`)}
+                        onClick={() => downloadImage(img.url!, `enhanced-${index + 1}-${Date.now()}.png`)}
                         className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-medium text-sm"
                       >
                         💾 ดาวน์โหลด
