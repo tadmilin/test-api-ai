@@ -166,6 +166,37 @@ export const Jobs: CollectionConfig = {
               ],
             },
             {
+              name: 'sheetRows',
+              type: 'array',
+              label: 'Sheet Rows Data',
+              admin: {
+                description: 'Per-image metadata from Google Sheet rows (1 row = 1 image)',
+                readOnly: true,
+              },
+              fields: [
+                {
+                  name: 'productName',
+                  type: 'text',
+                  label: 'Product Name',
+                },
+                {
+                  name: 'photoType',
+                  type: 'text',
+                  label: 'Photo Type',
+                },
+                {
+                  name: 'contentTopic',
+                  type: 'text',
+                  label: 'Content Topic',
+                },
+                {
+                  name: 'postTitleHeadline',
+                  type: 'text',
+                  label: 'Post Title / Headline',
+                },
+              ],
+            },
+            {
               name: 'templateType',
               type: 'select',
               label: 'Template Type',
@@ -213,9 +244,33 @@ export const Jobs: CollectionConfig = {
                     description: 'Used for polling async prediction status',
                   },
                 },
+                {
+                  name: 'photoType',
+                  type: 'text',
+                  label: 'Photo Type',
+                  admin: {
+                    description: 'Type from Sheet row (bedroom, pool, etc.)',
+                  },
+                },
+                {
+                  name: 'contentTopic',
+                  type: 'text',
+                  label: 'Content Topic',
+                  admin: {
+                    description: 'Content topic from Sheet row',
+                  },
+                },
+                {
+                  name: 'postTitleHeadline',
+                  type: 'text',
+                  label: 'Post Title / Headline',
+                  admin: {
+                    description: 'Post title from Sheet row',
+                  },
+                },
               ],
               admin: {
-                description: 'Enhanced images with approval status',
+                description: 'Enhanced images with metadata from Sheet',
               },
             },
             {

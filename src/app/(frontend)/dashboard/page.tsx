@@ -42,6 +42,9 @@ interface Job {
     status?: string
     predictionId?: string
     originalUrl?: string
+    photoType?: string
+    contentTopic?: string
+    postTitleHeadline?: string
   }>
 }
 
@@ -97,7 +100,7 @@ export default function DashboardPage() {
   const [spreadsheets, setSpreadsheets] = useState<{ id: string; name: string }[]>([])
   const [selectedSheetId, setSelectedSheetId] = useState<string>('')
   const [sheetData, setSheetData] = useState<SheetData[]>([])
-  const [selectedSheetRow, setSelectedSheetRow] = useState<SheetData | null>(null)
+  const [selectedSheetRows, setSelectedSheetRows] = useState<SheetData[]>([])
   const [driveFolders, setDriveFolders] = useState<{ id: string; name: string }[]>([])
   const [selectedFolderId, setSelectedFolderId] = useState<string>('')
   const [driveFolderId, setDriveFolderId] = useState<string>('')
@@ -107,7 +110,15 @@ export default function DashboardPage() {
   
   // Review & Finalize States
   const [currentJobId, setCurrentJobId] = useState<string | null>(null)
-  const [enhancedImages, setEnhancedImages] = useState<Array<{url?: string, status?: string, originalUrl?: string, predictionId?: string}>>([])
+  const [enhancedImages, setEnhancedImages] = useState<Array<{
+    url?: string
+    status?: string
+    originalUrl?: string
+    predictionId?: string
+    photoType?: string
+    contentTopic?: string
+    postTitleHeadline?: string
+  }>>([])
   const [reviewMode, setReviewMode] = useState(false)
   const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null)
   const [finalImageUrl, setFinalImageUrl] = useState<string | null>(null)
@@ -439,13 +450,20 @@ export default function DashboardPage() {
   }
 
   async function createJob() {
-    if (!selectedSheetRow) {
-      alert('❌ กรุณาเลือกสินค้าจาก Google Sheet ก่อน')
+    // Validation for multi-row selection
+    if (selectedSheetRows.length === 0) {
+      alert('❌ กรุณาเลือกข้อมูลจาก Google Sheet อย่างน้อย 1 แถว')
       return
     }
     
     if (selectedImages.length === 0) {
       alert('❌ กรุณาเลือกรูปอย่างน้อย 1 รูป')
+      return
+    }
+
+    // Match images to sheet rows (1 row = 1 image)
+    if (selectedImages.length !== selectedSheetRows.length) {
+      alert(`❌ จำนวนรูปและข้อมูล Sheet ไม่ตรงกัน\n- รูปที่เลือก: ${selectedImages.length} รูป\n- ข้อมูล Sheet: ${selectedSheetRows.length} แถว\n\nกรุณาเลือกให้ตรงกัน (1 แถว = 1 รูป)`)
       return
     }
 
@@ -458,25 +476,37 @@ export default function DashboardPage() {
 
     console.log('🚀 Starting job creation...')
     console.log('📊 Valid images:', validImages.length)
+    console.log('📋 Sheet rows:', selectedSheetRows.length)
 
     setCreating(true)
     setReviewMode(false)
     setFinalImageUrl(null)
 
     try {
-      // Create job with new template settings
+      // Use first row for job-level metadata, images will have individual metadata
+      const firstRow = selectedSheetRows[0]
+      
+      // Create job with multi-row data
       const jobRes = await fetch('/api/jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          productName: selectedSheetRow['Product Name'] || 'Untitled',
-          productDescription: selectedSheetRow['Product Description'] || selectedSheetRow['Description'] || '',
-          contentTopic: selectedSheetRow['Content_Topic'] || '',
-          postTitleHeadline: selectedSheetRow['Post_Title_Headline'] || '',
-          contentDescription: selectedSheetRow['Content_Description'] || '',
-          photoTypeFromSheet: selectedSheetRow['Photo_Type'] || undefined,
+          productName: firstRow['Product Name'] || 'Untitled',
+          productDescription: firstRow['Product Description'] || firstRow['Description'] || '',
+          contentTopic: firstRow['Content_Topic'] || '',
+          postTitleHeadline: firstRow['Post_Title_Headline'] || '',
+          contentDescription: firstRow['Content_Description'] || '',
+          photoTypeFromSheet: firstRow['Photo_Type'] || undefined,
           referenceImageIds: validImages.map((img) => ({ imageId: img.id })),
           referenceImageUrls: validImages.map((img) => ({ url: img.url })),
+          
+          // Pass all sheet rows for per-image metadata
+          sheetRows: selectedSheetRows.map(row => ({
+            productName: row['Product Name'] || '',
+            photoType: row['Photo_Type'] || '',
+            contentTopic: row['Content_Topic'] || '',
+            postTitleHeadline: row['Post_Title_Headline'] || '',
+          })),
           
           status: 'pending',
         }),
@@ -921,7 +951,7 @@ export default function DashboardPage() {
                   value={selectedSheetId}
                   onChange={(e) => {
                     setSelectedSheetId(e.target.value)
-                    setSelectedSheetRow(null)
+                    setSelectedSheetRows([])
                     setSheetData([])
                   }}
                 >
@@ -945,52 +975,143 @@ export default function DashboardPage() {
                 </button>
               )}
 
-              {/* Select from Google Sheets */}
+              {/* Select from Google Sheets - Multi-row checkbox selection */}
               {sheetData.length > 0 && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    เลือกสินค้าจาก Google Sheets
-                  </label>
-                  <select
-                    className="w-full border border-gray-300 rounded-lg p-2 text-gray-900"
-                    onChange={(e) => setSelectedSheetRow(sheetData[parseInt(e.target.value)])}
-                  >
-                    <option value="">-- เลือกสินค้า --</option>
-                    {sheetData.map((row, index) => (
-                      <option key={index} value={index}>
-                        {row['Product Name'] || `Row ${index + 1}`}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="block text-sm font-medium text-gray-700">
+                      เลือกสินค้าจาก Google Sheets ({selectedSheetRows.length} แถว)
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSheetRows([...sheetData])}
+                        className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200"
+                      >
+                        เลือกทั้งหมด
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSheetRows([])}
+                        className="text-xs bg-gray-100 text-gray-700 px-3 py-1 rounded hover:bg-gray-200"
+                      >
+                        ล้างทั้งหมด
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="max-h-96 overflow-y-auto border border-gray-300 rounded-lg">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50 sticky top-0">
+                        <tr>
+                          <th className="px-4 py-3 text-left">
+                            <input
+                              type="checkbox"
+                              checked={selectedSheetRows.length === sheetData.length}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedSheetRows([...sheetData])
+                                } else {
+                                  setSelectedSheetRows([])
+                                }
+                              }}
+                              className="w-4 h-4"
+                            />
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">ชื่อสินค้า</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">ประเภทภาพ</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">หัวข้อเนื้อหา</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">หัวข้อโพสต์</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {sheetData.map((row, index) => {
+                          const isSelected = selectedSheetRows.includes(row)
+                          return (
+                            <tr 
+                              key={index}
+                              className={`hover:bg-gray-50 cursor-pointer ${isSelected ? 'bg-blue-50' : ''}`}
+                              onClick={() => {
+                                if (isSelected) {
+                                  setSelectedSheetRows(selectedSheetRows.filter(r => r !== row))
+                                } else {
+                                  setSelectedSheetRows([...selectedSheetRows, row])
+                                }
+                              }}
+                            >
+                              <td className="px-4 py-3">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => {}}
+                                  className="w-4 h-4"
+                                />
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-900">
+                                {row['Product Name'] || `Row ${index + 1}`}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-900">
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                  {row['Photo_Type'] || '-'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-700">
+                                {row['Content_Topic'] || '-'}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-700">
+                                {row['Post_Title_Headline'] || '-'}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
 
-              {/* Show selected sheet row as table with all columns */}
-              {selectedSheetRow && (
+              {/* Show selected sheet rows details */}
+              {selectedSheetRows.length > 0 && (
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl border-2 border-blue-200">
-                  <h3 className="font-bold text-lg mb-4 text-blue-900">📋 ข้อมูลที่เลือกจาก Google Sheet:</h3>
+                  <h3 className="font-bold text-lg mb-4 text-blue-900">📋 ข้อมูลที่เลือก: {selectedSheetRows.length} แถว</h3>
                   
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full bg-white rounded-lg shadow-sm">
-                      <thead className="bg-blue-600 text-white">
-                        <tr>
-                          <th className="px-4 py-3 text-left font-semibold text-sm">คอลัมน์</th>
-                          <th className="px-4 py-3 text-left font-semibold text-sm">ข้อมูล</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
-                        {Object.entries(selectedSheetRow).map(([key, value], index) => (
-                          <tr key={key} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                            <td className="px-4 py-3 text-sm font-medium text-gray-700 whitespace-nowrap">
-                              {key}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-gray-900">
-                              {value?.toString() || '-'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="space-y-3 max-h-64 overflow-y-auto">
+                    {selectedSheetRows.map((row, idx) => (
+                      <div key={idx} className="bg-white p-4 rounded-lg shadow-sm border border-blue-100">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-gray-900 mb-2">
+                              {idx + 1}. {row['Product Name'] || 'Untitled'}
+                            </h4>
+                            <div className="grid grid-cols-2 gap-2 text-sm">
+                              <div>
+                                <span className="text-gray-600">ประเภท: </span>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                                  {row['Photo_Type'] || '-'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">หัวข้อ: </span>
+                                <span className="text-gray-900">{row['Content_Topic'] || '-'}</span>
+                              </div>
+                            </div>
+                            {row['Post_Title_Headline'] && (
+                              <div className="mt-2 text-sm">
+                                <span className="text-gray-600">หัวข้อโพสต์: </span>
+                                <span className="text-gray-900">{row['Post_Title_Headline']}</span>
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedSheetRows(selectedSheetRows.filter(r => r !== row))}
+                            className="ml-3 text-red-500 hover:text-red-700 text-sm"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -1124,7 +1245,7 @@ export default function DashboardPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={creating || selectedImages.length === 0 || !selectedSheetRow}
+                  disabled={creating || selectedImages.length === 0 || selectedSheetRows.length === 0 || selectedImages.length !== selectedSheetRows.length}
                   className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl"
                 >
                   {creating ? '🎨 กำลังสร้าง...' : '✨ เริ่มปรับปรุงรูป'}
@@ -1156,80 +1277,113 @@ export default function DashboardPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {enhancedImages.map((img, index) => (
-                <div key={index} className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-4 border-2 border-gray-200">
-                  <div className="mb-3">
-                    <h3 className="font-semibold text-gray-900">รูปที่ {index + 1}</h3>
-                    <div className={`inline-block px-2 py-1 rounded text-xs font-medium mt-1 ${
-                      img.url && img.url.trim() !== '' ? 'bg-green-100 text-green-700' :
-                      img.status === 'processing' ? 'bg-blue-100 text-blue-700' :
-                      img.status === 'failed' ? 'bg-red-100 text-red-700' :
-                      'bg-gray-100 text-gray-700'
-                    }`}>
-                      {img.url && img.url.trim() !== '' ? '✅ เสร็จแล้ว' :
-                       img.status === 'processing' ? '⏳ กำลังประมวลผล...' :
-                       img.status === 'failed' ? '❌ ล้มเหลว' :
-                       '⏳ รอคิว...'}
+              {enhancedImages.map((img, index) => {
+                const hasMetadata = img.photoType || img.contentTopic || img.postTitleHeadline
+                return (
+                  <div key={index} className="bg-white rounded-xl border-2 border-gray-200 shadow-sm hover:shadow-md transition-all overflow-hidden">
+                    {/* Header with Status */}
+                    <div className="bg-gradient-to-r from-gray-50 to-gray-100 p-3 border-b border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-semibold text-gray-900">รูปที่ {index + 1}</h3>
+                        <div className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold ${
+                          img.url && img.url.trim() !== '' ? 'bg-green-100 text-green-700' :
+                          img.status === 'processing' ? 'bg-blue-100 text-blue-700' :
+                          img.status === 'failed' ? 'bg-red-100 text-red-700' :
+                          'bg-gray-100 text-gray-700'
+                        }`}>
+                          {img.url && img.url.trim() !== '' ? '✅ เสร็จแล้ว' :
+                           img.status === 'processing' ? '⏳ ประมวลผล' :
+                           img.status === 'failed' ? '❌ ล้มเหลว' :
+                           '⏳ รอคิว'}
+                        </div>
+                      </div>
+                      
+                      {/* Metadata - Always show if available */}
+                      {hasMetadata && (
+                        <div className="mt-2 space-y-1.5">
+                          {img.photoType && (
+                            <div>
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-600 text-white">
+                                📷 {img.photoType}
+                              </span>
+                            </div>
+                          )}
+                          {img.contentTopic && (
+                            <div className="text-xs">
+                              <span className="text-gray-600">หัวข้อ: </span>
+                              <span className="text-gray-900 font-medium">{img.contentTopic}</span>
+                            </div>
+                          )}
+                          {img.postTitleHeadline && (
+                            <div className="text-xs">
+                              <span className="text-gray-600">โพสต์: </span>
+                              <span className="text-gray-900">{img.postTitleHeadline}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Enhanced Image */}
+                    <div className="relative aspect-[4/3] bg-gray-100">
+                      {img.url ? (
+                        <Image
+                          src={img.url}
+                          alt={`Enhanced ${index + 1}`}
+                          fill
+                          className="object-cover"
+                          unoptimized
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center h-full text-gray-400 flex-col gap-3">
+                          {img.status === 'processing' ? (
+                            <>
+                              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                              <span className="text-xs font-medium">กำลังประมวลผล...</span>
+                            </>
+                          ) : img.status === 'failed' ? (
+                            <>
+                              <span className="text-3xl">❌</span>
+                              <span className="text-xs font-medium">ล้มเหลว</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-3xl">⏳</span>
+                              <span className="text-xs font-medium">รอคิว...</span>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="p-3">
+                      {img.url && img.url.trim() !== '' ? (
+                        <button
+                          onClick={() => downloadImage(img.url!, `${img.photoType || 'enhanced'}-${index + 1}-${Date.now()}.jpg`)}
+                          className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-2.5 rounded-lg hover:from-blue-700 hover:to-purple-700 font-medium text-sm shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2"
+                        >
+                          <span>💾</span>
+                          <span>ดาวน์โหลด</span>
+                        </button>
+                      ) : img.status === 'failed' ? (
+                        <button
+                          onClick={() => handleRegenerateImage(index)}
+                          disabled={regeneratingIndex === index}
+                          className="w-full bg-amber-600 text-white py-2.5 rounded-lg hover:bg-amber-700 font-medium text-sm disabled:bg-gray-400 shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2"
+                        >
+                          <span>{regeneratingIndex === index ? '⏳' : '🔄'}</span>
+                          <span>{regeneratingIndex === index ? 'กำลังสร้าง...' : 'ลองใหม่'}</span>
+                        </button>
+                      ) : (
+                        <div className="w-full bg-gray-100 text-gray-500 py-2.5 rounded-lg font-medium text-sm text-center">
+                          ⏳ รอสักครู่...
+                        </div>
+                      )}
                     </div>
                   </div>
-
-                  {/* Enhanced Image */}
-                  <div className="relative aspect-[4/3] rounded-lg overflow-hidden mb-3 border-2 border-gray-300 bg-gray-100">
-                    {img.url ? (
-                      <Image
-                        src={img.url}
-                        alt={`Enhanced ${index + 1}`}
-                        fill
-                        className="object-cover"
-                        unoptimized
-                      />
-                    ) : (
-                      <div className="flex items-center justify-center h-full text-gray-400 flex-col gap-2">
-                        {img.status === 'processing' ? (
-                          <>
-                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-                            <span className="text-xs">กำลังประมวลผล...</span>
-                          </>
-                        ) : img.status === 'failed' ? (
-                          <>
-                            <span className="text-2xl">❌</span>
-                            <span className="text-xs">ล้มเหลว</span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="text-2xl">⏳</span>
-                            <span className="text-xs">รอคิว...</span>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-2">
-                    {img.url && img.url.trim() !== '' ? (
-                      <button
-                        onClick={() => downloadImage(img.url!, `enhanced-${index + 1}-${Date.now()}.png`)}
-                        className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-medium text-sm"
-                      >
-                        💾 ดาวน์โหลด
-                      </button>
-                    ) : img.status === 'failed' ? (
-                      <button
-                        onClick={() => handleRegenerateImage(index)}
-                        disabled={regeneratingIndex === index}
-                        className="flex-1 bg-amber-600 text-white py-2 rounded-lg hover:bg-amber-700 font-medium text-sm disabled:bg-gray-400"
-                      >
-                        {regeneratingIndex === index ? '⏳ กำลังสร้าง...' : '🔄 ลองใหม่'}
-                      </button>
-                    ) : (
-                      <div className="flex-1 bg-gray-100 text-gray-500 py-2 rounded-lg font-medium text-sm text-center">
-                        ⏳ รอสักครู่...
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
 
             {/* Complete Button */}
@@ -1277,11 +1431,13 @@ export default function DashboardPage() {
                 {viewingJob.enhancedImageUrls && viewingJob.enhancedImageUrls.length > 0 ? (
                   <div>
                     <h3 className="font-semibold mb-4 text-lg">🎨 รูปที่ปรับปรุงด้วย Nano-Banana Pro</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {viewingJob.enhancedImageUrls.map((img, index) => (
-                        img.url ? (
-                          <div key={index} className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200">
-                            <div className="relative aspect-[4/3] rounded-lg overflow-hidden mb-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {viewingJob.enhancedImageUrls.map((img, index) => {
+                        const hasMetadata = img.photoType || img.contentTopic || img.postTitleHeadline
+                        return img.url ? (
+                          <div key={index} className="bg-white rounded-lg border-2 border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+                            {/* Image */}
+                            <div className="relative aspect-[4/3] bg-gray-100">
                               <Image
                                 src={img.url}
                                 alt={`Enhanced ${index + 1}`}
@@ -1289,19 +1445,57 @@ export default function DashboardPage() {
                                 className="object-cover"
                                 unoptimized
                               />
+                              {/* Image Number Badge */}
+                              <div className="absolute top-2 left-2 bg-black/70 text-white text-xs font-bold px-2 py-1 rounded">
+                                #{index + 1}
+                              </div>
                             </div>
-                            <button
-                              onClick={() => downloadImage(img.url!, `${viewingJob.productName}_enhanced_${index + 1}.jpg`)}
-                              className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-medium text-sm flex items-center justify-center gap-2"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                              </svg>
-                              ดาวน์โหลดรูปที่ {index + 1}
-                            </button>
+                            
+                            {/* Metadata Section */}
+                            {hasMetadata && (
+                              <div className="p-4 border-b border-gray-100 bg-gradient-to-br from-blue-50 to-purple-50">
+                                {/* Photo Type Badge */}
+                                {img.photoType && (
+                                  <div className="mb-2">
+                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-purple-600 text-white">
+                                      📷 {img.photoType}
+                                    </span>
+                                  </div>
+                                )}
+                                
+                                {/* Content Topic */}
+                                {img.contentTopic && (
+                                  <div className="mb-2">
+                                    <div className="text-xs text-gray-600 font-medium mb-1">หัวข้อเนื้อหา:</div>
+                                    <div className="text-sm text-gray-900 font-medium">{img.contentTopic}</div>
+                                  </div>
+                                )}
+                                
+                                {/* Post Title / Headline */}
+                                {img.postTitleHeadline && (
+                                  <div>
+                                    <div className="text-xs text-gray-600 font-medium mb-1">หัวข้อโพสต์:</div>
+                                    <div className="text-sm text-gray-900">{img.postTitleHeadline}</div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            
+                            {/* Download Button */}
+                            <div className="p-3">
+                              <button
+                                onClick={() => downloadImage(img.url!, `${viewingJob.productName}_${img.photoType || 'enhanced'}_${index + 1}.jpg`)}
+                                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-2.5 rounded-lg hover:from-blue-700 hover:to-purple-700 font-medium text-sm flex items-center justify-center gap-2 shadow-sm hover:shadow-md transition-all"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                ดาวน์โหลดรูป
+                              </button>
+                            </div>
                           </div>
                         ) : null
-                      ))}
+                      })}
                     </div>
                   </div>
                 ) : viewingJob.generatedImages ? (

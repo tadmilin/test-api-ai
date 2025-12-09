@@ -56,31 +56,29 @@ export async function POST(request: NextRequest) {
         throw new Error('No reference images found')
       }
 
-      // Get photoType from job (from Sheet)
-      const photoTypeFromSheet = job.photoTypeFromSheet || null
-      console.log(`📋 PhotoType from Sheet: ${photoTypeFromSheet || 'none'}`)
-
-      // Get prompt once (same for all images)
-      console.log('📝 Getting prompt...')
-      const promptRes = await fetch(`${baseUrl}/api/generate/prompt`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ photoTypeFromSheet }),
-      })
-
-      if (!promptRes.ok) {
-        throw new Error(`Prompt API failed: ${promptRes.status}`)
-      }
-
-      const { prompt, photoType } = await promptRes.json()
-      console.log(`✅ Using prompt for: ${photoType}`)
+      // Get sheetRows data for per-image metadata
+      const sheetRows = (job as any).sheetRows || []
+      console.log(`📋 Sheet rows data:`, sheetRows.length > 0 ? `${sheetRows.length} rows` : 'none (fallback to job photoType)')
 
       // Process images with stagger delay (2s between each)
       const STAGGER_DELAY_MS = 2000
       const predictionIds: string[] = []
+      const imageMetadata: Array<{
+        photoType: string
+        contentTopic?: string
+        postTitleHeadline?: string
+      }> = []
 
       for (let i = 0; i < referenceUrls.length; i++) {
         const imageUrl = referenceUrls[i] as string
+        
+        // Get per-image metadata from sheetRows or fallback to job-level data
+        const sheetRow = sheetRows[i] || {}
+        const photoTypeFromSheet = sheetRow.photoType || job.photoTypeFromSheet || null
+        
+        console.log(`\n🖼️ Processing image ${i + 1}/${referenceUrls.length}`)
+        console.log(`📋 Sheet row:`, sheetRow.productName || 'N/A')
+        console.log(`📷 PhotoType:`, photoTypeFromSheet || 'generic')
         
         // Stagger requests
         if (i > 0) {
@@ -88,9 +86,29 @@ export async function POST(request: NextRequest) {
           await new Promise(resolve => setTimeout(resolve, STAGGER_DELAY_MS))
         }
 
-        console.log(`\n🖼️ Processing image ${i + 1}/${referenceUrls.length}`)
-
         try {
+          // Get prompt for this specific image
+          console.log(`📝 Getting prompt for ${photoTypeFromSheet || 'generic'}...`)
+          const promptRes = await fetch(`${baseUrl}/api/generate/prompt`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ photoTypeFromSheet }),
+          })
+
+          if (!promptRes.ok) {
+            throw new Error(`Prompt API failed: ${promptRes.status}`)
+          }
+
+          const { prompt, photoType } = await promptRes.json()
+          console.log(`✅ Using prompt for: ${photoType}`)
+          
+          // Store metadata for this image
+          imageMetadata.push({
+            photoType,
+            contentTopic: sheetRow.contentTopic || '',
+            postTitleHeadline: sheetRow.postTitleHeadline || '',
+          })
+
           // Start enhancement
           const enhanceRes = await fetch(`${baseUrl}/api/generate/enhance`, {
             method: 'POST',
@@ -115,15 +133,25 @@ export async function POST(request: NextRequest) {
         } catch (error: any) {
           console.error(`❌ Image ${i + 1} failed:`, error.message)
           predictionIds.push('') // Empty = failed
+          
+          // Still store metadata even for failed images
+          imageMetadata.push({
+            photoType: photoTypeFromSheet || 'generic',
+            contentTopic: sheetRow.contentTopic || '',
+            postTitleHeadline: sheetRow.postTitleHeadline || '',
+          })
         }
       }
 
-      // Update job with prediction IDs and set status properly
+      // Update job with prediction IDs and metadata
       const initialImages = predictionIds.map((id, index) => ({
         url: '', // Will be filled by polling
         predictionId: id || null,
         originalUrl: referenceUrls[index] as string,
         status: 'pending' as const, // All start as pending, will update via polling
+        photoType: imageMetadata[index]?.photoType || '',
+        contentTopic: imageMetadata[index]?.contentTopic || '',
+        postTitleHeadline: imageMetadata[index]?.postTitleHeadline || '',
       }))
       
       await payload.update({
