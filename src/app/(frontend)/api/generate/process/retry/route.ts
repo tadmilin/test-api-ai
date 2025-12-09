@@ -76,8 +76,7 @@ export async function POST(request: NextRequest) {
       ...targetImage,
       predictionId,
       url: '',
-      status: 'processing',
-      error: undefined,
+      status: 'pending',
     }
 
     await payload.update({

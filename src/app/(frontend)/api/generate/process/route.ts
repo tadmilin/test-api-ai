@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
         url: '', // Will be filled by polling
         predictionId: id || null,
         originalUrl: referenceUrls[index] as string,
-        status: id ? 'processing' : 'failed',
+        status: 'pending' as const, // All start as pending, will update via polling
       }))
       
       await payload.update({

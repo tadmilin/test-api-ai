@@ -684,10 +684,9 @@ export default function DashboardPage() {
       const updated = [...enhancedImages]
       updated[index] = {
         ...updated[index],
-        status: 'processing',
+        status: 'pending',
         predictionId: data.predictionId,
         url: '',
-        error: undefined,
       }
       setEnhancedImages(updated)
 
