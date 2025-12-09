@@ -40,16 +40,16 @@ export async function POST(request: NextRequest) {
 
     const templateRef = await getTemplateReference(templateType as TemplateType)
     
-    // 🚀 OPTIMIZATION: Limit to max 3 images total for faster processing
+    // Use ALL user images - don't limit
     let finalImageUrls: string[]
     if (templateRef) {
-      // Template + first 2 user images = 3 total
-      finalImageUrls = [templateRef, ...imageUrls.slice(0, 2)]
-      console.log(`📐 Using template reference + ${imageUrls.slice(0, 2).length} images`)
+      // Template reference + ALL user images
+      finalImageUrls = [templateRef, ...imageUrls]
+      console.log(`📐 Using template reference + ${imageUrls.length} user images = ${finalImageUrls.length} total`)
     } else {
-      // Max 3 user images
-      finalImageUrls = imageUrls.slice(0, 3)
-      console.log(`📸 Using ${finalImageUrls.length} images (no template ref)`)
+      // All user images (no template ref)
+      finalImageUrls = imageUrls
+      console.log(`📸 Using all ${finalImageUrls.length} user images (no template ref)`)
     }
 
     // Ensure all images are public (especially the template from Media)
