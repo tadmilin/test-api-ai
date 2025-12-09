@@ -63,6 +63,75 @@ export async function POST(request: NextRequest) {
       finalImageUrls.map(url => ensurePublicImage(url, jobId, baseUrl))
     )
     console.log('✅ All template images are public')
+    
+    // 🎯 THUMBNAIL STRATEGY: Resize all images for template generation
+    // Template generation doesn't need full resolution (collage uses smaller images)
+    console.log('📐 Optimizing images for template generation (thumbnail strategy)...')
+    
+    const sharp = (await import('sharp')).default
+    const optimizedUrls: string[] = []
+    
+    for (let i = 0; i < finalImageUrls.length; i++) {
+      const imageUrl = finalImageUrls[i]
+      const isTemplateRef = (i === 0 && usedTemplateRef)
+      
+      try {
+        console.log(`  Processing image ${i + 1}/${finalImageUrls.length}...`)
+        
+        // Download image
+        const response = await fetch(imageUrl)
+        if (!response.ok) throw new Error(`Failed to fetch: ${response.statusText}`)
+        const arrayBuffer = await response.arrayBuffer()
+        const inputBuffer = Buffer.from(arrayBuffer)
+        
+        // Optimize based on role
+        const targetSize = isTemplateRef ? 768 : 512 // Template ref: 768px, Others: 512px
+        console.log(`    ${isTemplateRef ? 'Template ref' : 'User image'} - target: ${targetSize}px`)
+        
+        const metadata = await sharp(inputBuffer).metadata()
+        const currentSize = Math.max(metadata.width || 0, metadata.height || 0)
+        
+        let optimizedBuffer = inputBuffer
+        
+        // Only resize if larger than target
+        if (currentSize > targetSize) {
+          console.log(`    Resizing from ${metadata.width}x${metadata.height} to ${targetSize}px`)
+          optimizedBuffer = await sharp(inputBuffer)
+            .resize({ width: targetSize, height: targetSize, fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 85 }) // Use JPEG for smaller size, 85% quality sufficient for collage
+            .toBuffer()
+        } else {
+          console.log(`    Already small enough (${metadata.width}x${metadata.height}), converting to JPEG`)
+          // Still convert to JPEG for consistency
+          optimizedBuffer = await sharp(inputBuffer)
+            .jpeg({ quality: 85 })
+            .toBuffer()
+        }
+        
+        // Upload optimized version to Blob
+        const timestamp = Date.now()
+        const { put } = await import('@vercel/blob')
+        const optimizedBlob = await put(
+          `jobs/${jobId}/template-optimized-${i}-${timestamp}.jpg`,
+          optimizedBuffer,
+          {
+            access: 'public',
+            contentType: 'image/jpeg',
+          }
+        )
+        
+        optimizedUrls.push(optimizedBlob.url)
+        console.log(`  ✅ Image ${i + 1} optimized: ${(optimizedBuffer.byteLength / 1024).toFixed(1)} KB`)
+        
+      } catch (error) {
+        console.error(`  ❌ Failed to optimize image ${i + 1}:`, error)
+        // Fallback to original URL if optimization fails
+        optimizedUrls.push(imageUrl)
+      }
+    }
+    
+    finalImageUrls = optimizedUrls
+    console.log(`✅ All images optimized for template generation`)
 
     const prompt = getTemplatePrompt(templateType as TemplateType)
     if (!prompt) {
