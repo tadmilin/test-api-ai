@@ -340,8 +340,8 @@ export default function DashboardPage() {
       if (exists) {
         return prev.filter(img => img && img.id !== image.id)
       } else {
-        // Allow maximum 4 images (not limited by templateType)
-        const MAX_IMAGES = 4
+        // Allow maximum 14 images
+        const MAX_IMAGES = 14
         if (prev.length >= MAX_IMAGES) {
           alert(`❌ สามารถเลือกได้สูงสุด ${MAX_IMAGES} รูปเท่านั้น`)
           return prev
@@ -458,6 +458,15 @@ export default function DashboardPage() {
             const statusData = await statusRes.json()
             console.log(`✅ Status: ${statusData.completed}/${statusData.total} complete, ${statusData.processing} processing`)
             
+            // Update images in real-time (show completed images immediately)
+            if (statusData.images && statusData.images.length > 0) {
+              setEnhancedImages(statusData.images)
+              // Show review mode immediately when first image completes
+              if (statusData.completed > 0 && !reviewMode) {
+                setReviewMode(true)
+              }
+            }
+            
             // Update status message
             const progress = `${statusData.completed}/${statusData.total}`
             const elapsed = Math.floor(polls * 5 / 60) // minutes
@@ -470,12 +479,9 @@ export default function DashboardPage() {
             }
             
             if (statusData.allComplete) {
-              // All done - show review UI
+              // All done
               setProcessingStatus('')
               setProcessingJobId(null)
-              setEnhancedImages(statusData.images || [])
-              setReviewMode(true)
-              alert('✅ รูปทั้งหมดถูกปรับปรุงแล้ว! กรุณาตรวจสอบและอนุมัติรูป')
               break
             }
           } catch (pollError) {
@@ -604,21 +610,17 @@ export default function DashboardPage() {
     }
   }
 
-  // Complete job after all images approved
+  // Complete job after all images done (no approval required)
   async function handleCompleteJob() {
     if (!currentJobId) return
 
-    // Check all images are approved
-    const allApproved = enhancedImages.every(img => img.status === 'approved')
-    if (!allApproved) {
-      alert('⚠️ กรุณาอนุมัติรูปทั้งหมดก่อน')
-      return
-    }
+    // Check all images have valid URLs (completed)
+    const completedImages = enhancedImages.filter(img => img.url && img.url.trim() !== '')
+    const totalImages = enhancedImages.length
     
-    // Check all images have valid URLs
-    const missingUrls = enhancedImages.filter(img => !img.url || img.url.trim() === '')
-    if (missingUrls.length > 0) {
-      alert(`⚠️ รูปบางรูปยังไม่พร้อม (${missingUrls.length}/${enhancedImages.length})\n\nกรุณารอให้การ enhance เสร็จสมบูรณ์ก่อน`)
+    if (completedImages.length < totalImages) {
+      const remaining = totalImages - completedImages.length
+      alert(`⚠️ ยังมีรูปที่กำลังประมวลผลอยู่: ${remaining}/${totalImages}\n\nกรุณารอให้เสร็จทั้งหมดก่อนบันทึกงาน`)
       return
     }
 
@@ -918,17 +920,17 @@ export default function DashboardPage() {
                       <div>
                         <h3 className="text-lg font-semibold text-gray-900">รูปอ้างอิง</h3>
                         <p className="text-sm text-gray-600 mt-1">
-                          คลิกรูปเพื่อเลือก/ยกเลิกสำหรับวิเคราะห์ด้วย AI (สูงสุด 4 รูป)
+                          คลิกรูปเพื่อเลือก/ยกเลิกสำหรับปรับปรุงด้วย AI (สูงสุด 14 รูป)
                         </p>
                       </div>
                       <div className={`px-4 py-2 rounded-lg font-semibold ${
-                        selectedImages.length === 4 
+                        selectedImages.length === 14 
                           ? 'bg-green-100 text-green-700' 
                           : selectedImages.length > 0 
                             ? 'bg-blue-100 text-blue-700' 
                             : 'bg-gray-100 text-gray-600'
                       }`}>
-                        {selectedImages.length}/4 เลือกแล้ว
+                        {selectedImages.length}/14 เลือกแล้ว
                       </div>
                     </div>
                     <div className="grid grid-cols-3 gap-4">
@@ -1007,15 +1009,15 @@ export default function DashboardPage() {
           <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">📸 Review Enhanced Images</h2>
+                <h2 className="text-2xl font-bold text-gray-900">📸 รูปที่ปรับปรุงแล้ว</h2>
                 <p className="text-gray-600 mt-1">
-                  ตรวจสอบรูปที่ปรับปรุงแล้ว - อนุมัติหรือสร้างใหม่ตามต้องการ
+                  ดาวน์โหลดรูปที่เสร็จแล้วได้ทันที - รูปที่ยังไม่เสร็จจะแสดงเมื่อประมวลผลเสร็จ
                 </p>
               </div>
               <div className="text-right">
                 <div className="text-sm text-gray-600">
-                  อนุมัติแล้ว: <span className="font-bold text-green-600">
-                    {enhancedImages.filter(img => img.status === 'approved').length} / {enhancedImages.length}
+                  สำเร็จแล้ว: <span className="font-bold text-green-600">
+                    {enhancedImages.filter(img => img.url && img.url.trim() !== '').length} / {enhancedImages.length}
                   </span>
                 </div>
               </div>
@@ -1027,13 +1029,15 @@ export default function DashboardPage() {
                   <div className="mb-3">
                     <h3 className="font-semibold text-gray-900">รูปที่ {index + 1}</h3>
                     <div className={`inline-block px-2 py-1 rounded text-xs font-medium mt-1 ${
-                      img.status === 'approved' ? 'bg-green-100 text-green-700' :
-                      img.status === 'regenerating' ? 'bg-amber-100 text-amber-700' :
-                      'bg-blue-100 text-blue-700'
+                      img.url && img.url.trim() !== '' ? 'bg-green-100 text-green-700' :
+                      img.status === 'processing' ? 'bg-blue-100 text-blue-700' :
+                      img.status === 'failed' ? 'bg-red-100 text-red-700' :
+                      'bg-gray-100 text-gray-700'
                     }`}>
-                      {img.status === 'approved' ? '✅ อนุมัติแล้ว' :
-                       img.status === 'regenerating' ? '🔄 กำลังสร้างใหม่...' :
-                       '⏳ รอการตรวจสอบ'}
+                      {img.url && img.url.trim() !== '' ? '✅ เสร็จแล้ว' :
+                       img.status === 'processing' ? '⏳ กำลังประมวลผล...' :
+                       img.status === 'failed' ? '❌ ล้มเหลว' :
+                       '⏳ รอคิว...'}
                     </div>
                   </div>
 
@@ -1049,35 +1053,47 @@ export default function DashboardPage() {
                       />
                     ) : (
                       <div className="flex items-center justify-center h-full text-gray-400 flex-col gap-2">
-                        <span className="text-2xl">⚠️</span>
-                        <span className="text-xs">ไม่พบรูปภาพ</span>
+                        {img.status === 'processing' ? (
+                          <>
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                            <span className="text-xs">กำลังประมวลผล...</span>
+                          </>
+                        ) : img.status === 'failed' ? (
+                          <>
+                            <span className="text-2xl">❌</span>
+                            <span className="text-xs">ล้มเหลว</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-2xl">⏳</span>
+                            <span className="text-xs">รอคิว...</span>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
 
                   {/* Action Buttons */}
                   <div className="flex gap-2">
-                    {img.status === 'approved' ? (
-                      <div className="flex-1 bg-green-100 text-green-700 py-2 rounded-lg font-medium text-sm text-center border-2 border-green-300">
-                        ✅ อนุมัติแล้ว
-                      </div>
-                    ) : (
+                    {img.url && img.url.trim() !== '' ? (
                       <button
-                        onClick={() => handleApproveImage(index)}
-                        disabled={regeneratingIndex === index}
-                        className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 font-medium text-sm disabled:bg-gray-400"
+                        onClick={() => downloadImage(img.url, `enhanced-${index + 1}-${Date.now()}.png`)}
+                        className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-medium text-sm"
                       >
-                        ✅ อนุมัติ
+                        💾 ดาวน์โหลด
                       </button>
-                    )}
-                    {img.status !== 'approved' && (
+                    ) : img.status === 'failed' ? (
                       <button
                         onClick={() => handleRegenerateImage(index)}
                         disabled={regeneratingIndex === index}
                         className="flex-1 bg-amber-600 text-white py-2 rounded-lg hover:bg-amber-700 font-medium text-sm disabled:bg-gray-400"
                       >
-                        {regeneratingIndex === index ? '⏳ กำลังสร้าง...' : '🔄 สร้างใหม่'}
+                        {regeneratingIndex === index ? '⏳ กำลังสร้าง...' : '🔄 ลองใหม่'}
                       </button>
+                    ) : (
+                      <div className="flex-1 bg-gray-100 text-gray-500 py-2 rounded-lg font-medium text-sm text-center">
+                        ⏳ รอสักครู่...
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1095,12 +1111,12 @@ export default function DashboardPage() {
                 </button>
                 <button
                   onClick={handleCompleteJob}
-                  disabled={!enhancedImages.every(img => img.status === 'approved')}
+                  disabled={enhancedImages.filter(img => img.url && img.url.trim() !== '').length < enhancedImages.length}
                   className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-8 py-3 rounded-lg hover:from-green-700 hover:to-emerald-700 font-bold text-lg shadow-lg hover:shadow-xl transition-all disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed"
                 >
-                  {enhancedImages.every(img => img.status === 'approved') 
+                  {enhancedImages.filter(img => img.url && img.url.trim() !== '').length === enhancedImages.length
                     ? '✅ บันทึกงาน' 
-                    : '⚠️ กรุณาอนุมัติรูปทั้งหมดก่อน'}
+                    : `⏳ รอทุกรูปเสร็จ (${enhancedImages.filter(img => img.url && img.url.trim() !== '').length}/${enhancedImages.length})`}
                 </button>
               </div>
             </div>
