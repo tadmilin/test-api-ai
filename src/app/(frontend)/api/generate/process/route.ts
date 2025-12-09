@@ -71,7 +71,17 @@ export async function POST(request: NextRequest) {
       let resolvedType: PhotoType | null = null
       
       // Process all images in parallel using Promise.all
+      // Add staggered delay to prevent overwhelming Replicate with simultaneous requests
+      const STAGGER_DELAY_MS = 2000 // 2 seconds between each image
+      
       const enhancePromises = referenceUrls.map(async (rawImageUrl, i) => {
+        // Stagger the requests: image 0 starts immediately, image 1 after 2s, image 2 after 4s, etc.
+        const delayMs = i * STAGGER_DELAY_MS
+        if (delayMs > 0) {
+          console.log(`⏱️ Image ${i + 1}: Waiting ${delayMs/1000}s before starting...`)
+          await new Promise(resolve => setTimeout(resolve, delayMs))
+        }
+        
         console.log(`\n🖼️ Starting image ${i + 1}/${referenceUrls.length}...`)
         
         // Safe cast since we filtered Boolean above

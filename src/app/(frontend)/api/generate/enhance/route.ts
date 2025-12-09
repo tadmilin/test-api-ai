@@ -31,6 +31,9 @@ export async function POST(request: NextRequest) {
     console.log('📝 Prompt:', prompt.substring(0, 120) + '...')
     console.log('📸 PhotoType:', photoType || 'not specified')
 
+    // Get payload instance early for logging
+    const payload = await getPayload({ config })
+
     // ตรวจสอบว่าเป็น Google Drive URL หรือไม่
     let processedImageUrl = imageUrl
     
@@ -168,23 +171,67 @@ export async function POST(request: NextRequest) {
       throw checkError
     }
     
-    const nanoBananaPrediction = await replicate.predictions.create({
-      model: 'google/nano-banana-pro',
-      input: {
-        image_input: [processedImageUrl],
-        prompt: prompt,
-        resolution: '1K',
-        aspect_ratio: 'match_input_image',
-        output_format: 'png',
-        safety_filter_level: 'block_only_high',
-      },
-    })
-
-    console.log(`✅ Prediction created: ${nanoBananaPrediction.id}`)
-    console.log(`🔗 https://replicate.com/p/${nanoBananaPrediction.id}`)
+    // Retry logic for E6716 timeout errors
+    const MAX_RETRIES = 3
+    const RETRY_DELAYS = [3000, 8000, 15000] // 3s, 8s, 15s
+    
+    let nanoBananaPrediction
+    let lastError
+    
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        console.log(`🎯 Creating prediction (attempt ${attempt + 1}/${MAX_RETRIES + 1})...`)
+        
+        nanoBananaPrediction = await replicate.predictions.create({
+          model: 'google/nano-banana-pro',
+          input: {
+            image_input: [processedImageUrl],
+            prompt: prompt,
+            resolution: '1K',
+            aspect_ratio: 'match_input_image',
+            output_format: 'png',
+            safety_filter_level: 'block_only_high',
+          },
+        })
+        
+        console.log(`✅ Prediction created: ${nanoBananaPrediction.id}`)
+        console.log(`🔗 https://replicate.com/p/${nanoBananaPrediction.id}`)
+        break // Success! Exit retry loop
+        
+      } catch (error: any) {
+        lastError = error
+        const errorMsg = error?.message || String(error)
+        
+        // Check if it's E6716 timeout error
+        if (errorMsg.includes('E6716') && attempt < MAX_RETRIES) {
+          const delay = RETRY_DELAYS[attempt]
+          console.log(`⏳ E6716 timeout detected, retrying in ${delay/1000}s... (attempt ${attempt + 1}/${MAX_RETRIES + 1})`)
+          
+          await payload.create({
+            collection: 'job-logs',
+            data: {
+              jobId,
+              level: 'warning',
+              message: `E6716 timeout on attempt ${attempt + 1}, retrying in ${delay/1000}s...`,
+              timestamp: new Date().toISOString(),
+            },
+          })
+          
+          await new Promise(resolve => setTimeout(resolve, delay))
+          continue
+        }
+        
+        // Not E6716 or max retries reached - throw error
+        console.error(`❌ Failed to create prediction:`, error)
+        throw error
+      }
+    }
+    
+    if (!nanoBananaPrediction) {
+      throw new Error(`Failed after ${MAX_RETRIES + 1} attempts: ${lastError}`)
+    }
 
     // Store prediction ID in metadata for polling
-    const payload = await getPayload({ config })
     await payload.create({
       collection: 'job-logs',
       data: {

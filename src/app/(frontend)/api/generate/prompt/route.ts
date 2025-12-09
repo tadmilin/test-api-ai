@@ -22,13 +22,8 @@ export async function POST(request: NextRequest) {
 
     let detectedPhotoType: PhotoType = 'generic'
     
-    // Priority 1: Use photoType from Google Sheet if provided
-    if (photoTypeFromSheet) {
-      detectedPhotoType = photoTypeFromSheet as PhotoType
-      console.log('📋 Using photoType from Sheet:', detectedPhotoType)
-    }
-    // Priority 2: Use Gemini Vision to analyze the image (CRITICAL for multi-image detection)
-    else if (referenceImageUrls && referenceImageUrls.length > 0) {
+    // Priority 1: Use Gemini Vision to analyze the image (PRIMARY - AI-driven classification)
+    if (referenceImageUrls && referenceImageUrls.length > 0) {
       try {
         console.log('🔍 Analyzing image with Gemini Vision to detect photoType...')
         
@@ -194,6 +189,11 @@ Reply with ONLY the category name, nothing else.` }
         detectedPhotoType = detectPhotoTypeSimple('', contentDescription || contentTopic || '')
         console.log('📝 Fallback to simple detection:', detectedPhotoType)
       }
+    }
+    // Priority 2: Use photoType from Google Sheet as override (if user specified)
+    else if (photoTypeFromSheet) {
+      detectedPhotoType = photoTypeFromSheet as PhotoType
+      console.log('📋 Using photoType from Sheet (no image provided):', detectedPhotoType)
     }
     // Priority 3: Use simple text-based detection from content description
     else {
