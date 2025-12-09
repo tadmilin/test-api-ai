@@ -80,19 +80,52 @@ export async function POST(request: NextRequest) {
     
     // Validate all URLs are accessible
     console.log('🔍 Validating all image URLs before creating prediction...')
+    const validatedUrls: string[] = []
+    
     for (let i = 0; i < finalImageUrls.length; i++) {
       try {
         const checkResponse = await fetch(finalImageUrls[i], { method: 'HEAD' })
         if (!checkResponse.ok) {
+          console.warn(`  ⚠️ Image ${i + 1} not accessible: ${checkResponse.status} ${checkResponse.statusText}`)
+          
+          // If it's the template reference (first image) and it fails, skip it
+          if (i === 0 && usedTemplateRef) {
+            console.log(`  ⏭️ Skipping template reference, will use user images only`)
+            usedTemplateRef = false
+            continue
+          }
+          
           throw new Error(`Image ${i + 1} not accessible: ${checkResponse.status} ${checkResponse.statusText}`)
         }
         console.log(`  ✅ Image ${i + 1}: ${checkResponse.status} OK`)
+        validatedUrls.push(finalImageUrls[i])
       } catch (error) {
         console.error(`  ❌ Image ${i + 1} validation failed:`, error)
+        
+        // If it's the template reference, skip it and continue with user images
+        if (i === 0 && usedTemplateRef) {
+          console.log(`  ⏭️ Template reference failed validation, using user images only`)
+          usedTemplateRef = false
+          continue
+        }
+        
         throw new Error(`Image ${i + 1} URL not accessible: ${finalImageUrls[i].substring(0, 100)}`)
       }
     }
-    console.log('✅ All image URLs validated')
+    
+    // Update finalImageUrls with only validated URLs
+    if (validatedUrls.length === 0) {
+      throw new Error('No valid image URLs after validation')
+    }
+    
+    finalImageUrls = validatedUrls
+    console.log(`✅ ${validatedUrls.length} image URLs validated successfully`)
+    
+    // If we skipped template ref, use user images only
+    if (usedTemplateRef && validatedUrls.length === imageUrls.length) {
+      console.log('ℹ️ Template reference was skipped, using user images only')
+      usedTemplateRef = false
+    }
     
     // Get payload instance for logging
     const payload = await getPayload({ config })

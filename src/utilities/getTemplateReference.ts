@@ -36,23 +36,47 @@ export async function getTemplateReference(
     console.log(`📐 Selected template: ${selectedTemplate.filename}`)
     console.log(`   Type: ${type}`)
     console.log(`   Total available: ${templates.docs.length}`)
+    console.log(`   Raw template data:`, JSON.stringify({
+      id: selectedTemplate.id,
+      filename: selectedTemplate.filename,
+      url: selectedTemplate.url,
+      mimeType: selectedTemplate.mimeType,
+      filesize: selectedTemplate.filesize,
+    }, null, 2))
 
-    // Convert relative URL to absolute URL
-    const relativeUrl = selectedTemplate.url
-    if (!relativeUrl) return null
+    // Get URL - Vercel Blob storage should provide direct URL
+    // Try multiple fields in order of preference
+    let templateUrl = selectedTemplate.url || selectedTemplate.filename
     
-    // If already absolute URL, return as-is
-    if (relativeUrl.startsWith('http://') || relativeUrl.startsWith('https://')) {
-      return relativeUrl
+    if (!templateUrl) {
+      console.warn('⚠️ Template has no URL or filename')
+      return null
     }
     
-    // Convert to absolute URL
-    const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
-    const absoluteUrl = `${baseUrl}${relativeUrl.startsWith('/') ? relativeUrl : '/' + relativeUrl}`
+    // Check if it's already a full Blob URL
+    if (templateUrl.includes('blob.vercel-storage.com') || templateUrl.includes('public.blob.vercel')) {
+      console.log(`   ✅ Direct Blob URL: ${templateUrl}`)
+      return templateUrl
+    }
     
-    console.log(`   URL: ${absoluteUrl}`)
+    // If it's a Payload CMS path like /api/media/file/xxx, we need to convert it
+    // But this shouldn't happen with Vercel Blob storage enabled
+    if (templateUrl.includes('/api/media/file/')) {
+      console.error('   ❌ Got Payload path instead of Blob URL - Blob storage may not be working')
+      console.error('   This template was not uploaded to Blob storage')
+      return null
+    }
     
-    return absoluteUrl
+    // If it's a relative path, convert to absolute
+    if (!templateUrl.startsWith('http://') && !templateUrl.startsWith('https://')) {
+      const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
+      templateUrl = `${baseUrl}${templateUrl.startsWith('/') ? templateUrl : '/' + templateUrl}`
+      console.log(`   📝 Converted to absolute URL: ${templateUrl}`)
+    } else {
+      console.log(`   ✅ Using URL: ${templateUrl}`)
+    }
+    
+    return templateUrl
   } catch (error) {
     console.error('Error getting template reference:', error)
     return null
