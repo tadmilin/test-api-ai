@@ -202,17 +202,20 @@ export async function POST(request: NextRequest) {
         lastError = error
         const errorMsg = error?.message || String(error)
         
-        // Check if it's E6716 timeout error
-        if (errorMsg.includes('E6716') && attempt < MAX_RETRIES) {
+        // Check if it's E6716 timeout or E9243 director error
+        const isRetryableError = errorMsg.includes('E6716') || errorMsg.includes('E9243')
+        
+        if (isRetryableError && attempt < MAX_RETRIES) {
           const delay = RETRY_DELAYS[attempt]
-          console.log(`⏳ E6716 timeout detected, retrying in ${delay/1000}s... (attempt ${attempt + 1}/${MAX_RETRIES + 1})`)
+          const errorCode = errorMsg.includes('E9243') ? 'E9243 (Director error)' : 'E6716 (timeout)'
+          console.log(`⏳ ${errorCode} detected, retrying in ${delay/1000}s... (attempt ${attempt + 1}/${MAX_RETRIES + 1})`)
           
           await payload.create({
             collection: 'job-logs',
             data: {
               jobId,
               level: 'warning',
-              message: `E6716 timeout on attempt ${attempt + 1}, retrying in ${delay/1000}s...`,
+              message: `${errorCode} on attempt ${attempt + 1}, retrying in ${delay/1000}s...`,
               timestamp: new Date().toISOString(),
             },
           })
@@ -221,7 +224,7 @@ export async function POST(request: NextRequest) {
           continue
         }
         
-        // Not E6716 or max retries reached - throw error
+        // Not retryable error or max retries reached - throw error
         console.error(`❌ Failed to create prediction:`, error)
         throw error
       }
