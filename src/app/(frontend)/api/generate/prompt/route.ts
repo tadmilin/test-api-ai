@@ -1,234 +1,58 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getNanoBananaPrompt, detectPhotoTypeSimple, type PhotoType } from '@/utilities/nanoBananaPrompts'
-import { GoogleGenerativeAI } from '@google/generative-ai'
-import { google } from 'googleapis'
+import { getNanoBananaPrompt, type PhotoType } from '@/utilities/nanoBananaPrompts'
 
+/**
+ * SIMPLIFIED Prompt API - use photoType from Sheet only
+ * No Vision AI, no complex detection - clean and fast
+ */
 export async function POST(request: NextRequest) {
   try {
     const { 
-      productName, 
-      contentTopic,
-      contentDescription,
-      referenceImageUrls,
-      photoTypeFromSheet, // Optional: photoType from Google Sheet
+      photoTypeFromSheet, // photoType from Google Sheet (required)
     } = await request.json()
 
-    if (!productName) {
-      return NextResponse.json(
-        { error: 'productName is required' },
-        { status: 400 }
-      )
-    }
+    console.log('📝 Prompt API called with photoType:', photoTypeFromSheet)
 
-    let detectedPhotoType: PhotoType = 'generic'
+    // Use photoType from Sheet - main room types only
+    let photoType: PhotoType = 'generic'
     
-    // Priority 1: Use Gemini Vision to analyze the image (PRIMARY - AI-driven classification)
-    if (referenceImageUrls && referenceImageUrls.length > 0) {
-      try {
-        console.log('🔍 Analyzing image with Gemini Vision to detect photoType...')
-        
-        const apiKey = process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY
-        if (!apiKey) {
-          throw new Error('GOOGLE_AI_API_KEY or GOOGLE_GEMINI_API_KEY not configured')
-        }
-
-        const genAI = new GoogleGenerativeAI(apiKey)
-        // Try gemini-1.5-flash-001 (versioned stable model)
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-001' })
-
-        // Download image and convert to base64
-        const imageUrl = referenceImageUrls[0]
-        let imageBuffer: Buffer
-
-        // Check if it's a Google Drive URL
-        if (imageUrl.includes('drive.google.com')) {
-          console.log('🔄 Detected Google Drive URL in Prompt API, downloading via API...')
-          
-          // Extract file ID
-          let fileId = null
-          if (imageUrl.includes('id=')) {
-            const match = imageUrl.match(/[?&]id=([^&]+)/)
-            fileId = match ? match[1] : null
-          } else if (imageUrl.includes('/file/d/')) {
-            const match = imageUrl.match(/\/file\/d\/([^/]+)/)
-            fileId = match ? match[1] : null
-          }
-          
-          if (!fileId) {
-            throw new Error('Could not extract file ID from Google Drive URL')
-          }
-
-          // Setup Google Drive API
-          const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
-          const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
-
-          if (serviceAccountEmail && privateKey) {
-            const auth = new google.auth.GoogleAuth({
-              credentials: {
-                client_email: serviceAccountEmail,
-                private_key: privateKey.replace(/\\n/gm, '\n').replace(/^"|"$/g, ''),
-              },
-              scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-            })
-
-            const drive = google.drive({ version: 'v3', auth })
-
-            // Download image from Google Drive
-            const response = await drive.files.get(
-              { fileId, alt: 'media', supportsAllDrives: true },
-              { responseType: 'arraybuffer' }
-            )
-            
-            imageBuffer = Buffer.from(response.data as ArrayBuffer)
-            console.log(`✅ Downloaded from Drive for Prompt: ${(imageBuffer.byteLength / 1024).toFixed(2)} KB`)
-          } else {
-            console.warn('⚠️ Google Service Account not configured, trying fetch fallback...')
-            const imageResponse = await fetch(imageUrl)
-            if (!imageResponse.ok) throw new Error('Failed to fetch image from Drive URL')
-            const arrayBuffer = await imageResponse.arrayBuffer()
-            imageBuffer = Buffer.from(arrayBuffer)
-          }
-        } else {
-          // Normal URL
-          console.log('🌐 Fetching image from URL:', imageUrl.substring(0, 100) + '...')
-          const imageResponse = await fetch(imageUrl)
-          console.log('📥 Fetch response status:', imageResponse.status, imageResponse.statusText)
-          
-          if (!imageResponse.ok) {
-            throw new Error(`Failed to fetch image: ${imageResponse.status} ${imageResponse.statusText}`)
-          }
-          const arrayBuffer = await imageResponse.arrayBuffer()
-          imageBuffer = Buffer.from(arrayBuffer)
-          console.log(`✅ Downloaded from URL: ${(imageBuffer.byteLength / 1024).toFixed(2)} KB`)
-        }
-
-        const base64Image = imageBuffer.toString('base64')
-        const base64Length = base64Image.length
-        console.log(`📊 Base64 length: ${base64Length.toLocaleString()} chars (${(base64Length / 1024).toFixed(2)} KB)`)
-        
-        // Detect actual mime type from buffer
-        let mimeType = 'image/jpeg' // default
-        const header = imageBuffer.toString('hex', 0, 4)
-        if (header.startsWith('89504e47')) mimeType = 'image/png'
-        else if (header.startsWith('47494638')) mimeType = 'image/gif'
-        else if (header.startsWith('52494646')) mimeType = 'image/webp'
-        else if (header.startsWith('ffd8ff')) mimeType = 'image/jpeg'
-        
-        console.log(`📸 Detected image type: ${mimeType} (header: ${header})`)
-
-        console.log('🤖 Calling Gemini Vision API via REST...')
-        
-        // Use Gemini 2.5 Flash - latest stable model with vision support
-        const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`
-        
-        const geminiResponse = await fetch(geminiApiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                { inlineData: { mimeType, data: base64Image } },
-                { text: `Analyze this hotel/resort image and classify it into ONE of these categories:
-- bedroom (ห้องนอน/ห้องพัก)
-- bathroom (ห้องน้ำ)  
-- dining_room (ห้องอาหาร)
-- buffet (บุฟเฟต์)
-- food_closeup (อาหาร close-up)
-- lobby (ล็อบบี้)
-- pool (สระว่ายน้ำ)
-- gym (ฟิตเนส)
-- spa (สปา)
-- meeting_room (ห้องประชุม)
-- corridor (ทางเดิน)
-- balcony (ระเบียง)
-- entrance (ทางเข้า)
-- building_exterior (ภายนอกอาคาร)
-- nature_garden (สวน/ธรรมชาติ)
-- beach_resort (รีสอร์ทชายหาด)
-- mountain_resort (รีสอร์ทภูเขา)
-- jungle_resort (รีสอร์ทป่า)
-- generic (อื่นๆ)
-
-Reply with ONLY the category name, nothing else.` }
-              ]
-            }]
-          })
-        })
-
-        if (!geminiResponse.ok) {
-          const errorText = await geminiResponse.text()
-          throw new Error(`Gemini API ${geminiResponse.status}: ${errorText}`)
-        }
-
-        const result = await geminiResponse.json()
-        console.log('✅ Gemini API call successful')
-        
-        const responseText = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim().toLowerCase().replace(/[^a-z_]/g, '') || ''
-        console.log('📝 Gemini response:', responseText)
-        
-        const validCategories: PhotoType[] = [
-          'bedroom', 'bathroom', 'dining_room', 'buffet', 'food_closeup',
-          'lobby', 'pool', 'gym', 'spa', 'meeting_room', 'corridor',
-          'balcony', 'entrance', 'building_exterior', 'nature_garden',
-          'beach_resort', 'mountain_resort', 'jungle_resort', 'generic'
-        ]
-        
-        if (validCategories.includes(responseText as PhotoType)) {
-          detectedPhotoType = responseText as PhotoType
-          console.log('✅ Gemini detected photoType:', detectedPhotoType)
-        } else {
-          console.warn('⚠️ Invalid category from Gemini:', responseText)
-          detectedPhotoType = detectPhotoTypeSimple('', contentDescription || contentTopic || '')
-          console.log('📝 Fallback to simple detection:', detectedPhotoType)
-        }
-        
-      } catch (error) {
-        console.error('⚠️ Gemini Vision analysis failed:', error)
-        
-        // Fallback to simple text detection
-        detectedPhotoType = detectPhotoTypeSimple('', contentDescription || contentTopic || '')
-        console.log('📝 Fallback to simple detection:', detectedPhotoType)
+    if (photoTypeFromSheet && typeof photoTypeFromSheet === 'string') {
+      const validTypes: PhotoType[] = [
+        'bedroom',     // ห้องนอน
+        'pool',        // สระว่ายน้ำ
+        'buffet',      // บุฟเฟ่
+        'bathroom',    // ห้องน้ำ
+        'lobby',       // ล็อบบี้
+        'dining_room',  // ร้านอาหาร
+        'generic'      // ทั่วไป
+      ]
+      
+      if (validTypes.includes(photoTypeFromSheet as PhotoType)) {
+        photoType = photoTypeFromSheet as PhotoType
+        console.log('✅ Using photoType from Sheet:', photoType)
+      } else {
+        console.warn('⚠️ Invalid photoType:', photoTypeFromSheet, '- using generic')
       }
-    }
-    // Priority 2: Use photoType from Google Sheet as override (if user specified)
-    else if (photoTypeFromSheet) {
-      detectedPhotoType = photoTypeFromSheet as PhotoType
-      console.log('📋 Using photoType from Sheet (no image provided):', detectedPhotoType)
-    }
-    // Priority 3: Use simple text-based detection from content description
-    else {
-      detectedPhotoType = detectPhotoTypeSimple('', contentDescription || contentTopic || '')
-      console.log('📝 Using simple text detection:', detectedPhotoType)
+    } else {
+      console.warn('⚠️ No photoType provided - using generic')
     }
 
-    // Get template prompt for this photo type
-    const prompt = getNanoBananaPrompt(detectedPhotoType)
+    // Get prompt for this photo type
+    const prompt = getNanoBananaPrompt(photoType)
     
-    console.log('=' .repeat(80))
-    console.log('📊 PHOTO TYPE DETECTION SUMMARY')
-    console.log('=' .repeat(80))
-    console.log('Input:', {
-      productName,
-      photoTypeFromSheet: photoTypeFromSheet || 'not provided',
-      hasImage: !!(referenceImageUrls && referenceImageUrls.length > 0),
-      contentTopic: contentTopic || 'none',
-      contentDescription: contentDescription ? contentDescription.substring(0, 50) + '...' : 'none'
-    })
-    console.log('Detected Type:', detectedPhotoType)
-    console.log('Prompt Preview:', prompt.substring(0, 150) + '...')
-    console.log('=' .repeat(80))
+    console.log('✨ Generated prompt for', photoType)
+    console.log('📄 Prompt length:', prompt.length, 'characters')
 
-    return NextResponse.json({ 
-      prompt,
-      photoType: detectedPhotoType
-    })
-  } catch (error) {
-    console.error('Error generating prompt:', error)
-    
-    // Fallback to generic template
     return NextResponse.json({
-      prompt: getNanoBananaPrompt('generic'),
-      photoType: 'generic'
+      photoType,
+      prompt,
     })
+
+  } catch (error: any) {
+    console.error('❌ Prompt generation error:', error)
+    return NextResponse.json(
+      { error: error.message || 'Failed to generate prompt' },
+      { status: 500 }
+    )
   }
 }
