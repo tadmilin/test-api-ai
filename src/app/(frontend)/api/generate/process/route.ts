@@ -65,17 +65,27 @@ export async function POST(request: NextRequest) {
       
       console.log(`📊 Processing ${referenceUrls.length} images`)
       
+      // Helper: Timeout wrapper to prevent hanging
+      const withTimeout = <T>(promise: Promise<T>, timeoutMs: number, errorMsg: string): Promise<T> => {
+        return Promise.race([
+          promise,
+          new Promise<T>((_, reject) => 
+            setTimeout(() => reject(new Error(errorMsg)), timeoutMs)
+          )
+        ])
+      }
+      
       // PHASE 1: Enhance all images IN PARALLEL
       console.log('🎨 Phase 1: Enhancing images with Nano-Banana Pro (parallel)...')
       
       let resolvedType: PhotoType | null = null
       
       // Process all images in parallel using Promise.all
-      // Add staggered delay to prevent overwhelming Replicate with simultaneous requests
-      const STAGGER_DELAY_MS = 2000 // 2 seconds between each image
+      // Add SMALL staggered delay to prevent overwhelming Replicate (but not too slow)
+      const STAGGER_DELAY_MS = 500 // 0.5 seconds between each image (was 2s - too slow!)
       
       const enhancePromises = referenceUrls.map(async (rawImageUrl, i) => {
-        // Stagger the requests: image 0 starts immediately, image 1 after 2s, image 2 after 4s, etc.
+        // Stagger the requests: image 0 starts immediately, image 1 after 0.5s, image 2 after 1s, etc.
         const delayMs = i * STAGGER_DELAY_MS
         if (delayMs > 0) {
           console.log(`⏱️ Image ${i + 1}: Waiting ${delayMs/1000}s before starting...`)
@@ -191,8 +201,16 @@ export async function POST(request: NextRequest) {
         }
       })
       
-      // Wait for all predictions to start
-      const predictionResults = await Promise.all(enhancePromises)
+      // Wait for all predictions to start (with timeout protection)
+      // Timeout: 30s per image + 10s buffer
+      const TIMEOUT_MS = (referenceUrls.length * 30000) + 10000
+      console.log(`⏱️ Setting timeout: ${TIMEOUT_MS/1000}s for ${referenceUrls.length} images`)
+      
+      const predictionResults = await withTimeout(
+        Promise.all(enhancePromises),
+        TIMEOUT_MS,
+        `Timeout waiting for ${referenceUrls.length} image enhancements to start`
+      )
       
       console.log(`\n✅ All ${predictionResults.length} enhancements started in parallel`)
       

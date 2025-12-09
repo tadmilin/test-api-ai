@@ -172,8 +172,8 @@ export async function POST(request: NextRequest) {
     }
     
     // Retry logic for E6716 timeout errors
-    const MAX_RETRIES = 3
-    const RETRY_DELAYS = [3000, 8000, 15000] // 3s, 8s, 15s
+    const MAX_RETRIES = 2 // Reduced from 3 to 2 for faster failure
+    const RETRY_DELAYS = [2000, 5000] // 2s, 5s (was 3s, 8s, 15s - too slow)
     
     let nanoBananaPrediction
     let lastError
