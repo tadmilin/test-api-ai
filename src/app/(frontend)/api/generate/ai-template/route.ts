@@ -22,10 +22,21 @@ export async function POST(request: NextRequest) {
     if (!templateType) {
       return NextResponse.json({ error: 'templateType is required' }, { status: 400 })
     }
+    
+    // Validate all image URLs are valid and accessible
+    const invalidUrls = imageUrls.filter(url => !url || typeof url !== 'string' || url.trim() === '')
+    if (invalidUrls.length > 0) {
+      console.error('❌ Invalid image URLs detected:', invalidUrls)
+      return NextResponse.json({ 
+        error: 'All image URLs must be valid strings',
+        details: 'Some images are not ready yet. Please wait for enhancement to complete.'
+      }, { status: 400 })
+    }
 
     console.log(`🎨 Starting AI template generation:`)
     console.log(`  - Type: ${templateType} (${imageUrls.length} images)`)
     console.log(`  - Job ID: ${jobId}`)
+    console.log(`  - Image URLs:`, imageUrls.map((url, i) => `\n    ${i + 1}. ${url.substring(0, 80)}...`))
 
     const templateRef = await getTemplateReference(templateType as TemplateType)
     

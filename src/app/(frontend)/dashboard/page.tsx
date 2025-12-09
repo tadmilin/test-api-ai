@@ -623,9 +623,17 @@ export default function DashboardPage() {
   async function handleFinalizeTemplate() {
     if (!currentJobId) return
 
+    // Check all images are approved
     const allApproved = enhancedImages.every(img => img.status === 'approved')
     if (!allApproved) {
       alert('⚠️ กรุณาอนุมัติรูปทั้งหมดก่อนสร้าง Template')
+      return
+    }
+    
+    // Check all images have valid URLs
+    const missingUrls = enhancedImages.filter(img => !img.url || img.url.trim() === '')
+    if (missingUrls.length > 0) {
+      alert(`⚠️ รูปบางรูปยังไม่พร้อม (${missingUrls.length}/${enhancedImages.length})\n\nกรุณารอให้การ enhance เสร็จสมบูรณ์ก่อน`)
       return
     }
 
