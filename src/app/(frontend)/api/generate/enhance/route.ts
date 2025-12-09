@@ -153,6 +153,20 @@ export async function POST(request: NextRequest) {
     // Nano-Banana enhancement - conversational image editing
     console.log('✨ Creating Nano-Banana prediction...')
     console.log('📸 Final image URL:', processedImageUrl)
+    console.log('📝 Prompt length:', prompt.length, 'chars')
+    console.log('🎨 Photo type:', photoType)
+    
+    // Validate URL is accessible before sending to Replicate
+    try {
+      const headCheck = await fetch(processedImageUrl, { method: 'HEAD' })
+      console.log(`🔍 Image URL check: ${headCheck.status} ${headCheck.statusText}`)
+      if (!headCheck.ok) {
+        throw new Error(`Image URL not accessible: ${headCheck.status}`)
+      }
+    } catch (checkError) {
+      console.error('❌ Image URL validation failed:', checkError)
+      throw checkError
+    }
     
     const nanoBananaPrediction = await replicate.predictions.create({
       model: 'google/nano-banana-pro',
