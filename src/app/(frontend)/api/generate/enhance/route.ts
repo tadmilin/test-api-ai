@@ -9,6 +9,14 @@ const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN!,
 })
 
+// Helper: Round dimension to nearest multiple of 64 (required for Flux models)
+function roundTo64(value: number): number {
+  return Math.floor(value / 64) * 64
+}
+
+// Helper: Sleep utility for retries
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
 // POST: Start image enhancement (returns predictionId immediately)
 export async function POST(request: NextRequest) {
   try {
@@ -93,38 +101,57 @@ export async function POST(request: NextRequest) {
       const imageBuffer = Buffer.from(response.data as ArrayBuffer)
       console.log(`Downloaded from Drive: ${(imageBuffer.byteLength / 1024).toFixed(2)} KB`)
 
-      // Resize if too large for GPU (max 1M pixels for stability)
+      // 🔥 CRITICAL FIX: Resize with dimensions divisible by 64 + Convert to JPEG
       const sharp = (await import('sharp')).default
       const metadata = await sharp(imageBuffer).metadata()
-      console.log(`Original dimensions: ${metadata.width}x${metadata.height}`)
+      console.log(`📐 Original dimensions: ${metadata.width}x${metadata.height}`)
       
-      const maxPixels = 1000000 // 1M pixels (1024x1024) - safer limit
-      const currentPixels = (metadata.width || 0) * (metadata.height || 0)
+      const MAX_DIMENSION = 1024 // Safe limit for Nano-Banana Pro
+      const width = metadata.width || 0
+      const height = metadata.height || 0
       
-      let processedBuffer = imageBuffer
-      if (currentPixels > maxPixels) {
-        const scale = Math.sqrt(maxPixels / currentPixels)
-        const newWidth = Math.floor((metadata.width || 0) * scale)
-        const newHeight = Math.floor((metadata.height || 0) * scale)
-        console.log(`📐 Resizing to ${newWidth}x${newHeight} (${(newWidth * newHeight / 1000000).toFixed(2)}M pixels)`)
+      let pipeline = sharp(imageBuffer)
+      
+      // Calculate new dimensions if resizing needed
+      if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+        const scale = Math.min(MAX_DIMENSION / width, MAX_DIMENSION / height)
+        const newWidth = roundTo64(width * scale)
+        const newHeight = roundTo64(height * scale)
         
-        processedBuffer = await sharp(imageBuffer)
-          .resize(newWidth, newHeight, { fit: 'inside', withoutEnlargement: true })
-          .png()
-          .toBuffer()
+        console.log(`📐 Resizing to ${newWidth}x${newHeight} (divisible by 64)`)
+        console.log(`   Check: ${newWidth} ÷ 64 = ${newWidth / 64}, ${newHeight} ÷ 64 = ${newHeight / 64}`)
+        
+        pipeline = pipeline.resize(newWidth, newHeight, {
+          fit: 'fill', // Ensure exact dimensions
+          position: 'centre',
+        })
+      } else {
+        // Even if not resizing, ensure dimensions are divisible by 64
+        const newWidth = roundTo64(width)
+        const newHeight = roundTo64(height)
+        
+        if (newWidth !== width || newHeight !== height) {
+          console.log(`📐 Adjusting to ${newWidth}x${newHeight} (divisible by 64)`)
+          pipeline = pipeline.resize(newWidth, newHeight, { fit: 'fill' })
+        }
       }
+      
+      // 🔥 Convert to JPEG to remove alpha channel and reduce file size
+      const processedBuffer = await pipeline
+        .jpeg({ quality: 92, chromaSubsampling: '4:4:4' })
+        .toBuffer()
 
       // Upload to Vercel Blob as source image
       const timestamp = Date.now()
-      const sourceBlob = await put(`jobs/${jobId}/source-${timestamp}.png`, processedBuffer, {
+      const sourceBlob = await put(`jobs/${jobId}/source-${timestamp}.jpg`, processedBuffer, {
         access: 'public',
-        contentType: 'image/png',
+        contentType: 'image/jpeg',
       })
       
       processedImageUrl = sourceBlob.url
       console.log('✅ Uploaded to Blob:', processedImageUrl)
-      console.log('🔍 VERIFY Blob URL - Should contain Drive image content!')
-      console.log('👉 Open this Blob URL:', processedImageUrl)
+      console.log('🔍 Image optimized: JPEG format with dimensions divisible by 64')
+      
     } else if (isLocalhost) {
       // ถ้าเป็น Localhost ต้อง Upload ขึ้น Blob ก่อน เพราะ Replicate เข้าถึงไม่ได้
       console.log('🏠 Detected Localhost URL, uploading to Blob for Replicate access...')
@@ -132,13 +159,40 @@ export async function POST(request: NextRequest) {
       const checkImageResponse = await fetch(imageUrl)
       if (!checkImageResponse.ok) throw new Error('Failed to fetch local image')
       
-      const imageBuffer = await checkImageResponse.arrayBuffer()
+      const imageBuffer = Buffer.from(await checkImageResponse.arrayBuffer())
+      
+      // Apply same optimization as Google Drive
+      const sharp = (await import('sharp')).default
+      const metadata = await sharp(imageBuffer).metadata()
+      const width = metadata.width || 0
+      const height = metadata.height || 0
+      
+      let pipeline = sharp(imageBuffer)
+      const MAX_DIMENSION = 1024
+      
+      if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+        const scale = Math.min(MAX_DIMENSION / width, MAX_DIMENSION / height)
+        const newWidth = roundTo64(width * scale)
+        const newHeight = roundTo64(height * scale)
+        console.log(`📐 Resizing localhost image to ${newWidth}x${newHeight}`)
+        pipeline = pipeline.resize(newWidth, newHeight, { fit: 'fill' })
+      } else {
+        const newWidth = roundTo64(width)
+        const newHeight = roundTo64(height)
+        if (newWidth !== width || newHeight !== height) {
+          pipeline = pipeline.resize(newWidth, newHeight, { fit: 'fill' })
+        }
+      }
+      
+      const processedBuffer = await pipeline
+        .jpeg({ quality: 92, chromaSubsampling: '4:4:4' })
+        .toBuffer()
       
       // Upload to Vercel Blob
       const timestamp = Date.now()
-      const sourceBlob = await put(`jobs/${jobId}/source-local-${timestamp}.png`, imageBuffer, {
+      const sourceBlob = await put(`jobs/${jobId}/source-local-${timestamp}.jpg`, processedBuffer, {
         access: 'public',
-        contentType: 'image/png',
+        contentType: 'image/jpeg',
       })
       
       processedImageUrl = sourceBlob.url
@@ -171,9 +225,8 @@ export async function POST(request: NextRequest) {
       throw checkError
     }
     
-    // Retry logic for E6716 timeout errors
-    const MAX_RETRIES = 2 // Reduced from 3 to 2 for faster failure
-    const RETRY_DELAYS = [2000, 5000] // 2s, 5s (was 3s, 8s, 15s - too slow)
+    // Retry logic for E6716, E9243, and 429 errors
+    const MAX_RETRIES = 5 // Increased for 429 handling
     
     let nanoBananaPrediction
     let lastError
@@ -189,7 +242,7 @@ export async function POST(request: NextRequest) {
             prompt: prompt,
             resolution: '1K',
             aspect_ratio: 'match_input_image',
-            output_format: 'png',
+            output_format: 'jpg', // JPEG for smaller file size
             safety_filter_level: 'block_only_high',
           },
         })
@@ -201,14 +254,43 @@ export async function POST(request: NextRequest) {
       } catch (error: any) {
         lastError = error
         const errorMsg = error?.message || String(error)
+        const status = error?.response?.status || 0
         
-        // Check if it's E6716 timeout or E9243 director error
-        const isRetryableError = errorMsg.includes('E6716') || errorMsg.includes('E9243')
+        console.log(`⚠️ Error: ${errorMsg}`)
+        
+        // Handle 429 Rate Limit (insufficient credits or throttled)
+        if (status === 429 || errorMsg.includes('429') || errorMsg.includes('throttled')) {
+          if (attempt < MAX_RETRIES) {
+            console.log(`🛑 Rate Limit (429). Waiting 30 seconds...`)
+            await payload.create({
+              collection: 'job-logs',
+              data: {
+                jobId,
+                level: 'warning',
+                message: `Rate limit hit (429), waiting 30s... (attempt ${attempt + 1})`,
+                timestamp: new Date().toISOString(),
+              },
+            })
+            await sleep(30000) // Wait 30 seconds for rate limit
+            continue
+          }
+        }
+        
+        // Handle E6716 (timeout) or E9243 (director error) or 5xx errors
+        const isRetryableError = 
+          errorMsg.includes('E6716') || 
+          errorMsg.includes('E9243') || 
+          status >= 500
         
         if (isRetryableError && attempt < MAX_RETRIES) {
-          const delay = RETRY_DELAYS[attempt]
-          const errorCode = errorMsg.includes('E9243') ? 'E9243 (Director error)' : 'E6716 (timeout)'
-          console.log(`⏳ ${errorCode} detected, retrying in ${delay/1000}s... (attempt ${attempt + 1}/${MAX_RETRIES + 1})`)
+          const delay = 3000 * (attempt + 1) // 3s, 6s, 9s, 12s, 15s
+          const errorCode = errorMsg.includes('E9243') 
+            ? 'E9243 (Director error)' 
+            : errorMsg.includes('E6716') 
+            ? 'E6716 (timeout)' 
+            : `Server error (${status})`
+          
+          console.log(`⏳ ${errorCode}, retrying in ${delay/1000}s...`)
           
           await payload.create({
             collection: 'job-logs',
@@ -220,11 +302,11 @@ export async function POST(request: NextRequest) {
             },
           })
           
-          await new Promise(resolve => setTimeout(resolve, delay))
+          await sleep(delay)
           continue
         }
         
-        // Not retryable error or max retries reached - throw error
+        // Not retryable or max retries reached
         console.error(`❌ Failed to create prediction:`, error)
         throw error
       }
@@ -279,8 +361,19 @@ export async function GET(request: NextRequest) {
     try {
       prediction = await replicate.predictions.get(predictionId)
       console.log(`Status: ${prediction.status}`)
-    } catch (replicateError) {
+    } catch (replicateError: any) {
       console.error('❌ Replicate API error:', replicateError)
+      
+      // Handle 429 during status check
+      if (replicateError?.response?.status === 429 || replicateError?.message?.includes('429')) {
+        return NextResponse.json({
+          success: true,
+          status: 'processing',
+          message: 'Rate limited, retrying...',
+          predictionId,
+        })
+      }
+      
       // Return a special status so client can retry
       return NextResponse.json({
         success: false,
