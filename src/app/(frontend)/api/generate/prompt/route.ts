@@ -123,8 +123,8 @@ export async function POST(request: NextRequest) {
 
         console.log('🤖 Calling Gemini Vision API via REST...')
         
-        // Use REST API directly - SDK has compatibility issues
-        const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`
+        // Use Gemini 2.5 Flash - latest stable model with vision support
+        const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`
         
         const geminiResponse = await fetch(geminiApiUrl, {
           method: 'POST',
