@@ -661,37 +661,43 @@ export default function DashboardPage() {
     setRegeneratingIndex(index)
 
     try {
-      const res = await fetch('/api/generate/review', {
+      console.log(`🔄 Retrying image ${index + 1}...`)
+      
+      const res = await fetch('/api/generate/process/retry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           jobId: currentJobId,
           imageIndex: index,
-          action: 'regenerate',
         }),
       })
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ error: 'Unknown error' }))
-        throw new Error(errorData.error || 'Failed to regenerate image')
+        throw new Error(errorData.error || 'Failed to retry image')
       }
 
       const data = await res.json()
+      console.log(`✅ Retry started:`, data)
       
-      if (!data.newUrl) {
-        throw new Error('No new URL in response')
-      }
-      
-      // Update local state with new URL
+      // Update local state to show processing
       const updated = [...enhancedImages]
-      updated[index].url = data.newUrl
-      updated[index].status = 'pending'
+      updated[index] = {
+        ...updated[index],
+        status: 'processing',
+        predictionId: data.predictionId,
+        url: '',
+        error: undefined,
+      }
       setEnhancedImages(updated)
 
-      alert('✅ รูปถูกสร้างใหม่แล้ว! กรุณาตรวจสอบอีกครั้ง')
+      // Resume polling
+      pollJobStatus(currentJobId)
+
+      alert('🔄 เริ่มสร้างรูปใหม่แล้ว กรุณารอสักครู่...')
     } catch (error) {
-      console.error('Regenerate error:', error)
-      alert('Failed to regenerate image: ' + (error instanceof Error ? error.message : 'Unknown error'))
+      console.error('Retry error:', error)
+      alert('ไม่สามารถลองใหม่ได้: ' + (error instanceof Error ? error.message : 'Unknown error'))
     } finally {
       setRegeneratingIndex(null)
     }
@@ -701,14 +707,26 @@ export default function DashboardPage() {
   async function handleCompleteJob() {
     if (!currentJobId) return
 
-    // Check all images have valid URLs (completed)
+    // Check all images have either completed or failed (not processing)
     const completedImages = enhancedImages.filter(img => img.url && img.url.trim() !== '')
+    const processingImages = enhancedImages.filter(img => 
+      img.status === 'processing' && (!img.url || img.url.trim() === '')
+    )
     const totalImages = enhancedImages.length
     
-    if (completedImages.length < totalImages) {
-      const remaining = totalImages - completedImages.length
-      alert(`⚠️ ยังมีรูปที่กำลังประมวลผลอยู่: ${remaining}/${totalImages}\n\nกรุณารอให้เสร็จทั้งหมดก่อนบันทึกงาน`)
+    if (processingImages.length > 0) {
+      alert(`⏳ ยังมีรูปที่กำลังประมวลผลอยู่: ${processingImages.length}/${totalImages}\n\nกรุณารอให้เสร็จทั้งหมดก่อนบันทึกงาน`)
       return
+    }
+    
+    // Show warning if some images failed
+    const failedImages = totalImages - completedImages.length
+    if (failedImages > 0) {
+      const confirm = window.confirm(
+        `⚠️ มีรูปที่ล้มเหลว ${failedImages} รูปจากทั้งหมด ${totalImages} รูป\n\n` +
+        `คุณต้องการบันทึกงานด้วยรูปที่สำเร็จ ${completedImages.length} รูปหรือไม่?`
+      )
+      if (!confirm) return
     }
 
     setProcessingJobId(currentJobId)

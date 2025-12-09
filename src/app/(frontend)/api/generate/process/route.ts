@@ -118,16 +118,20 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Update job with prediction IDs
+      // Update job with prediction IDs and set status properly
+      const initialImages = predictionIds.map((id, index) => ({
+        url: '', // Will be filled by polling
+        predictionId: id || null,
+        originalUrl: referenceUrls[index] as string,
+        status: id ? 'processing' : 'failed',
+      }))
+      
       await payload.update({
         collection: 'jobs',
         id: jobId,
         data: {
-          enhancedImageUrls: predictionIds.map((id, index) => ({
-            url: '', // Will be filled by polling
-            predictionId: id,
-            originalUrl: referenceUrls[index] as string,
-          })),
+          status: 'enhancing',
+          enhancedImageUrls: initialImages,
         },
       })
 

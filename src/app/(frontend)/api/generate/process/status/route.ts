@@ -59,12 +59,12 @@ export async function GET(request: NextRequest) {
               
               if (data.status === 'failed' || data.status === 'canceled' || data.status === 'error') {
                 console.error(`   ❌ Image ${index + 1} ${data.status}:`, data.error || 'Unknown error')
-                // Mark as failed, use original
+                // Mark as failed but keep trying
                 return {
                   ...img,
-                  url: img.originalUrl,
-                  status: 'pending', // Fallback to original
-                  predictionId: null, // Clear prediction ID
+                  url: '', // No URL yet
+                  status: 'failed',
+                  error: data.error || 'Enhancement failed',
                 }
               }
               
@@ -143,12 +143,23 @@ export async function GET(request: NextRequest) {
     const allComplete = processing === 0
     
     // Update job status if all complete
-    if (allComplete && job.status === 'enhancing') {
+    if (allComplete && (job.status === 'enhancing' || job.status === 'processing')) {
+      console.log(`🎉 All images complete! Updating job to completed`)
       await payload.update({
         collection: 'jobs',
         id: jobId,
         data: {
-          status: 'review_pending',
+          status: 'completed',
+        },
+      })
+      
+      await payload.create({
+        collection: 'job-logs',
+        data: {
+          jobId,
+          level: 'info',
+          message: `Job completed: ${completed} succeeded, ${failed} failed`,
+          timestamp: new Date().toISOString(),
         },
       })
     }
@@ -156,7 +167,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       jobId,
-      status: allComplete ? 'review_pending' : 'enhancing',
+      status: allComplete ? 'completed' : 'enhancing',
       total: updatedImages.length,
       processing,
       completed,
