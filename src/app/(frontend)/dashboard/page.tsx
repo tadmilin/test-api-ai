@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import TemplateTypeSelector from '@/components/TemplateTypeSelector'
 
 interface CurrentUser {
   id: string
@@ -97,9 +96,6 @@ export default function DashboardPage() {
   const [driveImages, setDriveImages] = useState<DriveImage[]>([])
   const [selectedImages, setSelectedImages] = useState<DriveImage[]>([])
   const [creating, setCreating] = useState(false)
-  
-  // Template Settings (AI mode only)
-  const [templateType, setTemplateType] = useState<'single' | 'dual' | 'triple' | 'quad'>('triple')
   
   // Review & Finalize States
   const [currentJobId, setCurrentJobId] = useState<string | null>(null)
@@ -366,13 +362,6 @@ export default function DashboardPage() {
       return
     }
 
-    // Validate template type matches selected images
-    const requiredImages = templateType === 'single' ? 1 : templateType === 'dual' ? 2 : templateType === 'triple' ? 3 : 4
-    if (selectedImages.length < requiredImages) {
-      alert(`❌ Template "${templateType}" ต้องการรูปอย่างน้อย ${requiredImages} รูป\n\nคุณเลือกไว้: ${selectedImages.length} รูป\n\n💡 โปรดเลือกรูปเพิ่ม หรือเปลี่ยน Template Type ให้เหมาะสม`)
-      return
-    }
-
     // Filter out any undefined images
     const validImages = selectedImages.filter(img => img && img.id && img.url)
     if (validImages.length === 0) {
@@ -382,7 +371,6 @@ export default function DashboardPage() {
 
     console.log('🚀 Starting job creation...')
     console.log('📊 Valid images:', validImages.length)
-    console.log('📐 Template:', templateType)
 
     setCreating(true)
     setReviewMode(false)
@@ -402,9 +390,6 @@ export default function DashboardPage() {
           photoTypeFromSheet: selectedSheetRow['Photo_Type'] || undefined,
           referenceImageIds: validImages.map((img) => ({ imageId: img.id })),
           referenceImageUrls: validImages.map((img) => ({ url: img.url })),
-          
-          // Template settings (AI mode)
-          templateType: templateType,
           
           status: 'pending',
         }),
@@ -568,7 +553,7 @@ export default function DashboardPage() {
 
       // Check if all approved
       if (data.allApproved) {
-        alert('✅ ทุกรูปได้รับการอนุมัติแล้ว! คุณสามารถสร้าง Template ได้')
+        alert('✅ ทุกรูปได้รับการอนุมัติแล้ว! งานสำเร็จแล้ว')
       }
     } catch (error) {
       console.error('Approve error:', error)
@@ -619,14 +604,14 @@ export default function DashboardPage() {
     }
   }
 
-  // NEW: Finalize template with polling
-  async function handleFinalizeTemplate() {
+  // Complete job after all images approved
+  async function handleCompleteJob() {
     if (!currentJobId) return
 
     // Check all images are approved
     const allApproved = enhancedImages.every(img => img.status === 'approved')
     if (!allApproved) {
-      alert('⚠️ กรุณาอนุมัติรูปทั้งหมดก่อนสร้าง Template')
+      alert('⚠️ กรุณาอนุมัติรูปทั้งหมดก่อน')
       return
     }
     
@@ -638,10 +623,10 @@ export default function DashboardPage() {
     }
 
     setProcessingJobId(currentJobId)
-    setProcessingStatus('🎨 กำลังเริ่มสร้าง Template...')
+    setProcessingStatus('✅ กำลังบันทึก...')
 
     try {
-      // Start generation
+      // Mark job as completed
       const res = await fetch('/api/generate/finalize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -650,57 +635,27 @@ export default function DashboardPage() {
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ error: 'Unknown error' }))
-        throw new Error(errorData.error || 'Failed to start template generation')
+        throw new Error(errorData.error || 'Failed to complete job')
       }
 
       const data = await res.json()
       
-      if (!data.predictionId) {
-        throw new Error('No prediction ID in response')
-      }
-
-      // Poll for completion
-      setProcessingStatus('⏳ กำลังสร้าง Template (ใช้เวลา 1-2 นาที)...')
-      
-      const pollInterval = setInterval(async () => {
-        try {
-          const statusRes = await fetch(
-            `/api/generate/ai-template?predictionId=${data.predictionId}&jobId=${currentJobId}`
-          )
-          const statusData = await statusRes.json()
-
-          if (statusData.status === 'succeeded') {
-            clearInterval(pollInterval)
-            setFinalImageUrl(statusData.templateUrl)
-            setReviewMode(false)
-            setProcessingStatus('')
-            setProcessingJobId(null)
-            alert('🎉 Template สร้างเสร็จแล้ว!')
-            fetchDashboardData()
-          } else if (statusData.status === 'failed') {
-            clearInterval(pollInterval)
-            throw new Error(statusData.error || 'Template generation failed')
-          } else {
-            // Still processing
-            setProcessingStatus(`⏳ กำลังสร้าง Template... (${statusData.status})`)
-          }
-        } catch (err) {
-          clearInterval(pollInterval)
-          throw err
-        }
-      }, 3000) // Poll every 3 seconds
-
-      // Timeout after 5 minutes
-      setTimeout(() => {
-        clearInterval(pollInterval)
+      if (data.status === 'completed') {
+        alert('🎉 งานสำเร็จแล้ว! รูปทั้งหมดได้รับการปรับปรุงเรียบร้อย')
+        setReviewMode(false)
         setProcessingStatus('')
         setProcessingJobId(null)
-        alert('⏱️ Template generation timeout - กรุณาตรวจสอบใน Job logs')
-      }, 300000)
+        fetchDashboardData()
+        
+        // Reset workflow
+        handleResetWorkflow()
+      } else {
+        throw new Error('Job completion failed')
+      }
 
     } catch (error) {
-      console.error('Finalize error:', error)
-      alert('Failed to create template: ' + (error instanceof Error ? error.message : 'Unknown error'))
+      console.error('Complete error:', error)
+      alert('Failed to complete job: ' + (error instanceof Error ? error.message : 'Unknown error'))
       setProcessingStatus('')
       setProcessingJobId(null)
     }
@@ -934,20 +889,6 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              {/* NEW: Template Configuration */}
-              {selectedImages.length > 0 && (
-                <div className="space-y-6 bg-gradient-to-br from-indigo-50 to-purple-50 p-6 rounded-xl border-2 border-indigo-200">
-                  <h3 className="text-xl font-bold text-indigo-900 mb-4">⚙️ Template Configuration</h3>
-                  
-                  {/* Template Type Selector */}
-                  <TemplateTypeSelector
-                    value={templateType}
-                    onChange={setTemplateType}
-                    maxImages={selectedImages.length}
-                  />
-                </div>
-              )}
-
               {/* Google Drive Images */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1052,7 +993,7 @@ export default function DashboardPage() {
                   disabled={creating || selectedImages.length === 0 || !selectedSheetRow}
                   className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl"
                 >
-                  {creating ? '🎨 กำลังสร้าง...' : '✨ เริ่มสร้าง Template'}
+                  {creating ? '🎨 กำลังสร้าง...' : '✨ เริ่มปรับปรุงรูป'}
                 </button>
               </div>
             </form>
@@ -1077,28 +1018,6 @@ export default function DashboardPage() {
                     {enhancedImages.filter(img => img.status === 'approved').length} / {enhancedImages.length}
                   </span>
                 </div>
-              </div>
-            </div>
-
-            {/* Template Configuration (Can change before finalizing) */}
-            <div className="mb-6 p-6 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl border-2 border-indigo-200">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-indigo-900">⚙️ ตั้งค่า Template</h3>
-                <span className="text-xs bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full font-medium">
-                  เปลี่ยนได้ทุกเมื่อ
-                </span>
-              </div>
-              <p className="text-sm text-indigo-700 mb-4">
-                เปลี่ยนจำนวนรูปหรือสไตล์ของ Template ก่อนกดสร้าง
-              </p>
-              
-              {/* Template Type Selector */}
-              <div className="mb-4">
-                <TemplateTypeSelector
-                  value={templateType}
-                  onChange={setTemplateType}
-                  maxImages={enhancedImages.length}
-                />
               </div>
             </div>
 
@@ -1165,7 +1084,7 @@ export default function DashboardPage() {
               ))}
             </div>
 
-            {/* Finalize Button */}
+            {/* Complete Button */}
             <div className="mt-6 pt-6 border-t-2 border-gray-200">
               <div className="flex items-center justify-between">
                 <button
@@ -1175,61 +1094,15 @@ export default function DashboardPage() {
                   ← เริ่มใหม่
                 </button>
                 <button
-                  onClick={handleFinalizeTemplate}
+                  onClick={handleCompleteJob}
                   disabled={!enhancedImages.every(img => img.status === 'approved')}
-                  className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-8 py-3 rounded-lg hover:from-purple-700 hover:to-indigo-700 font-bold text-lg shadow-lg hover:shadow-xl transition-all disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed"
+                  className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-8 py-3 rounded-lg hover:from-green-700 hover:to-emerald-700 font-bold text-lg shadow-lg hover:shadow-xl transition-all disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed"
                 >
                   {enhancedImages.every(img => img.status === 'approved') 
-                    ? '🎨 สร้าง Template (Phase 3)' 
+                    ? '✅ บันทึกงาน' 
                     : '⚠️ กรุณาอนุมัติรูปทั้งหมดก่อน'}
                 </button>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* NEW: Final Result Section */}
-        {finalImageUrl && (
-          <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg shadow-lg p-6 mb-8 border-2 border-green-300">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-green-900">🎉 Template สร้างเสร็จแล้ว!</h2>
-                <p className="text-green-700 mt-1">
-                  Type: {templateType}
-                </p>
-              </div>
-              <button
-                onClick={handleResetWorkflow}
-                className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-semibold"
-              >
-                ➕ สร้างใหม่
-              </button>
-            </div>
-
-            <div className="relative w-full max-w-4xl mx-auto rounded-xl overflow-hidden shadow-2xl border-4 border-green-400">
-              <Image
-                src={finalImageUrl}
-                alt="Final Template"
-                width={1200}
-                height={630}
-                className="w-full h-auto"
-                unoptimized
-              />
-            </div>
-
-            <div className="mt-6 flex gap-4 justify-center">
-              <button
-                onClick={() => downloadImage(finalImageUrl, `template-${Date.now()}.png`)}
-                className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-semibold"
-              >
-                💾 ดาวน์โหลด
-              </button>
-              <button
-                onClick={() => window.open(finalImageUrl, '_blank')}
-                className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 font-semibold"
-              >
-                🔍 เปิดในแท็บใหม่
-              </button>
             </div>
           </div>
         )}
