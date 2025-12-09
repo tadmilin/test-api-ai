@@ -42,9 +42,12 @@ export async function POST(request: NextRequest) {
     
     // Use ALL user images - don't limit
     let finalImageUrls: string[]
+    let usedTemplateRef = false
+    
     if (templateRef) {
       // Template reference + ALL user images
       finalImageUrls = [templateRef, ...imageUrls]
+      usedTemplateRef = true
       console.log(`📐 Using template reference + ${imageUrls.length} user images = ${finalImageUrls.length} total`)
     } else {
       // All user images (no template ref)
@@ -69,6 +72,27 @@ export async function POST(request: NextRequest) {
     console.log(`📝 Creating Replicate prediction for template...`)
     console.log(`📊 Total images: ${finalImageUrls.length}`)
     console.log(`📝 Prompt length: ${prompt.length} chars`)
+    
+    // Log each image URL for debugging
+    finalImageUrls.forEach((url, i) => {
+      console.log(`  Image ${i + 1}: ${url.substring(0, 100)}${url.length > 100 ? '...' : ''}`)
+    })
+    
+    // Validate all URLs are accessible
+    console.log('🔍 Validating all image URLs before creating prediction...')
+    for (let i = 0; i < finalImageUrls.length; i++) {
+      try {
+        const checkResponse = await fetch(finalImageUrls[i], { method: 'HEAD' })
+        if (!checkResponse.ok) {
+          throw new Error(`Image ${i + 1} not accessible: ${checkResponse.status} ${checkResponse.statusText}`)
+        }
+        console.log(`  ✅ Image ${i + 1}: ${checkResponse.status} OK`)
+      } catch (error) {
+        console.error(`  ❌ Image ${i + 1} validation failed:`, error)
+        throw new Error(`Image ${i + 1} URL not accessible: ${finalImageUrls[i].substring(0, 100)}`)
+      }
+    }
+    console.log('✅ All image URLs validated')
     
     // Get payload instance for logging
     const payload = await getPayload({ config })
@@ -103,6 +127,26 @@ export async function POST(request: NextRequest) {
       } catch (error: any) {
         lastError = error
         const errorMsg = error?.message || String(error)
+        
+        // Special case: If using template reference and it fails, try without it
+        if (usedTemplateRef && attempt === 0) {
+          console.log(`⚠️ Template reference might be causing issues, trying without it...`)
+          finalImageUrls = imageUrls // Remove template reference
+          usedTemplateRef = false
+          
+          await payload.create({
+            collection: 'job-logs',
+            data: {
+              jobId,
+              level: 'warning',
+              message: `Template reference failed, retrying with user images only`,
+              timestamp: new Date().toISOString(),
+            },
+          })
+          
+          await new Promise(resolve => setTimeout(resolve, 1000))
+          continue
+        }
         
         // Check if it's E6716 timeout error
         if (errorMsg.includes('E6716') && attempt < MAX_RETRIES) {
