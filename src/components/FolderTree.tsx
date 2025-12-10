@@ -34,11 +34,23 @@ export function FolderTree({ folders, onSelectFolder, selectedFolderId }: Folder
     const isExpanded = expandedFolders.has(folder.id)
     const hasChildren = folder.children.length > 0
     const isSelected = selectedFolderId === folder.id
-    const canSelect = folder.imageCount > 0 // Only folders with images are selectable
+    const hasImages = folder.imageCount > 0
+
+    const handleFolderClick = () => {
+      if (hasChildren) {
+        // If has children, toggle expand
+        toggleExpand(folder.id)
+      }
+      if (hasImages) {
+        // If has images, select this folder
+        onSelectFolder(folder.id)
+      }
+    }
 
     return (
       <div key={folder.id}>
         <div
+          onClick={handleFolderClick}
           className={`flex items-center gap-2 py-2 px-3 hover:bg-gray-100 cursor-pointer rounded transition-colors ${
             isSelected ? 'bg-blue-100 border-l-4 border-blue-500' : ''
           }`}
@@ -59,15 +71,12 @@ export function FolderTree({ folders, onSelectFolder, selectedFolderId }: Folder
           {!hasChildren && <span className="w-4" />}
 
           {/* Folder Info */}
-          <div
-            onClick={() => canSelect && onSelectFolder(folder.id)}
-            className={`flex-1 flex items-center gap-2 ${canSelect ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
-          >
+          <div className="flex-1 flex items-center gap-2">
             <span className="text-lg">📁</span>
             <span className={`text-sm ${isSelected ? 'font-semibold text-blue-700' : 'text-gray-900'}`}>
               {folder.name}
             </span>
-            {folder.imageCount > 0 && (
+            {hasImages && (
               <span className="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full">
                 {folder.imageCount} รูป
               </span>
