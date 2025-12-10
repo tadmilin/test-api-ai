@@ -189,9 +189,20 @@ export const Jobs: CollectionConfig = {
               label: 'Enhanced Images',
               fields: [
                 {
+                  name: 'originalUrl',
+                  type: 'text',
+                  label: 'Original Image URL',
+                  admin: {
+                    description: 'Google Drive URL of the original image',
+                  },
+                },
+                {
                   name: 'url',
                   type: 'text',
-                  label: 'Image URL',
+                  label: 'Enhanced Image URL',
+                  admin: {
+                    description: 'Replicate output URL after enhancement',
+                  },
                 },
                 {
                   name: 'status',
@@ -202,11 +213,6 @@ export const Jobs: CollectionConfig = {
                     { label: 'Approved', value: 'approved' },
                     { label: 'Regenerating', value: 'regenerating' },
                   ],
-                },
-                {
-                  name: 'originalUrl',
-                  type: 'text',
-                  label: 'Original Image URL',
                 },
                 {
                   name: 'predictionId',
