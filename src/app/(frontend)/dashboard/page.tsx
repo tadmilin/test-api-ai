@@ -165,28 +165,8 @@ export default function DashboardPage() {
     checkAuth()
   }, [checkAuth])
 
-  useEffect(() => {
-    if (currentUser) {
-      fetchDashboardData()
-      fetchSpreadsheets()
-      fetchDriveFolders()
-      
-      // Auto-resume processing jobs
-      resumeProcessingJobs()
-    }
-  }, [currentUser, resumeProcessingJobs])
-
-  async function handleLogout() {
-    try {
-      await fetch('/api/users/logout', { method: 'POST' })
-      router.push('/login')
-    } catch (error) {
-      console.error('Logout error:', error)
-    }
-  }
-
   // Resume processing for any jobs stuck in processing/enhancing state
-  async function resumeProcessingJobs() {
+  const resumeProcessingJobs = useCallback(async () => {
     try {
       const jobsRes = await fetch('/api/jobs?status=processing')
       const jobsData = await jobsRes.json()
@@ -206,14 +186,34 @@ export default function DashboardPage() {
             setEnhancedImages(job.enhancedImageUrls)
             setReviewMode(true)
             
-            // Start polling
-            pollJobStatus(job.id)
+            // Start polling - pollJobStatus is defined later in the file
+            setTimeout(() => pollJobStatus(job.id), 0)
             break // Only resume one job at a time
           }
         }
       }
     } catch (error) {
       console.error('Error resuming jobs:', error)
+    }
+  }, []) // Empty deps - only uses setState and fetch
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchDashboardData()
+      fetchSpreadsheets()
+      fetchDriveFolders()
+      
+      // Auto-resume processing jobs
+      resumeProcessingJobs()
+    }
+  }, [currentUser, resumeProcessingJobs])
+
+  async function handleLogout() {
+    try {
+      await fetch('/api/users/logout', { method: 'POST' })
+      router.push('/login')
+    } catch (error) {
+      console.error('Logout error:', error)
     }
   }
   
@@ -235,7 +235,16 @@ export default function DashboardPage() {
         if (statusData.images && statusData.images.length > 0) {
           setEnhancedImages(prevImages => {
             if (prevImages.length === 0) return statusData.images
-            return statusData.images.map((newImg: any, index: number) => {
+            return statusData.images.map((newImg: {
+              url?: string
+              status?: string
+              predictionId?: string
+              originalUrl?: string
+              photoType?: string
+              contentTopic?: string
+              postTitleHeadline?: string
+              contentDescription?: string
+            }, index: number) => {
               const prevImg = prevImages[index] || {}
               const merged = {
                 ...prevImg,

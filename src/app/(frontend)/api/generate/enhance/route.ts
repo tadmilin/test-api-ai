@@ -251,10 +251,10 @@ export async function POST(request: NextRequest) {
         console.log(`🔗 https://replicate.com/p/${nanoBananaPrediction.id}`)
         break // Success! Exit retry loop
         
-      } catch (error: any) {
+      } catch (error: unknown) {
         lastError = error
-        const errorMsg = error?.message || String(error)
-        const status = error?.response?.status || 0
+        const errorMsg = error instanceof Error ? error.message : String(error)
+        const status = (error as { response?: { status?: number } })?.response?.status || 0
         
         console.log(`⚠️ Error: ${errorMsg}`)
         
@@ -361,11 +361,13 @@ export async function GET(request: NextRequest) {
     try {
       prediction = await replicate.predictions.get(predictionId)
       console.log(`Status: ${prediction.status}`)
-    } catch (replicateError: any) {
+    } catch (replicateError: unknown) {
       console.error('❌ Replicate API error:', replicateError)
       
       // Handle 429 during status check
-      if (replicateError?.response?.status === 429 || replicateError?.message?.includes('429')) {
+      const is429 = (replicateError as { response?: { status?: number }; message?: string })?.response?.status === 429 || 
+                    (replicateError as { message?: string })?.message?.includes('429')
+      if (is429) {
         return NextResponse.json({
           success: true,
           status: 'processing',

@@ -29,7 +29,13 @@ export async function GET(request: NextRequest) {
     
     // Check each image that's still processing
     const updatedImages = await Promise.all(
-      enhancedImages.map(async (img: any, index: number) => {
+      enhancedImages.map(async (img: {
+        url?: string | null
+        status?: 'pending' | 'approved' | 'regenerating' | null
+        predictionId?: string | null
+        originalUrl?: string | null
+        error?: string | null
+      }, index: number) => {
         // Check if image is processing (has predictionId but no URL yet)
         // Note: status might be 'pending' or 'processing' or 'regenerating'
         const isProcessing = img.predictionId && (!img.url || img.url === '')
@@ -53,7 +59,7 @@ export async function GET(request: NextRequest) {
                 return {
                   ...img,
                   url: finalUrl,
-                  status: 'pending', // Ready for review (keep as pending until approved)
+                  status: 'pending' as const, // Ready for review (keep as pending until approved)
                 }
               }
               
@@ -63,7 +69,7 @@ export async function GET(request: NextRequest) {
                 return {
                   ...img,
                   url: '', // No URL yet
-                  status: 'failed',
+                  status: 'pending' as const,
                   error: data.error || 'Enhancement failed',
                 }
               }
@@ -75,7 +81,7 @@ export async function GET(request: NextRequest) {
               try {
                 const errorData = await statusRes.json()
                 console.error(`   Error details:`, errorData)
-              } catch (e) {
+              } catch (_e) {
                 // Ignore parse error
               }
             }
@@ -127,15 +133,23 @@ export async function GET(request: NextRequest) {
     }
     
     // Count statuses
-    const processing = updatedImages.filter((img: any) => 
+    const processing = updatedImages.filter((img: {
+      predictionId?: string | null
+      url?: string | null
+    }) => 
       img.predictionId && (!img.url || img.url === '')
     ).length
     
-    const completed = updatedImages.filter((img: any) => 
+    const completed = updatedImages.filter((img: {
+      url?: string | null
+    }) => 
       img.url && img.url.length > 0
     ).length
 
-    const failed = updatedImages.filter((img: any) => 
+    const failed = updatedImages.filter((img: {
+      url?: string | null
+      predictionId?: string | null
+    }) => 
       (!img.url || img.url.length === 0) && !img.predictionId
     ).length
 

@@ -38,10 +38,11 @@ export async function POST(request: NextRequest) {
       prompt,
     })
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Prompt generation error:', error)
+    const message = error instanceof Error ? error.message : 'Failed to generate prompt'
     return NextResponse.json(
-      { error: error.message || 'Failed to generate prompt' },
+      { error: message },
       { status: 500 }
     )
   }
