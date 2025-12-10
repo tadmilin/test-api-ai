@@ -402,7 +402,7 @@ export async function GET(request: NextRequest) {
           // Check if this prediction already has a Blob URL cached
           // Must check: 1) same predictionId, 2) has url, 3) url is Blob storage, 4) status is 'pending' (processed)
           const cachedImage = job.enhancedImageUrls?.find(
-            (img: any) => 
+            (img: { predictionId?: string | null; url?: string | null; status?: string | null }) => 
               img.predictionId === predictionId && 
               img.url && 
               img.url.includes('blob.vercel-storage.com') &&

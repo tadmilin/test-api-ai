@@ -103,10 +103,11 @@ export async function POST(request: NextRequest) {
       imageIndex,
     })
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Retry error:', error)
+    const message = error instanceof Error ? error.message : 'Failed to retry'
     return NextResponse.json(
-      { error: error.message || 'Failed to retry' },
+      { error: message },
       { status: 500 }
     )
   }

@@ -132,7 +132,7 @@ export default function DashboardPage() {
   const [expandedImageIds, setExpandedImageIds] = useState<Set<number>>(new Set())
   const [reviewMode, setReviewMode] = useState(false)
   const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null)
-  const [finalImageUrl, setFinalImageUrl] = useState<string | null>(null)
+  const [_finalImageUrl, setFinalImageUrl] = useState<string | null>(null)
 
   // View Generated Images
   const [viewingJob, setViewingJob] = useState<Job | null>(null)
@@ -174,7 +174,7 @@ export default function DashboardPage() {
       // Auto-resume processing jobs
       resumeProcessingJobs()
     }
-  }, [currentUser])
+  }, [currentUser, resumeProcessingJobs])
 
   async function handleLogout() {
     try {
@@ -196,7 +196,7 @@ export default function DashboardPage() {
       for (const job of processingJobs) {
         if (job.enhancedImageUrls && job.enhancedImageUrls.length > 0) {
           const hasIncomplete = job.enhancedImageUrls.some(
-            (img: any) => !img.url || img.status === 'processing'
+            (img: { url?: string; status?: string }) => !img.url || img.status === 'processing'
           )
           
           if (hasIncomplete) {
@@ -709,7 +709,16 @@ export default function DashboardPage() {
             // Merge with existing metadata to preserve contentTopic and postTitleHeadline
             if (statusData.images && statusData.images.length > 0) {
               setEnhancedImages(prevImages => {
-                return statusData.images.map((newImg: any, index: number) => {
+                return statusData.images.map((newImg: {
+                  url?: string
+                  status?: string
+                  predictionId?: string
+                  originalUrl?: string
+                  photoType?: string
+                  contentTopic?: string
+                  postTitleHeadline?: string
+                  contentDescription?: string
+                }, index: number) => {
                   const prevImg = prevImages[index] || {}
                   return {
                     ...prevImg, // Keep existing metadata
@@ -794,8 +803,8 @@ export default function DashboardPage() {
     }
   }
 
-  // NEW: Approve image
-  async function handleApproveImage(index: number) {
+  // NEW: Approve image (not currently used in UI)
+  async function _handleApproveImage(index: number) {
     if (!currentJobId) return
 
     try {
@@ -1333,7 +1342,7 @@ export default function DashboardPage() {
                               ชีทระบุหลาย types ({availableTypes.join(', ')}) - กรุณาเลือก type สำหรับแต่ละรูป
                             </p>
                             <div className="space-y-3 max-h-96 overflow-y-auto">
-                              {currentImages.map((img, idx) => (
+                              {currentImages.map((img, _idx) => (
                                 <div key={img.id} className="flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-200">
                                   <div className="flex-shrink-0 w-16 h-12 relative rounded overflow-hidden bg-gray-100">
                                     <Image

@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Get sheetRows data for per-image metadata
-      const sheetRows = (job as any).sheetRows || []
+      const sheetRows = (job as { sheetRows?: Array<{ productName?: string; photoType?: string; contentTopic?: string; postTitleHeadline?: string; contentDescription?: string }> }).sheetRows || []
       console.log(`📋 Sheet rows data:`, sheetRows.length > 0 ? `${sheetRows.length} rows` : 'none (fallback to job photoType)')
 
       // Process images with stagger delay (2s between each)
@@ -132,8 +132,9 @@ export async function POST(request: NextRequest) {
           
           console.log(`✅ Image ${i + 1} started: ${predictionId}`)
 
-        } catch (error: any) {
-          console.error(`❌ Image ${i + 1} failed:`, error.message)
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : 'Unknown error'
+          console.error(`❌ Image ${i + 1} failed:`, message)
           predictionIds.push('') // Empty = failed
           
           // Still store metadata even for failed images
@@ -175,8 +176,9 @@ export async function POST(request: NextRequest) {
         total: referenceUrls.length,
       })
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ Processing error:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       
       await payload.update({
         collection: 'jobs',
@@ -189,7 +191,7 @@ export async function POST(request: NextRequest) {
         data: {
           jobId,
           level: 'error',
-          message: `Processing failed: ${error.message}`,
+          message: `Processing failed: ${errorMessage}`,
           timestamp: new Date().toISOString(),
         },
       })
@@ -197,10 +199,11 @@ export async function POST(request: NextRequest) {
       throw error
     }
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Process API error:', error)
+    const message = error instanceof Error ? error.message : 'Failed to process job'
     return NextResponse.json(
-      { error: error.message || 'Failed to process job' },
+      { error: message },
       { status: 500 }
     )
   }
