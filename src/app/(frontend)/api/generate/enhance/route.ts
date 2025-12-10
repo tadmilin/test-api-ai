@@ -245,6 +245,8 @@ export async function POST(request: NextRequest) {
             output_format: 'jpg', // JPEG for smaller file size
             safety_filter_level: 'block_only_high',
           },
+          webhook: `${process.env.NEXT_PUBLIC_SERVER_URL}/api/webhooks/replicate`,
+          webhook_events_filter: ['completed'],
         })
         
         console.log(`✅ Prediction created: ${nanoBananaPrediction.id}`)

@@ -776,24 +776,28 @@ export interface Job {
    */
   notes?: string | null;
   /**
-   * Photo type classified from sheet content (auto-detected)
+   * Photo type from Google Sheet (any value allowed)
    */
-  photoTypeFromSheet?: ('bedroom' | 'dining' | 'lobby' | 'pool' | 'bathroom' | 'generic') | null;
+  photoTypeFromSheet?: string | null;
   /**
    * Final photo type after hybrid detection (sheet + GPT Vision)
    */
   resolvedPhotoType?: ('bedroom' | 'dining' | 'lobby' | 'pool' | 'bathroom' | 'generic') | null;
   mood?: string | null;
   targetPlatforms?: ('facebook' | 'instagram_feed' | 'instagram_story')[] | null;
-  referenceImageIds?:
-    | {
-        imageId?: string | null;
-        id?: string | null;
-      }[]
-    | null;
   referenceImageUrls?:
     | {
         url?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  sheetRows?:
+    | {
+        productName?: string | null;
+        photoType?: string | null;
+        contentTopic?: string | null;
+        postTitleHeadline?: string | null;
+        contentDescription?: string | null;
         id?: string | null;
       }[]
     | null;
@@ -802,17 +806,39 @@ export interface Job {
    */
   templateType?: ('single' | 'dual' | 'triple' | 'quad') | null;
   /**
-   * Enhanced images with approval status
+   * Enhanced images with metadata from Sheet
    */
   enhancedImageUrls?:
     | {
-        url?: string | null;
-        status?: ('pending' | 'approved' | 'regenerating') | null;
+        /**
+         * Google Drive URL of the original image
+         */
         originalUrl?: string | null;
+        /**
+         * Replicate output URL after enhancement
+         */
+        url?: string | null;
+        status?: ('pending' | 'completed' | 'failed' | 'approved' | 'regenerating') | null;
         /**
          * Used for polling async prediction status
          */
         predictionId?: string | null;
+        /**
+         * Type from Sheet row (bedroom, pool, etc.)
+         */
+        photoType?: string | null;
+        /**
+         * Content topic from Sheet row
+         */
+        contentTopic?: string | null;
+        /**
+         * Post title from Sheet row
+         */
+        postTitleHeadline?: string | null;
+        /**
+         * Content description from Sheet row
+         */
+        contentDescription?: string | null;
         id?: string | null;
       }[]
     | null;
@@ -1440,26 +1466,34 @@ export interface JobsSelect<T extends boolean = true> {
   resolvedPhotoType?: T;
   mood?: T;
   targetPlatforms?: T;
-  referenceImageIds?:
-    | T
-    | {
-        imageId?: T;
-        id?: T;
-      };
   referenceImageUrls?:
     | T
     | {
         url?: T;
         id?: T;
       };
+  sheetRows?:
+    | T
+    | {
+        productName?: T;
+        photoType?: T;
+        contentTopic?: T;
+        postTitleHeadline?: T;
+        contentDescription?: T;
+        id?: T;
+      };
   templateType?: T;
   enhancedImageUrls?:
     | T
     | {
+        originalUrl?: T;
         url?: T;
         status?: T;
-        originalUrl?: T;
         predictionId?: T;
+        photoType?: T;
+        contentTopic?: T;
+        postTitleHeadline?: T;
+        contentDescription?: T;
         id?: T;
       };
   reviewCompleted?: T;

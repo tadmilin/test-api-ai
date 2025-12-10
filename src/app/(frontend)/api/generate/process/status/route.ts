@@ -31,10 +31,14 @@ export async function GET(request: NextRequest) {
     const updatedImages = await Promise.all(
       enhancedImages.map(async (img: {
         url?: string | null
-        status?: 'pending' | 'approved' | 'regenerating' | null
+        status?: 'pending' | 'completed' | 'failed' | 'approved' | 'regenerating' | null
         predictionId?: string | null
         originalUrl?: string | null
         error?: string | null
+        photoType?: string | null
+        contentTopic?: string | null
+        postTitleHeadline?: string | null
+        contentDescription?: string | null
       }, index: number) => {
         // Check if image is processing (has predictionId but no URL yet)
         // Note: status might be 'pending' or 'processing' or 'regenerating'

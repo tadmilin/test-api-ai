@@ -222,6 +222,8 @@ export const Jobs: CollectionConfig = {
                   defaultValue: 'pending',
                   options: [
                     { label: 'Pending', value: 'pending' },
+                    { label: 'Completed', value: 'completed' },
+                    { label: 'Failed', value: 'failed' },
                     { label: 'Approved', value: 'approved' },
                     { label: 'Regenerating', value: 'regenerating' },
                   ],
