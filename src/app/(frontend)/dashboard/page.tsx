@@ -1625,6 +1625,7 @@ export default function DashboardPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {viewingJob.enhancedImageUrls.map((img, index) => {
                         const hasMetadata = img.photoType || img.contentTopic || img.postTitleHeadline
+                        console.log(`Image ${index + 1} URL:`, img.url, 'Status:', img.status)
                         return img.url ? (
                           <div key={index} className="bg-white rounded-lg border-2 border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
                             {/* Image */}
