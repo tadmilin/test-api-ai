@@ -55,9 +55,9 @@ export async function GET(request: NextRequest) {
               if (data.status === 'succeeded' && (data.imageUrl || data.output)) {
                 const finalUrl = data.imageUrl || (Array.isArray(data.output) ? data.output[0] : data.output)
                 console.log(`   ✅ Image ${index + 1} completed: ${finalUrl}`)
-                // Update image with completed URL
+                // Update image with completed URL while preserving all metadata
                 return {
-                  ...img,
+                  ...img, // Keep ALL existing fields (photoType, contentTopic, etc.)
                   url: finalUrl,
                   status: 'pending' as const, // Ready for review (keep as pending until approved)
                 }
