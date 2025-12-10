@@ -33,16 +33,16 @@ export async function GET() {
     const sharedDrives = drivesResponse.data.drives || []
     console.log(`Found ${sharedDrives.length} Shared Drives`)
 
-    // Step 2: Get folders from My Drive
+    // Step 2: Get folders from My Drive (shared with service account)
     const myDriveResponse = await drive.files.list({
-      q: "mimeType='application/vnd.google-apps.folder' and trashed=false and 'me' in owners",
+      q: "mimeType='application/vnd.google-apps.folder' and trashed=false",
       fields: 'files(id, name, parents, driveId)',
       pageSize: 1000,
       orderBy: 'name',
     })
 
     const myDriveFolders = myDriveResponse.data.files || []
-    console.log(`Found ${myDriveFolders.length} folders in My Drive`)
+    console.log(`Found ${myDriveFolders.length} folders accessible to Service Account`)
 
     // Step 3: Get folders from each Shared Drive
     const allDriveData: Array<{ driveId: string; driveName: string; folders: any[] }> = []
@@ -168,6 +168,15 @@ export async function GET() {
           folders,
         })
       }
+    }
+
+    console.log(`Total drives with folders: ${drivesWithFolders.length}`)
+    
+    // If no folders found, return helpful message
+    if (drivesWithFolders.length === 0) {
+      console.log('⚠️ No folders found. Service Account may not have access to any drives.')
+      console.log(`Service Account: ${serviceAccountEmail}`)
+      console.log('Please share drives/folders with this email.')
     }
 
     return NextResponse.json({ drives: drivesWithFolders })

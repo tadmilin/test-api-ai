@@ -417,7 +417,15 @@ export default function DashboardPage() {
       const res = await fetch('/api/drive/list-folders')
       if (res.ok) {
         const data = await res.json()
-        setDriveFolders(data.drives || [])
+        const drives = data.drives || []
+        setDriveFolders(drives)
+        
+        if (drives.length === 0) {
+          console.warn('⚠️ No Google Drive folders found!')
+          console.warn('Make sure to share folders with your Service Account email')
+        } else {
+          console.log(`✅ Loaded ${drives.length} drives with folders`)
+        }
       }
     } catch (error) {
       console.error('Error fetching drive folders:', error)
