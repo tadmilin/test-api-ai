@@ -9,7 +9,7 @@ export async function POST(req: Request) {
 
     const { id: predictionId, status, output } = body
 
-    console.log('[Webhook] Received from Replicate:', { predictionId, status })
+    console.log('[Webhook] Received from Replicate:', { predictionId, status, output })
 
     // ค้นหา Job ที่มี predictionId นี้
     const jobs = await payload.find({
@@ -32,10 +32,12 @@ export async function POST(req: Request) {
     // อัปเดตสถานะรูปภาพที่ตรงกับ predictionId
     const updatedUrls = job.enhancedImageUrls?.map((img) => {
       if (img.predictionId === predictionId) {
+        const finalUrl = status === 'succeeded' && output ? (Array.isArray(output) ? output[0] : output) : img.url
+        console.log('[Webhook] Updating image:', { predictionId, status, finalUrl })
         return {
           ...img,
           status: (status === 'succeeded' ? 'completed' : 'failed') as 'completed' | 'failed',
-          url: status === 'succeeded' && output?.[0] ? output[0] : img.url,
+          url: finalUrl,
         }
       }
       return img
