@@ -137,34 +137,9 @@ export const Jobs: CollectionConfig = {
           label: 'Reference Images',
           fields: [
             {
-              name: 'referenceImageIds',
-              type: 'array',
-              fields: [
-                {
-                  name: 'imageId',
-                  type: 'text',
-                  label: 'Google Drive File ID',
-                },
-              ],
-            },
-            {
-              name: 'referenceImageUrls',
-              type: 'array',
-              fields: [
-                {
-                  name: 'url',
-                  type: 'text',
-                },
-              ],
-            },
-            {
               name: 'sheetRows',
               type: 'array',
-              label: 'Sheet Rows Data',
-              admin: {
-                description: 'Per-image metadata from Google Sheet rows (1 row = 1 image)',
-                readOnly: true,
-              },
+              label: 'Sheet Rows Data (Per-Image Metadata)',
               fields: [
                 {
                   name: 'productName',
