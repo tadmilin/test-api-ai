@@ -84,6 +84,13 @@ export async function POST(request: NextRequest) {
       status = 'pending',
     } = body
 
+    console.log('📥 Received sheetRows:', sheetRows?.length || 0, 'rows')
+    if (sheetRows && sheetRows.length > 0) {
+      sheetRows.forEach((row: { photoType?: string; productName?: string }, i: number) => {
+        console.log(`  Row ${i + 1}: photoType = "${row.photoType}", product = "${row.productName}"`)
+      })
+    }
+
     if (!productName) {
       return NextResponse.json(
         { error: 'productName is required' },
@@ -112,6 +119,7 @@ export async function POST(request: NextRequest) {
     // Create new job with all fields
     const job = await payload.create({
       collection: 'jobs',
+      draft: false,
       data: {
         productName,
         productDescription: productDescription || '',

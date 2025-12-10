@@ -577,225 +577,116 @@ export default function DashboardPage() {
     setFinalImageUrl(null)
 
     try {
-      // Flatten imageSets into arrays for API
-      const allImages: DriveImage[] = []
-      const sheetRows: Array<{
-        productName: string
-        photoType: string
-        contentTopic: string
-        postTitleHeadline: string
-        contentDescription: string
-      }> = []
-
-      imageSets.forEach(set => {
-        set.images.forEach(img => {
-          allImages.push(img)
-          sheetRows.push({
-            productName: set.sheetRow['Product Name'] || '',
-            photoType: img.photoType || set.sheetRow['Photo_Type'] || '', // Use per-image type first
-            contentTopic: set.sheetRow['Content_Topic'] || '',
-            postTitleHeadline: set.sheetRow['Post_Title_Headline'] || '',
-            contentDescription: set.sheetRow['Content_Description'] || '',
+      // Create separate job for each image
+      const jobIds: string[] = []
+      
+      console.log(`📦 Creating ${imageSets.reduce((sum, set) => sum + set.images.length, 0)} separate jobs...`)
+      
+      for (const set of imageSets) {
+        for (const img of set.images) {
+          const sheetRow = set.sheetRow
+          
+          console.log(`📋 Creating job for: ${img.photoType || sheetRow['Photo_Type']}`)
+          
+          // Create individual job
+          const jobRes = await fetch('/api/jobs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              productName: sheetRow['Product Name'] || 'Untitled',
+              productDescription: sheetRow['Product Description'] || sheetRow['Description'] || '',
+              contentTopic: sheetRow['Content_Topic'] || '',
+              postTitleHeadline: sheetRow['Post_Title_Headline'] || '',
+              contentDescription: sheetRow['Content_Description'] || '',
+              photoTypeFromSheet: img.photoType || sheetRow['Photo_Type'] || undefined,
+              referenceImageUrls: [{ url: img.url }], // Single image
+              templateType: 'single', // Single image per job
+              status: 'pending',
+            }),
           })
-        })
-      })
 
-      console.log('📋 Mapped sheet rows:', sheetRows.length)
-      sheetRows.forEach((row, i) => {
-        console.log(`  Row ${i + 1}: photoType = "${row.photoType}", product = "${row.productName}"`)
-      })
+          if (!jobRes.ok) {
+            const errorData = await jobRes.json().catch(() => ({ error: 'Unknown error' }))
+            throw new Error(errorData.error || `Failed to create job for ${img.photoType}`)
+          }
 
-      // Use first set's row for job-level metadata
-      const firstRow = imageSets[0].sheetRow
-      
-      // Create job with flattened data
-      const jobRes = await fetch('/api/jobs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          productName: firstRow['Product Name'] || 'Untitled',
-          productDescription: firstRow['Product Description'] || firstRow['Description'] || '',
-          contentTopic: firstRow['Content_Topic'] || '',
-          postTitleHeadline: firstRow['Post_Title_Headline'] || '',
-          contentDescription: firstRow['Content_Description'] || '',
-          photoTypeFromSheet: firstRow['Photo_Type'] || undefined,
-          referenceImageUrls: allImages.map((img) => ({ url: img.url })),
+          const response = await jobRes.json()
+          const jobData = response.doc || response
+          const jobId = jobData.id
           
-          // Pass all sheet rows for per-image metadata
-          sheetRows: sheetRows,
+          if (!jobId) {
+            throw new Error('No job ID in response')
+          }
           
-          status: 'pending',
-        }),
-      })
-
-      if (!jobRes.ok) {
-        const errorData = await jobRes.json().catch(() => ({ error: 'Unknown error' }))
-        throw new Error(errorData.error || 'Failed to create job')
-      }
-
-      const response = await jobRes.json()
-      console.log('✅ Job created:', response)
-
-      // Handle both response formats: {doc: job} or job directly
-      const jobData = response.doc || response
-      const jobId = jobData.id
-      
-      if (!jobId) {
-        throw new Error('No job ID in response')
-      }
-
-      // Set states for review workflow
-      setCurrentJobId(jobId)
-      setProcessingJobId(jobId)
-      setProcessingStatus('🎨 Phase 1: Enhancing images with Nano-Banana Pro...')
-      setShowCreateForm(false)
-
-      // Start Phase 1: Enhancement
-      const processRes = await fetch('/api/generate/process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId: jobId }),
-      })
-
-      if (!processRes.ok) {
-        const errorData = await processRes.json().catch(() => ({ error: 'Unknown error' }))
-        throw new Error(errorData.error || 'Failed to start processing')
-      }
-
-      const processData = await processRes.json()
-      
-      // Initialize enhanced images with metadata immediately
-      const initialEnhancedImages = allImages.map((img, index) => {
-        const metadata = sheetRows[index] || {}
-        console.log(`🎨 Image ${index + 1} metadata:`, {
-          photoType: metadata.photoType,
-          contentTopic: metadata.contentTopic,
-          productName: metadata.productName
-        })
-        return {
-          url: '',
-          status: 'pending' as const,
-          originalUrl: img.url,
-          predictionId: processData.predictions?.[index] || null,
-          photoType: metadata.photoType || '',
-          contentTopic: metadata.contentTopic || '',
-          postTitleHeadline: metadata.postTitleHeadline || '',
-          contentDescription: metadata.contentDescription || '',
+          jobIds.push(jobId)
+          console.log(`✅ Job created: ${jobId} (${img.photoType})`)
         }
-      })
-      setEnhancedImages(initialEnhancedImages)
-      setReviewMode(true) // Show review mode immediately with metadata
+      }
       
-      // New async flow: poll for completion
-      if (processData.status === 'enhancing' && processData.predictions) {
-        setProcessingStatus('⏳ กำลังเริ่มประมวลผลรูป...')
+      console.log(`✅ Created ${jobIds.length} jobs total`)
+
+      // Process all jobs sequentially
+      const allEnhancedImages: typeof enhancedImages = []
+      
+      for (let i = 0; i < jobIds.length; i++) {
+        const jobId = jobIds[i]
         
-        console.log('🔄 Starting polling for', processData.predictions.length, 'predictions')
-        
-        // Poll until all images complete - extend to 10 minutes
-        const maxPolls = 120 // 10 minutes (120 * 5s = 600s)
+        setCurrentJobId(jobId)
+        setProcessingJobId(jobId)
+        setProcessingStatus(`🎨 Processing image ${i + 1}/${jobIds.length}...`)
+
+        // Start enhancement
+        const processRes = await fetch('/api/generate/process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jobId: jobId }),
+        })
+
+        if (!processRes.ok) {
+          const errorData = await processRes.json().catch(() => ({ error: 'Unknown error' }))
+          throw new Error(errorData.error || 'Processing failed')
+        }
+
+        // Poll for completion
+        const maxPolls = 120 // 10 minutes
         let polls = 0
-        let lastCompleted = 0
         
         while (polls < maxPolls) {
-          await new Promise(resolve => setTimeout(resolve, 5000)) // Wait 5s (increased from 3s)
+          await new Promise(resolve => setTimeout(resolve, 5000))
           polls++
-          
-          console.log(`📊 Poll ${polls}/${maxPolls}: Checking status...`)
           
           try {
             const statusRes = await fetch(`/api/generate/process/status?jobId=${jobId}`)
-            if (!statusRes.ok) {
-              console.error('❌ Status check failed:', statusRes.status, statusRes.statusText)
-              continue // Skip this poll, try again
-            }
+            if (!statusRes.ok) continue
             
             const statusData = await statusRes.json()
-            console.log(`✅ Status: ${statusData.completed}/${statusData.total} complete, ${statusData.processing} processing`)
+            console.log(`📊 Job ${i + 1}: ${statusData.completed}/${statusData.total} complete`)
             
-            // Update images in real-time (show completed images immediately)
-            // Merge with existing metadata to preserve contentTopic and postTitleHeadline
-            if (statusData.images && statusData.images.length > 0) {
-              setEnhancedImages(prevImages => {
-                return statusData.images.map((newImg: {
-                  url?: string
-                  status?: string
-                  predictionId?: string
-                  originalUrl?: string
-                  photoType?: string
-                  contentTopic?: string
-                  postTitleHeadline?: string
-                  contentDescription?: string
-                }, index: number) => {
-                  const prevImg = prevImages[index] || {}
-                  return {
-                    ...prevImg, // Keep existing metadata
-                    url: newImg.url || prevImg.url, // Update URL if available
-                    status: newImg.status || prevImg.status, // Update status
-                    predictionId: newImg.predictionId || prevImg.predictionId,
-                    originalUrl: newImg.originalUrl || prevImg.originalUrl,
-                    // Keep metadata from prevImg, only override if newImg has non-empty value
-                    photoType: newImg.photoType || prevImg.photoType,
-                    contentTopic: newImg.contentTopic || prevImg.contentTopic,
-                    postTitleHeadline: newImg.postTitleHeadline || prevImg.postTitleHeadline,
-                    contentDescription: newImg.contentDescription || prevImg.contentDescription,
-                  }
-                })
+            if (statusData.allComplete && statusData.images?.[0]?.url) {
+              // Image completed!
+              allEnhancedImages.push({
+                ...statusData.images[0],
+                photoType: statusData.images[0].photoType || '',
               })
-              // Show review mode immediately when first image completes
-              if (statusData.completed > 0 && !reviewMode) {
-                setReviewMode(true)
-              }
-            }
-            
-            // Update status message
-            const progress = `${statusData.completed}/${statusData.total}`
-            const elapsed = Math.floor(polls * 5 / 60) // minutes
-            setProcessingStatus(`⏳ ประมวลผลแล้ว ${progress} รูป (${polls * 5}s / ${elapsed}นาที)`)
-            
-            // Show progress if any image completed
-            if (statusData.completed > lastCompleted) {
-              console.log(`🎉 Image ${statusData.completed}/${statusData.total} completed`)
-              lastCompleted = statusData.completed
-            }
-            
-            if (statusData.allComplete) {
-              // All done
-              setProcessingStatus('')
-              setProcessingJobId(null)
+              console.log(`✅ Image ${i + 1} completed`)
               break
             }
-          } catch (pollError) {
-            console.error('Poll error:', pollError)
-            // Continue polling even if one poll fails
+          } catch (error) {
+            console.error(`Poll error for job ${i + 1}:`, error)
           }
         }
         
-        // Check if timeout or completed
         if (polls >= maxPolls) {
-          setProcessingStatus('')
-          setProcessingJobId(null)
-          const message = `⚠️ การประมวลผลใช้เวลานานกว่าปกติ\n\n` +
-            `Job ID: ${jobId}\n\n` +
-            `กรุณา:\n` +
-            `1. เช็คสถานะที่ Admin Panel > Jobs > ${jobId}\n` +
-            `2. ดูรายละเอียดที่ Job Logs\n` +
-            `3. หากรูปเสร็จแล้ว ให้ refresh หน้านี้\n\n` +
-            `หากรอนาน ลอง refresh หน้านี้ อาจเสร็จแล้ว`
-          alert(message)
+          throw new Error(`Timeout for image ${i + 1}`)
         }
-      } else if (processData.status === 'review_pending') {
-        // Legacy: immediate completion (shouldn't happen with new flow)
-        setProcessingStatus('')
-        setProcessingJobId(null)
-        setEnhancedImages(processData.enhancedImages || [])
-        setReviewMode(true)
-        alert('✅ รูปทั้งหมดถูกปรับปรุงแล้ว! กรุณาตรวจสอบและอนุมัติรูป')
-      } else if (processData.error) {
-        throw new Error(processData.error)
-      } else {
-        throw new Error('Unexpected response from processing API')
       }
+      
+      // All jobs complete
+      console.log(`✅ All ${allEnhancedImages.length} images completed`)
+      setEnhancedImages(allEnhancedImages)
+      setReviewMode(true)
+      setProcessingStatus('')
+      setProcessingJobId(null)
 
       // Refresh dashboard
       fetchDashboardData()
