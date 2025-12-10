@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
 
     try {
       const baseUrl = request.nextUrl.origin || process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
-      const referenceUrls = job.referenceImageUrls?.map((img: { url?: string | null }) => img.url).filter(Boolean) || []
+      const referenceUrls = job.enhancedImageUrls?.map((img: { originalUrl?: string | null }) => img.originalUrl).filter(Boolean) || []
       
       console.log(`📊 Processing ${referenceUrls.length} images`)
       

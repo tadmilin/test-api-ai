@@ -619,8 +619,10 @@ export default function DashboardPage() {
           postTitleHeadline: firstRow['Post_Title_Headline'] || '',
           contentDescription: firstRow['Content_Description'] || '',
           photoTypeFromSheet: firstRow['Photo_Type'] || undefined,
-          referenceImageIds: allImages.map((img) => ({ imageId: img.id })),
-          referenceImageUrls: allImages.map((img) => ({ url: img.url })),
+          enhancedImageUrls: allImages.map((img) => ({
+            originalUrl: img.url,
+            status: 'pending' as const,
+          })),
           
           // Pass all sheet rows for per-image metadata
           sheetRows: sheetRows,
