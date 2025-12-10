@@ -24,86 +24,153 @@ export async function GET() {
 
     const drive = google.drive({ version: 'v3', auth })
 
-    // List all folders that are shared with the service account
-    const response = await drive.files.list({
-      q: "mimeType='application/vnd.google-apps.folder' and trashed=false",
-      fields: 'files(id, name, parents)',
-      pageSize: 1000, // Increased to get all folders
+    // Step 1: List all Shared Drives
+    const drivesResponse = await drive.drives.list({
+      pageSize: 100,
+      fields: 'drives(id, name)',
+    })
+
+    const sharedDrives = drivesResponse.data.drives || []
+    console.log(`Found ${sharedDrives.length} Shared Drives`)
+
+    // Step 2: Get folders from My Drive
+    const myDriveResponse = await drive.files.list({
+      q: "mimeType='application/vnd.google-apps.folder' and trashed=false and 'me' in owners",
+      fields: 'files(id, name, parents, driveId)',
+      pageSize: 1000,
       orderBy: 'name',
-      supportsAllDrives: true,
-      includeItemsFromAllDrives: true,
     })
 
-    const files = response.data.files || []
+    const myDriveFolders = myDriveResponse.data.files || []
+    console.log(`Found ${myDriveFolders.length} folders in My Drive`)
 
-    // Build folder hierarchy with paths and image counts
-    const folderMap = new Map<string, { id: string; name: string; parents?: string[]; path: string; imageCount: number }>()
-    
-    // First pass: create map of all folders
-    files.forEach(file => {
-      if (file.id && file.name) {
-        folderMap.set(file.id, {
-          id: file.id,
-          name: file.name,
-          parents: file.parents || undefined,
-          path: file.name,
-          imageCount: 0,
-        })
-      }
-    })
+    // Step 3: Get folders from each Shared Drive
+    const allDriveData: Array<{ driveId: string; driveName: string; folders: any[] }> = []
 
-    // Second pass: build paths by traversing parent hierarchy
-    const buildPath = (folderId: string, visited = new Set<string>()): string => {
-      if (visited.has(folderId)) return '' // Prevent circular reference
-      visited.add(folderId)
-      
-      const folder = folderMap.get(folderId)
-      if (!folder) return ''
-      
-      const parentId = folder.parents?.[0]
-      if (parentId && folderMap.has(parentId)) {
-        const parentPath = buildPath(parentId, visited)
-        return parentPath ? `${parentPath} > ${folder.name}` : folder.name
-      }
-      
-      return folder.name
+    // Add My Drive
+    if (myDriveFolders.length > 0) {
+      allDriveData.push({
+        driveId: 'my-drive',
+        driveName: 'My Drive',
+        folders: myDriveFolders,
+      })
     }
 
-    // Update paths for all folders
-    folderMap.forEach((folder, id) => {
-      folder.path = buildPath(id)
-    })
+    // Add Shared Drives
+    for (const sharedDrive of sharedDrives) {
+      if (!sharedDrive.id) continue
 
-    // Third pass: count images in each folder
-    for (const [folderId, folder] of folderMap.entries()) {
       try {
-        const imagesResponse = await drive.files.list({
-          q: `'${folderId}' in parents and (mimeType contains 'image/' or mimeType='image/jpeg' or mimeType='image/png' or mimeType='image/webp') and trashed=false`,
-          fields: 'files(id)',
+        const sharedDriveFolders = await drive.files.list({
+          q: "mimeType='application/vnd.google-apps.folder' and trashed=false",
+          driveId: sharedDrive.id,
+          corpora: 'drive',
+          fields: 'files(id, name, parents, driveId)',
           pageSize: 1000,
+          orderBy: 'name',
           supportsAllDrives: true,
           includeItemsFromAllDrives: true,
         })
-        folder.imageCount = imagesResponse.data.files?.length || 0
+
+        const folders = sharedDriveFolders.data.files || []
+        console.log(`Found ${folders.length} folders in Shared Drive: ${sharedDrive.name}`)
+
+        if (folders.length > 0) {
+          allDriveData.push({
+            driveId: sharedDrive.id,
+            driveName: sharedDrive.name || 'Unnamed Drive',
+            folders,
+          })
+        }
       } catch (error) {
-        console.error(`Error counting images in folder ${folderId}:`, error)
-        folder.imageCount = 0
+        console.error(`Error listing folders in Shared Drive ${sharedDrive.name}:`, error)
       }
     }
 
-    // Filter folders with images and sort by path
-    const foldersWithImages = Array.from(folderMap.values())
-      .filter(f => f.imageCount > 0)
-      .sort((a, b) => a.path.localeCompare(b.path))
+    // Step 4: Process each drive's folders
+    const drivesWithFolders = []
 
-    const folders = foldersWithImages.map(f => ({
-      id: f.id,
-      name: f.name,
-      path: f.path,
-      imageCount: f.imageCount,
-    }))
+    for (const driveData of allDriveData) {
+      const { driveId, driveName, folders: files } = driveData
 
-    return NextResponse.json({ folders })
+      // Build folder hierarchy with paths and image counts
+      const folderMap = new Map<string, { id: string; name: string; parents?: string[]; path: string; imageCount: number }>()
+      
+      // First pass: create map of all folders
+      files.forEach(file => {
+        if (file.id && file.name) {
+          folderMap.set(file.id, {
+            id: file.id,
+            name: file.name,
+            parents: file.parents || undefined,
+            path: file.name,
+            imageCount: 0,
+          })
+        }
+      })
+
+      // Second pass: build paths by traversing parent hierarchy
+      const buildPath = (folderId: string, visited = new Set<string>()): string => {
+        if (visited.has(folderId)) return '' // Prevent circular reference
+        visited.add(folderId)
+        
+        const folder = folderMap.get(folderId)
+        if (!folder) return ''
+        
+        const parentId = folder.parents?.[0]
+        if (parentId && folderMap.has(parentId)) {
+          const parentPath = buildPath(parentId, visited)
+          return parentPath ? `${parentPath} > ${folder.name}` : folder.name
+        }
+        
+        return folder.name
+      }
+
+      // Update paths for all folders
+      folderMap.forEach((folder, id) => {
+        folder.path = buildPath(id)
+      })
+
+      // Third pass: count images in each folder
+      for (const [folderId, folder] of folderMap.entries()) {
+        try {
+          const imagesResponse = await drive.files.list({
+            q: `'${folderId}' in parents and (mimeType contains 'image/' or mimeType='image/jpeg' or mimeType='image/png' or mimeType='image/webp') and trashed=false`,
+            fields: 'files(id)',
+            pageSize: 1000,
+            supportsAllDrives: true,
+            includeItemsFromAllDrives: true,
+            ...(driveId !== 'my-drive' && { driveId, corpora: 'drive' }),
+          })
+          folder.imageCount = imagesResponse.data.files?.length || 0
+        } catch (error) {
+          console.error(`Error counting images in folder ${folderId}:`, error)
+          folder.imageCount = 0
+        }
+      }
+
+      // Filter folders with images and sort by path
+      const foldersWithImages = Array.from(folderMap.values())
+        .filter(f => f.imageCount > 0)
+        .sort((a, b) => a.path.localeCompare(b.path))
+
+      const folders = foldersWithImages.map(f => ({
+        id: f.id,
+        name: f.name,
+        path: f.path,
+        imageCount: f.imageCount,
+      }))
+
+      if (folders.length > 0) {
+        drivesWithFolders.push({
+          driveId,
+          driveName,
+          folders,
+        })
+      }
+    }
+
+    return NextResponse.json({ drives: drivesWithFolders })
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to list folders'
     console.error('Error listing folders:', error)

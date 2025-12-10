@@ -111,7 +111,7 @@ export default function DashboardPage() {
   const [selectedSheetId, setSelectedSheetId] = useState<string>('')
   const [sheetData, setSheetData] = useState<SheetData[]>([])
   const [currentSheetRow, setCurrentSheetRow] = useState<SheetData | null>(null)
-  const [driveFolders, setDriveFolders] = useState<{ id: string; name: string; path: string; imageCount: number }[]>([])
+  const [driveFolders, setDriveFolders] = useState<Array<{ driveId: string; driveName: string; folders: Array<{ id: string; name: string; path: string; imageCount: number }> }>>([])
   const [selectedFolderId, setSelectedFolderId] = useState<string>('')
   const [driveFolderId, setDriveFolderId] = useState<string>('')
   const [driveImages, setDriveImages] = useState<DriveImage[]>([])
@@ -417,7 +417,7 @@ export default function DashboardPage() {
       const res = await fetch('/api/drive/list-folders')
       if (res.ok) {
         const data = await res.json()
-        setDriveFolders(data.folders || [])
+        setDriveFolders(data.drives || [])
       }
     } catch (error) {
       console.error('Error fetching drive folders:', error)
@@ -1124,17 +1124,21 @@ export default function DashboardPage() {
                     }}
                   >
                     <option value="">-- เลือกโฟลเดอร์ --</option>
-                    {driveFolders.map((folder) => {
-                      // Calculate indent level based on path depth
-                      const depth = (folder.path.match(/>/g) || []).length
-                      const indent = '  '.repeat(depth)
-                      
-                      return (
-                        <option key={folder.id} value={folder.id}>
-                          {indent}📁 {folder.path} ({folder.imageCount} รูป)
-                        </option>
-                      )
-                    })}
+                    {driveFolders.map((drive) => (
+                      <optgroup key={drive.driveId} label={`📱 ${drive.driveName}`}>
+                        {drive.folders.map((folder) => {
+                          // Calculate indent level based on path depth
+                          const depth = (folder.path.match(/>/g) || []).length
+                          const indent = '  '.repeat(depth)
+                          
+                          return (
+                            <option key={folder.id} value={folder.id}>
+                              {indent}📁 {folder.path} ({folder.imageCount} รูป)
+                            </option>
+                          )
+                        })}
+                      </optgroup>
+                    ))}
                   </select>
                   
                   {/* Manual Folder ID Input (Optional) */}
