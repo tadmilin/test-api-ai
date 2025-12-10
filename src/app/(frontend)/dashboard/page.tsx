@@ -45,6 +45,7 @@ interface Job {
     photoType?: string
     contentTopic?: string
     postTitleHeadline?: string
+    contentDescription?: string
   }>
 }
 
@@ -124,7 +125,9 @@ export default function DashboardPage() {
     photoType?: string
     contentTopic?: string
     postTitleHeadline?: string
+    contentDescription?: string
   }>>([])
+  const [expandedImageIds, setExpandedImageIds] = useState<Set<number>>(new Set())
   const [reviewMode, setReviewMode] = useState(false)
   const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null)
   const [finalImageUrl, setFinalImageUrl] = useState<string | null>(null)
@@ -241,6 +244,7 @@ export default function DashboardPage() {
                 photoType: newImg.photoType || prevImg.photoType,
                 contentTopic: newImg.contentTopic || prevImg.contentTopic,
                 postTitleHeadline: newImg.postTitleHeadline || prevImg.postTitleHeadline,
+                contentDescription: newImg.contentDescription || prevImg.contentDescription,
               }
             })
           })
@@ -542,6 +546,7 @@ export default function DashboardPage() {
         photoType: string
         contentTopic: string
         postTitleHeadline: string
+        contentDescription: string
       }> = []
 
       imageSets.forEach(set => {
@@ -552,6 +557,7 @@ export default function DashboardPage() {
             photoType: set.sheetRow['Photo_Type'] || '',
             contentTopic: set.sheetRow['Content_Topic'] || '',
             postTitleHeadline: set.sheetRow['Post_Title_Headline'] || '',
+            contentDescription: set.sheetRow['Content_Description'] || '',
           })
         })
       })
@@ -627,6 +633,7 @@ export default function DashboardPage() {
         photoType: sheetRows[index]?.photoType || '',
         contentTopic: sheetRows[index]?.contentTopic || '',
         postTitleHeadline: sheetRows[index]?.postTitleHeadline || '',
+        contentDescription: sheetRows[index]?.contentDescription || '',
       }))
       setEnhancedImages(initialEnhancedImages)
       setReviewMode(true) // Show review mode immediately with metadata
@@ -674,6 +681,7 @@ export default function DashboardPage() {
                     photoType: newImg.photoType || prevImg.photoType,
                     contentTopic: newImg.contentTopic || prevImg.contentTopic,
                     postTitleHeadline: newImg.postTitleHeadline || prevImg.postTitleHeadline,
+                    contentDescription: newImg.contentDescription || prevImg.contentDescription,
                   }
                 })
               })
@@ -944,6 +952,19 @@ export default function DashboardPage() {
         console.error('Error downloading image:', error)
         alert('Failed to download image')
       })
+  }
+
+  // Toggle expanded state for image cards
+  function toggleExpanded(index: number) {
+    setExpandedImageIds((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(index)) {
+        newSet.delete(index)
+      } else {
+        newSet.add(index)
+      }
+      return newSet
+    })
   }
 
   const getStatusColor = (status: string) => {
@@ -1436,6 +1457,27 @@ export default function DashboardPage() {
                             <div className="text-xs">
                               <span className="text-gray-600">โพสต์: </span>
                               <span className="text-gray-900">{img.postTitleHeadline}</span>
+                            </div>
+                          )}
+
+                          {/* Expandable Content Description */}
+                          {img.contentDescription && (
+                            <div className="mt-2">
+                              <button
+                                onClick={() => toggleExpanded(index)}
+                                className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+                              >
+                                <span>{expandedImageIds.has(index) ? '▲' : '▼'}</span>
+                                <span>{expandedImageIds.has(index) ? 'ซ่อนรายละเอียด' : 'ดูรายละเอียดเพิ่มเติม'}</span>
+                              </button>
+                              {expandedImageIds.has(index) && (
+                                <div className="mt-2 p-3 border border-gray-300 rounded-lg bg-gray-50">
+                                  <div className="text-xs">
+                                    <span className="text-gray-600 font-semibold">รายละเอียดเนื้อหา:</span>
+                                    <p className="text-gray-800 mt-1 whitespace-pre-wrap">{img.contentDescription}</p>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>

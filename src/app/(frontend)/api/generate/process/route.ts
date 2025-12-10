@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
         photoType: string
         contentTopic?: string
         postTitleHeadline?: string
+        contentDescription?: string
       }> = []
 
       for (let i = 0; i < referenceUrls.length; i++) {
@@ -107,6 +108,7 @@ export async function POST(request: NextRequest) {
             photoType,
             contentTopic: sheetRow.contentTopic || '',
             postTitleHeadline: sheetRow.postTitleHeadline || '',
+            contentDescription: sheetRow.contentDescription || '',
           })
 
           // Start enhancement
@@ -139,6 +141,7 @@ export async function POST(request: NextRequest) {
             photoType: photoTypeFromSheet || 'generic',
             contentTopic: sheetRow.contentTopic || '',
             postTitleHeadline: sheetRow.postTitleHeadline || '',
+            contentDescription: sheetRow.contentDescription || '',
           })
         }
       }
@@ -152,6 +155,7 @@ export async function POST(request: NextRequest) {
         photoType: imageMetadata[index]?.photoType || '',
         contentTopic: imageMetadata[index]?.contentTopic || '',
         postTitleHeadline: imageMetadata[index]?.postTitleHeadline || '',
+        contentDescription: imageMetadata[index]?.contentDescription || '',
       }))
       
       await payload.update({

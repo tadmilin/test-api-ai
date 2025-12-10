@@ -186,6 +186,11 @@ export const Jobs: CollectionConfig = {
                   type: 'text',
                   label: 'Post Title / Headline',
                 },
+                {
+                  name: 'contentDescription',
+                  type: 'textarea',
+                  label: 'Content Description',
+                },
               ],
             },
             {
@@ -258,6 +263,14 @@ export const Jobs: CollectionConfig = {
                   label: 'Post Title / Headline',
                   admin: {
                     description: 'Post title from Sheet row',
+                  },
+                },
+                {
+                  name: 'contentDescription',
+                  type: 'textarea',
+                  label: 'Content Description',
+                  admin: {
+                    description: 'Content description from Sheet row',
                   },
                 },
               ],
