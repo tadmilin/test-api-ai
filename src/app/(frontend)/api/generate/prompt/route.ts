@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getNanoBananaPrompt, type PhotoType } from '@/utilities/nanoBananaPrompts'
+import { getNanoBananaPrompt, type PhotoType, VALID_PHOTO_TYPES } from '@/utilities/nanoBananaPrompts'
 
 /**
  * SIMPLIFIED Prompt API - use photoType from Sheet only
@@ -17,29 +17,7 @@ export async function POST(request: NextRequest) {
     let photoType: PhotoType = 'generic'
     
     if (photoTypeFromSheet && typeof photoTypeFromSheet === 'string') {
-      const validTypes: PhotoType[] = [
-        'buffet',
-        'food_closeup',
-        'bedroom',
-        'bathroom',
-        'lobby',
-        'entrance',
-        'building_exterior',
-        'dining_room',
-        'pool',
-        'gym',
-        'spa',
-        'meeting_room',
-        'corridor',
-        'balcony',
-        'nature_garden',
-        'beach_resort',
-        'mountain_resort',
-        'jungle_resort',
-        'generic'
-      ]
-      
-      if (validTypes.includes(photoTypeFromSheet as PhotoType)) {
+      if (VALID_PHOTO_TYPES.includes(photoTypeFromSheet as PhotoType)) {
         photoType = photoTypeFromSheet as PhotoType
         console.log('✅ Using photoType from Sheet:', photoType)
       } else {

@@ -237,7 +237,7 @@ export default function DashboardPage() {
             if (prevImages.length === 0) return statusData.images
             return statusData.images.map((newImg: any, index: number) => {
               const prevImg = prevImages[index] || {}
-              return {
+              const merged = {
                 ...prevImg,
                 url: newImg.url || prevImg.url,
                 status: newImg.status || prevImg.status,
@@ -248,6 +248,11 @@ export default function DashboardPage() {
                 postTitleHeadline: newImg.postTitleHeadline || prevImg.postTitleHeadline,
                 contentDescription: newImg.contentDescription || prevImg.contentDescription,
               }
+              // Debug log to check photoType preservation
+              if (merged.photoType !== prevImg.photoType) {
+                console.log(`⚠️ PhotoType changed for image ${index + 1}:`, prevImg.photoType, '→', merged.photoType)
+              }
+              return merged
             })
           })
         }
@@ -587,6 +592,9 @@ export default function DashboardPage() {
       })
 
       console.log('📋 Mapped sheet rows:', sheetRows.length)
+      sheetRows.forEach((row, i) => {
+        console.log(`  Row ${i + 1}: photoType = "${row.photoType}", product = "${row.productName}"`)
+      })
 
       // Use first set's row for job-level metadata
       const firstRow = imageSets[0].sheetRow
@@ -649,16 +657,24 @@ export default function DashboardPage() {
       const processData = await processRes.json()
       
       // Initialize enhanced images with metadata immediately
-      const initialEnhancedImages = allImages.map((img, index) => ({
-        url: '',
-        status: 'pending' as const,
-        originalUrl: img.url,
-        predictionId: processData.predictions?.[index] || null,
-        photoType: sheetRows[index]?.photoType || '',
-        contentTopic: sheetRows[index]?.contentTopic || '',
-        postTitleHeadline: sheetRows[index]?.postTitleHeadline || '',
-        contentDescription: sheetRows[index]?.contentDescription || '',
-      }))
+      const initialEnhancedImages = allImages.map((img, index) => {
+        const metadata = sheetRows[index] || {}
+        console.log(`🎨 Image ${index + 1} metadata:`, {
+          photoType: metadata.photoType,
+          contentTopic: metadata.contentTopic,
+          productName: metadata.productName
+        })
+        return {
+          url: '',
+          status: 'pending' as const,
+          originalUrl: img.url,
+          predictionId: processData.predictions?.[index] || null,
+          photoType: metadata.photoType || '',
+          contentTopic: metadata.contentTopic || '',
+          postTitleHeadline: metadata.postTitleHeadline || '',
+          contentDescription: metadata.contentDescription || '',
+        }
+      })
       setEnhancedImages(initialEnhancedImages)
       setReviewMode(true) // Show review mode immediately with metadata
       

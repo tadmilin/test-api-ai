@@ -25,6 +25,31 @@ export type PhotoType =
   | 'generic'
 
 /**
+ * Array of all valid photo types - use this for validation
+ */
+export const VALID_PHOTO_TYPES: readonly PhotoType[] = [
+  'buffet',
+  'food_closeup',
+  'bedroom',
+  'bathroom',
+  'lobby',
+  'entrance',
+  'building_exterior',
+  'dining_room',
+  'pool',
+  'gym',
+  'spa',
+  'meeting_room',
+  'corridor',
+  'balcony',
+  'nature_garden',
+  'beach_resort',
+  'mountain_resort',
+  'jungle_resort',
+  'generic'
+] as const
+
+/**
  * Simple template prompts optimized for Nano-Banana
  * คำสั่งแบบสนทนาธรรมชาติ ไม่ใช่ technical diffusion prompts
  */
