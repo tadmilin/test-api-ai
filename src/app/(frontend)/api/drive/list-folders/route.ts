@@ -87,14 +87,22 @@ export async function GET() {
       }
     }
 
-    // Step 4: Process each drive's folders
+    // Step 4: Process each drive's folders into tree structure
     const drivesWithFolders = []
 
     for (const driveData of allDriveData) {
       const { driveId, driveName, folders: files } = driveData
 
       // Build folder hierarchy with paths and image counts
-      const folderMap = new Map<string, { id: string; name: string; parents?: string[]; path: string; imageCount: number }>()
+      const folderMap = new Map<string, { 
+        id: string
+        name: string
+        parents?: string[]
+        path: string
+        imageCount: number
+        children: any[]
+        level: number
+      }>()
       
       // First pass: create map of all folders
       files.forEach(file => {
@@ -105,6 +113,8 @@ export async function GET() {
             parents: file.parents || undefined,
             path: file.name,
             imageCount: 0,
+            children: [],
+            level: 0,
           })
         }
       })
@@ -149,16 +159,41 @@ export async function GET() {
         }
       }
 
-      // Filter folders with images and sort by path
-      const foldersWithImages = Array.from(folderMap.values())
-        .filter(f => f.imageCount > 0)
-        .sort((a, b) => a.path.localeCompare(b.path))
+      // Fourth pass: build parent-child relationships
+      const rootFolders: any[] = []
+      const folderWithChildrenMap = new Map(Array.from(folderMap.entries()))
 
-      const folders = foldersWithImages.map(f => ({
+      folderWithChildrenMap.forEach((folder) => {
+        const parentId = folder.parents?.[0]
+        if (parentId && folderWithChildrenMap.has(parentId)) {
+          // Add to parent's children
+          const parent = folderWithChildrenMap.get(parentId)
+          parent!.children.push(folder)
+          folder.level = (parent!.level || 0) + 1
+        } else {
+          // No parent or parent not in our list = root folder
+          rootFolders.push(folder)
+          folder.level = 0
+        }
+      })
+
+      // Recursive function to sort children
+      const sortChildren = (folder: any) => {
+        folder.children.sort((a: any, b: any) => a.name.localeCompare(b.name))
+        folder.children.forEach((child: any) => sortChildren(child))
+      }
+
+      // Sort root folders and their children
+      rootFolders.sort((a, b) => a.name.localeCompare(b.name))
+      rootFolders.forEach(sortChildren)
+
+      const folders = rootFolders.map(f => ({
         id: f.id,
         name: f.name,
         path: f.path,
         imageCount: f.imageCount,
+        children: f.children,
+        level: f.level,
       }))
 
       if (folders.length > 0) {

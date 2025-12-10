@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
+import { FolderTree, type TreeFolder } from '@/components/FolderTree'
 
 interface CurrentUser {
   id: string
@@ -111,7 +112,7 @@ export default function DashboardPage() {
   const [selectedSheetId, setSelectedSheetId] = useState<string>('')
   const [sheetData, setSheetData] = useState<SheetData[]>([])
   const [currentSheetRow, setCurrentSheetRow] = useState<SheetData | null>(null)
-  const [driveFolders, setDriveFolders] = useState<Array<{ driveId: string; driveName: string; folders: Array<{ id: string; name: string; path: string; imageCount: number }> }>>([])
+  const [driveFolders, setDriveFolders] = useState<Array<{ driveId: string; driveName: string; folders: TreeFolder[] }>>([])
   const [selectedFolderId, setSelectedFolderId] = useState<string>('')
   const [driveFolderId, setDriveFolderId] = useState<string>('')
   const [driveImages, setDriveImages] = useState<DriveImage[]>([])
@@ -1121,36 +1122,33 @@ export default function DashboardPage() {
                   รูปอ้างอิงจาก Google Drive
                 </label>
                 <div className="space-y-3">
-                  {/* Dropdown Select Folder */}
-                  <select
-                    className="w-full border border-gray-300 rounded-lg p-2 text-gray-900 font-mono text-sm"
-                    value={selectedFolderId}
-                    onChange={(e) => {
-                      setSelectedFolderId(e.target.value)
-                      setDriveImages([])
-                      setCurrentImages([])
-                    }}
-                  >
-                    <option value="">-- เลือกโฟลเดอร์ --</option>
-                    {driveFolders.map((drive) => (
-                      <optgroup key={drive.driveId} label={`📱 ${drive.driveName}`}>
-                        {drive.folders.map((folder) => {
-                          // Calculate indent level based on path depth
-                          const depth = (folder.path.match(/>/g) || []).length
-                          const indent = '  '.repeat(depth)
-                          
-                          return (
-                            <option key={folder.id} value={folder.id}>
-                              {indent}📁 {folder.path} ({folder.imageCount} รูป)
-                            </option>
-                          )
-                        })}
-                      </optgroup>
-                    ))}
-                  </select>
+                  {/* Folder Tree View */}
+                  {driveFolders.map((drive) => (
+                    <div key={drive.driveId} className="mb-6">
+                      <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                        <span>📱</span>
+                        <span>{drive.driveName}</span>
+                      </h3>
+                      <FolderTree
+                        folders={drive.folders}
+                        onSelectFolder={(folderId) => {
+                          setSelectedFolderId(folderId)
+                          setDriveImages([])
+                          setCurrentImages([])
+                        }}
+                        selectedFolderId={selectedFolderId}
+                      />
+                    </div>
+                  ))}
+                  
+                  {driveFolders.length === 0 && (
+                    <div className="text-sm text-gray-500 text-center py-8 border border-gray-300 rounded-lg">
+                      กำลังโหลดโฟลเดอร์...
+                    </div>
+                  )}
                   
                   {/* Manual Folder ID Input (Optional) */}
-                  <details className="text-sm">
+                  <details className="text-sm mt-4">
                     <summary className="cursor-pointer text-gray-600 hover:text-gray-900">
                       หรือใส่ Folder ID เอง
                     </summary>
