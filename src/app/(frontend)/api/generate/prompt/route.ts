@@ -13,18 +13,30 @@ export async function POST(request: NextRequest) {
 
     console.log('📝 Prompt API called with photoType:', photoTypeFromSheet)
 
-    // Use photoType from Sheet - main room types only
+    // Use photoType from Sheet - support all available types
     let photoType: PhotoType = 'generic'
     
     if (photoTypeFromSheet && typeof photoTypeFromSheet === 'string') {
       const validTypes: PhotoType[] = [
-        'bedroom',     // ห้องนอน
-        'pool',        // สระว่ายน้ำ
-        'buffet',      // บุฟเฟ่
-        'bathroom',    // ห้องน้ำ
-        'lobby',       // ล็อบบี้
-        'dining_room',  // ร้านอาหาร
-        'generic'      // ทั่วไป
+        'buffet',
+        'food_closeup',
+        'bedroom',
+        'bathroom',
+        'lobby',
+        'entrance',
+        'building_exterior',
+        'dining_room',
+        'pool',
+        'gym',
+        'spa',
+        'meeting_room',
+        'corridor',
+        'balcony',
+        'nature_garden',
+        'beach_resort',
+        'mountain_resort',
+        'jungle_resort',
+        'generic'
       ]
       
       if (validTypes.includes(photoTypeFromSheet as PhotoType)) {
