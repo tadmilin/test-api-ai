@@ -152,11 +152,11 @@ export async function POST(request: NextRequest) {
         url: '', // Will be filled by polling
         predictionId: id || null,
         originalUrl: referenceUrls[index] as string,
-        status: 'pending' as const, // All start as pending, will update via polling
-        photoType: imageMetadata[index]?.photoType || '',
-        contentTopic: imageMetadata[index]?.contentTopic || '',
-        postTitleHeadline: imageMetadata[index]?.postTitleHeadline || '',
-        contentDescription: imageMetadata[index]?.contentDescription || '',
+        status: 'pending' as const,
+        photoType: imageMetadata[index]?.photoType || job.photoTypeFromSheet || '',
+        contentTopic: job.contentTopic || '',
+        postTitleHeadline: job.postTitleHeadline || '',
+        contentDescription: job.contentDescription || '',
       }))
       
       await payload.update({

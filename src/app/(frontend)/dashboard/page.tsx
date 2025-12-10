@@ -663,12 +663,15 @@ export default function DashboardPage() {
             console.log(`📊 Job ${i + 1}: ${statusData.completed}/${statusData.total} complete`)
             
             if (statusData.allComplete && statusData.images?.[0]?.url) {
-              // Image completed!
+              // Image completed with all metadata!
               allEnhancedImages.push({
                 ...statusData.images[0],
                 photoType: statusData.images[0].photoType || '',
+                contentTopic: statusData.images[0].contentTopic || '',
+                postTitleHeadline: statusData.images[0].postTitleHeadline || '',
+                contentDescription: statusData.images[0].contentDescription || '',
               })
-              console.log(`✅ Image ${i + 1} completed`)
+              console.log(`✅ Image ${i + 1} completed with metadata`)
               break
             }
           } catch (error) {
