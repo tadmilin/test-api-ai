@@ -79,6 +79,7 @@ export async function POST(request: NextRequest) {
       targetPlatforms,
       referenceImageIds,
       referenceImageUrls,
+      sheetRows, // Per-image metadata
       templateType,
       status = 'pending',
     } = body
@@ -122,6 +123,7 @@ export async function POST(request: NextRequest) {
         targetPlatforms: targetPlatforms || ['facebook', 'instagram_feed'],
         referenceImageIds: referenceImageIds || [],
         referenceImageUrls: referenceImageUrls || [],
+        sheetRows: sheetRows || [], // Per-image metadata from Sheet
         templateType: templateType || 'triple',
         status,
         createdBy: currentUser?.id || undefined,
