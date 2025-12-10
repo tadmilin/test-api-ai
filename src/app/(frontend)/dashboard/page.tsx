@@ -68,11 +68,12 @@ interface DriveImage {
   name: string
   thumbnailUrl: string
   url: string
+  photoType?: string // Per-image photo type selection
 }
 
 interface ImageSet {
   sheetRow: SheetData
-  images: DriveImage[]
+  images: DriveImage[] // Each image has its own photoType
 }
 
 const IMAGE_SIZES = {
@@ -112,6 +113,7 @@ export default function DashboardPage() {
   const [driveFolderId, setDriveFolderId] = useState<string>('')
   const [driveImages, setDriveImages] = useState<DriveImage[]>([])
   const [currentImages, setCurrentImages] = useState<DriveImage[]>([])
+  const [imagePhotoTypes, setImagePhotoTypes] = useState<Record<string, string>>({}) // Track photo type per image ID
   const [imageSets, setImageSets] = useState<ImageSet[]>([])
   const [creating, setCreating] = useState(false)
   
@@ -496,15 +498,37 @@ export default function DashboardPage() {
       return
     }
 
+    // Parse available photo types from sheet
+    const photoTypeFromSheet = currentSheetRow['Photo_Type'] || ''
+    const availableTypes = photoTypeFromSheet.split(',').map(t => t.trim()).filter(Boolean)
+
+    // Validate: if multiple types, ensure all images have photo type selected
+    if (availableTypes.length > 1) {
+      const missingTypes = currentImages.filter(img => !imagePhotoTypes[img.id])
+      if (missingTypes.length > 0) {
+        alert(`❌ กรุณาเลือก Photo Type สำหรับรูปทั้งหมด (ขาดอีก ${missingTypes.length} รูป)`)
+        return
+      }
+    }
+
+    // Create images with photo types
+    const imagesWithTypes = currentImages.map(img => ({
+      ...img,
+      photoType: availableTypes.length === 1 
+        ? availableTypes[0] // Auto-assign if single type
+        : (imagePhotoTypes[img.id] || availableTypes[0]) // Use selected or default
+    }))
+
     // Add to sets
     setImageSets(prev => [...prev, {
       sheetRow: currentSheetRow,
-      images: [...currentImages]
+      images: imagesWithTypes
     }])
 
     // Clear current selection
     setCurrentSheetRow(null)
     setCurrentImages([])
+    setImagePhotoTypes({}) // Clear photo type selections
     
     alert(`✅ เพิ่มชุดสำเร็จ: ${currentImages.length} รูป`)
   }
@@ -554,7 +578,7 @@ export default function DashboardPage() {
           allImages.push(img)
           sheetRows.push({
             productName: set.sheetRow['Product Name'] || '',
-            photoType: set.sheetRow['Photo_Type'] || '',
+            photoType: img.photoType || set.sheetRow['Photo_Type'] || '', // Use per-image type first
             contentTopic: set.sheetRow['Content_Topic'] || '',
             postTitleHeadline: set.sheetRow['Post_Title_Headline'] || '',
             contentDescription: set.sheetRow['Content_Description'] || '',
@@ -1277,6 +1301,70 @@ export default function DashboardPage() {
                       })}
                     </div>
 
+                    {/* Photo Type Selection (if multiple types in sheet) */}
+                    {currentSheetRow && currentImages.length > 0 && (() => {
+                      const photoTypeFromSheet = currentSheetRow['Photo_Type'] || ''
+                      const availableTypes = photoTypeFromSheet.split(',').map(t => t.trim()).filter(Boolean)
+                      
+                      // Only show dropdowns if there are multiple types
+                      if (availableTypes.length > 1) {
+                        return (
+                          <div className="mt-6 pt-6 border-t border-gray-300">
+                            <h4 className="text-sm font-semibold text-gray-900 mb-3">
+                              3️⃣ กำหนด Photo Type แต่ละรูป
+                            </h4>
+                            <p className="text-xs text-gray-600 mb-4">
+                              ชีทระบุหลาย types ({availableTypes.join(', ')}) - กรุณาเลือก type สำหรับแต่ละรูป
+                            </p>
+                            <div className="space-y-3 max-h-96 overflow-y-auto">
+                              {currentImages.map((img, idx) => (
+                                <div key={img.id} className="flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-200">
+                                  <div className="flex-shrink-0 w-16 h-12 relative rounded overflow-hidden bg-gray-100">
+                                    <Image
+                                      src={img.thumbnailUrl}
+                                      alt={img.name}
+                                      fill
+                                      className="object-cover"
+                                      unoptimized
+                                    />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs text-gray-600 truncate">{img.name}</p>
+                                  </div>
+                                  <select
+                                    value={imagePhotoTypes[img.id] || availableTypes[0]}
+                                    onChange={(e) => {
+                                      setImagePhotoTypes(prev => ({
+                                        ...prev,
+                                        [img.id]: e.target.value
+                                      }))
+                                    }}
+                                    className="flex-shrink-0 border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium text-gray-900 bg-white hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  >
+                                    {availableTypes.map(type => (
+                                      <option key={type} value={type}>
+                                        {type}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      } else if (availableTypes.length === 1) {
+                        // Single type - show info banner
+                        return (
+                          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <p className="text-sm text-blue-800">
+                              <span className="font-semibold">Photo Type:</span> {availableTypes[0]} (ตั้งค่าอัตโนมัติสำหรับทุกรูป)
+                            </p>
+                          </div>
+                        )
+                      }
+                      return null
+                    })()}
+
                     {/* Add Set Button */}
                     {currentSheetRow && currentImages.length > 0 && (
                       <div className="mt-6 pt-6 border-t border-gray-300">
@@ -1324,10 +1412,24 @@ export default function DashboardPage() {
                             
                             <div className="grid grid-cols-2 gap-2 text-sm mb-2">
                               <div>
-                                <span className="text-gray-600">ประเภท: </span>
-                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-purple-100 text-purple-800">
-                                  📷 {set.sheetRow['Photo_Type'] || '-'}
-                                </span>
+                                <span className="text-gray-600">Photo Types: </span>
+                                {(() => {
+                                  // Count photo types in this set
+                                  const typeCounts: Record<string, number> = {}
+                                  set.images.forEach(img => {
+                                    const type = img.photoType || 'unknown'
+                                    typeCounts[type] = (typeCounts[type] || 0) + 1
+                                  })
+                                  return (
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                      {Object.entries(typeCounts).map(([type, count]) => (
+                                        <span key={type} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-purple-100 text-purple-800">
+                                          📷 {type} ({count})
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )
+                                })()}
                               </div>
                               <div>
                                 <span className="text-gray-600">จำนวนรูป: </span>
