@@ -137,6 +137,18 @@ export const Jobs: CollectionConfig = {
           label: 'Reference Images',
           fields: [
             {
+              name: 'referenceImageUrls',
+              type: 'array',
+              label: 'Input Images (Google Drive URLs)',
+              fields: [
+                {
+                  name: 'url',
+                  type: 'text',
+                  label: 'Drive URL',
+                },
+              ],
+            },
+            {
               name: 'sheetRows',
               type: 'array',
               label: 'Sheet Rows Data (Per-Image Metadata)',
