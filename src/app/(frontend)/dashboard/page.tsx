@@ -230,10 +230,19 @@ export default function DashboardPage() {
         if (statusData.images && statusData.images.length > 0) {
           setEnhancedImages(prevImages => {
             if (prevImages.length === 0) return statusData.images
-            return statusData.images.map((newImg: any, index: number) => ({
-              ...prevImages[index], // Keep existing metadata
-              ...newImg, // Update with new data
-            }))
+            return statusData.images.map((newImg: any, index: number) => {
+              const prevImg = prevImages[index] || {}
+              return {
+                ...prevImg,
+                url: newImg.url || prevImg.url,
+                status: newImg.status || prevImg.status,
+                predictionId: newImg.predictionId || prevImg.predictionId,
+                originalUrl: newImg.originalUrl || prevImg.originalUrl,
+                photoType: newImg.photoType || prevImg.photoType,
+                contentTopic: newImg.contentTopic || prevImg.contentTopic,
+                postTitleHeadline: newImg.postTitleHeadline || prevImg.postTitleHeadline,
+              }
+            })
           })
         }
         
@@ -653,10 +662,20 @@ export default function DashboardPage() {
             // Merge with existing metadata to preserve contentTopic and postTitleHeadline
             if (statusData.images && statusData.images.length > 0) {
               setEnhancedImages(prevImages => {
-                return statusData.images.map((newImg: any, index: number) => ({
-                  ...prevImages[index], // Keep existing metadata
-                  ...newImg, // Update with new data (url, status, etc)
-                }))
+                return statusData.images.map((newImg: any, index: number) => {
+                  const prevImg = prevImages[index] || {}
+                  return {
+                    ...prevImg, // Keep existing metadata
+                    url: newImg.url || prevImg.url, // Update URL if available
+                    status: newImg.status || prevImg.status, // Update status
+                    predictionId: newImg.predictionId || prevImg.predictionId,
+                    originalUrl: newImg.originalUrl || prevImg.originalUrl,
+                    // Keep metadata from prevImg, only override if newImg has non-empty value
+                    photoType: newImg.photoType || prevImg.photoType,
+                    contentTopic: newImg.contentTopic || prevImg.contentTopic,
+                    postTitleHeadline: newImg.postTitleHeadline || prevImg.postTitleHeadline,
+                  }
+                })
               })
               // Show review mode immediately when first image completes
               if (statusData.completed > 0 && !reviewMode) {
