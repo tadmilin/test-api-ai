@@ -75,21 +75,12 @@ export async function POST(request: NextRequest) {
       postTitleHeadline,
       contentDescription,
       photoTypeFromSheet,
-      mood,
       targetPlatforms,
-      referenceImageIds,
       referenceImageUrls,
-      sheetRows, // Per-image metadata
-      templateType,
       status = 'pending',
     } = body
 
-    console.log('📥 Received sheetRows:', sheetRows?.length || 0, 'rows')
-    if (sheetRows && sheetRows.length > 0) {
-      sheetRows.forEach((row: { photoType?: string; productName?: string }, i: number) => {
-        console.log(`  Row ${i + 1}: photoType = "${row.photoType}", product = "${row.productName}"`)
-      })
-    }
+    console.log('📥 Received photoType:', photoTypeFromSheet)
 
     if (!productName) {
       return NextResponse.json(
@@ -127,12 +118,8 @@ export async function POST(request: NextRequest) {
         postTitleHeadline: postTitleHeadline || undefined,
         contentDescription: contentDescription || undefined,
         photoTypeFromSheet: photoTypeFromSheet || undefined,
-        mood: mood || '',
         targetPlatforms: targetPlatforms || ['facebook', 'instagram_feed'],
-        referenceImageIds: referenceImageIds || [],
         referenceImageUrls: referenceImageUrls || [],
-        sheetRows: sheetRows || [], // Per-image metadata from Sheet
-        templateType: templateType || 'triple',
         status,
         createdBy: currentUser?.id || undefined,
       },
