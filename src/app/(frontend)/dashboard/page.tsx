@@ -26,6 +26,9 @@ interface Job {
   productName: string
   status: string
   createdAt: string
+  contentTopic?: string
+  postTitleHeadline?: string
+  contentDescription?: string
   createdBy?: {
     id: string
     name: string
@@ -129,7 +132,7 @@ export default function DashboardPage() {
     postTitleHeadline?: string
     contentDescription?: string
   }>>([])
-  const [expandedImageIds, setExpandedImageIds] = useState<Set<number>>(new Set())
+  const [expandedImageIds, setExpandedImageIds] = useState<Set<number | string>>(new Set())
   const [reviewMode, setReviewMode] = useState(false)
   const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null)
   const [_finalImageUrl, setFinalImageUrl] = useState<string | null>(null)
@@ -906,7 +909,7 @@ export default function DashboardPage() {
   }
 
   // Toggle expanded state for image cards
-  function toggleExpanded(index: number) {
+  function toggleExpanded(index: number | string) {
     setExpandedImageIds((prev) => {
       const newSet = new Set(prev)
       if (newSet.has(index)) {
@@ -1575,25 +1578,14 @@ export default function DashboardPage() {
               })}
             </div>
 
-            {/* Complete Button */}
-            <div className="mt-6 pt-6 border-t-2 border-gray-200">
-              <div className="flex items-center justify-between">
-                <button
-                  onClick={handleResetWorkflow}
-                  className="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 font-semibold"
-                >
-                  ← เริ่มใหม่
-                </button>
-                <button
-                  onClick={handleCompleteJob}
-                  disabled={enhancedImages.filter(img => img.url && img.url.trim() !== '').length < enhancedImages.length}
-                  className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-8 py-3 rounded-lg hover:from-green-700 hover:to-emerald-700 font-bold text-lg shadow-lg hover:shadow-xl transition-all disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed"
-                >
-                  {enhancedImages.filter(img => img.url && img.url.trim() !== '').length === enhancedImages.length
-                    ? '✅ บันทึกงาน' 
-                    : `⏳ รอทุกรูปเสร็จ (${enhancedImages.filter(img => img.url && img.url.trim() !== '').length}/${enhancedImages.length})`}
-                </button>
-              </div>
+            {/* Reset Button */}
+            <div className="mt-6 pt-6 border-t-2 border-gray-200 flex justify-center">
+              <button
+                onClick={handleResetWorkflow}
+                className="bg-gray-600 text-white px-8 py-3 rounded-lg hover:bg-gray-700 font-semibold shadow-lg hover:shadow-xl transition-all"
+              >
+                ← เริ่มสร้างงานใหม่
+              </button>
             </div>
           </div>
         )}
@@ -1604,13 +1596,24 @@ export default function DashboardPage() {
             <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6">
                 <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h2 className="text-2xl font-bold">{viewingJob.productName}</h2>
-                    <p className="text-gray-600 mt-1">ภาพที่สร้างแล้ว</p>
+                  <div className="flex-1">
+                    {viewingJob.productName && viewingJob.productName !== 'Untitled' && (
+                      <h2 className="text-2xl font-bold text-gray-900">{viewingJob.productName}</h2>
+                    )}
+                    {viewingJob.contentTopic && (
+                      <div className="text-sm text-gray-600 mt-1">
+                        <span className="font-medium">หัวข้อเนื้อหา:</span> {viewingJob.contentTopic}
+                      </div>
+                    )}
+                    {viewingJob.postTitleHeadline && (
+                      <div className="text-sm text-gray-600 mt-1">
+                        <span className="font-medium">หัวข้อโพสต์:</span> {viewingJob.postTitleHeadline}
+                      </div>
+                    )}
                   </div>
                   <button
                     onClick={() => setViewingJob(null)}
-                    className="text-gray-500 hover:text-gray-700 text-2xl"
+                    className="text-gray-500 hover:text-gray-700 text-2xl ml-4"
                   >
                     ×
                   </button>
@@ -1619,7 +1622,6 @@ export default function DashboardPage() {
                 {/* Show Enhanced Images if available */}
                 {viewingJob.enhancedImageUrls && viewingJob.enhancedImageUrls.length > 0 ? (
                   <div>
-                    <h3 className="font-semibold mb-4 text-lg">🎨 รูปที่ปรับปรุงด้วย Nano-Banana Pro</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {viewingJob.enhancedImageUrls.map((img, index) => {
                         const hasMetadata = img.photoType || img.contentTopic || img.postTitleHeadline
@@ -1662,9 +1664,30 @@ export default function DashboardPage() {
                                 
                                 {/* Post Title / Headline */}
                                 {img.postTitleHeadline && (
-                                  <div>
+                                  <div className="mb-2">
                                     <div className="text-xs text-gray-600 font-medium mb-1">หัวข้อโพสต์:</div>
                                     <div className="text-sm text-gray-900">{img.postTitleHeadline}</div>
+                                  </div>
+                                )}
+                                
+                                {/* Expandable Content Description */}
+                                {img.contentDescription && (
+                                  <div className="mt-2">
+                                    <button
+                                      onClick={() => toggleExpanded(`view-${index}`)}
+                                      className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+                                    >
+                                      <span>{expandedImageIds.has(`view-${index}`) ? '▲' : '▼'}</span>
+                                      <span>{expandedImageIds.has(`view-${index}`) ? 'ซ่อนรายละเอียด' : 'ดูรายละเอียดเพิ่มเติม'}</span>
+                                    </button>
+                                    {expandedImageIds.has(`view-${index}`) && (
+                                      <div className="mt-2 p-3 border border-gray-300 rounded-lg bg-white">
+                                        <div className="text-xs">
+                                          <span className="text-gray-600 font-semibold">รายละเอียดเนื้อหา:</span>
+                                          <p className="text-gray-800 mt-1 whitespace-pre-wrap">{img.contentDescription}</p>
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                               </div>
