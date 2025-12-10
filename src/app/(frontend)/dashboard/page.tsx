@@ -1413,7 +1413,7 @@ export default function DashboardPage() {
                   {creating ? (
                     <>
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                      🎨 กำลังสร้าง...
+                      🎨 AI กำลังสร้าง...
                     </>
                   ) : (
                     <>
@@ -1602,12 +1602,12 @@ export default function DashboardPage() {
                     )}
                     {viewingJob.contentTopic && (
                       <div className="text-sm text-gray-600 mt-1">
-                        <span className="font-medium">หัวข้อเนื้อหา:</span> {viewingJob.contentTopic}
+                        <span className="font-medium">contentTopic</span> {viewingJob.contentTopic}
                       </div>
                     )}
                     {viewingJob.postTitleHeadline && (
                       <div className="text-sm text-gray-600 mt-1">
-                        <span className="font-medium">หัวข้อโพสต์:</span> {viewingJob.postTitleHeadline}
+                        <span className="font-medium">postTitleHeadline</span> {viewingJob.postTitleHeadline}
                       </div>
                     )}
                   </div>
@@ -1658,7 +1658,7 @@ export default function DashboardPage() {
                                 {/* Content Topic */}
                                 {img.contentTopic && (
                                   <div className="mb-2">
-                                    <div className="text-xs text-gray-600 font-medium mb-1">หัวข้อเนื้อหา:</div>
+                                    <div className="text-xs text-gray-600 font-medium mb-1">contentTopic</div>
                                     <div className="text-sm text-gray-900 font-medium">{img.contentTopic}</div>
                                   </div>
                                 )}
@@ -1666,7 +1666,7 @@ export default function DashboardPage() {
                                 {/* Post Title / Headline */}
                                 {img.postTitleHeadline && (
                                   <div className="mb-2">
-                                    <div className="text-xs text-gray-600 font-medium mb-1">หัวข้อโพสต์:</div>
+                                    <div className="text-xs text-gray-600 font-medium mb-1">postTitleHeadline</div>
                                     <div className="text-sm text-gray-900">{img.postTitleHeadline}</div>
                                   </div>
                                 )}
@@ -1830,7 +1830,7 @@ export default function DashboardPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    ชื่อสินค้า
+                    รูปภาพ
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     สถานะ
@@ -1854,10 +1854,40 @@ export default function DashboardPage() {
                     </td>
                   </tr>
                 ) : (
-                  recentJobs.map((job) => (
+                  recentJobs.map((job) => {
+                    const firstImage = job.enhancedImageUrls?.[0]
+                    const thumbnailUrl = firstImage?.url || firstImage?.originalUrl
+                    return (
                     <tr key={job.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{job.productName}</div>
+                        <div className="flex items-center gap-3">
+                          {thumbnailUrl ? (
+                            <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                              <Image
+                                src={thumbnailUrl}
+                                alt="Thumbnail"
+                                fill
+                                className="object-cover"
+                                unoptimized
+                              />
+                            </div>
+                          ) : (
+                            <div className="w-16 h-16 rounded-lg bg-gray-200 flex items-center justify-center flex-shrink-0">
+                              <span className="text-gray-400 text-2xl">🖼️</span>
+                            </div>
+                          )}
+                          <div className="flex flex-col">
+                            {job.contentTopic && (
+                              <div className="text-sm font-medium text-gray-900">{job.contentTopic}</div>
+                            )}
+                            {job.postTitleHeadline && (
+                              <div className="text-xs text-gray-500">{job.postTitleHeadline}</div>
+                            )}
+                            {!job.contentTopic && !job.postTitleHeadline && (
+                              <div className="text-sm text-gray-400">ไม่มีหัวข้อ</div>
+                            )}
+                          </div>
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span
@@ -1919,7 +1949,7 @@ export default function DashboardPage() {
                         </button>
                       </td>
                     </tr>
-                  ))
+                  )})
                 )}
               </tbody>
             </table>
