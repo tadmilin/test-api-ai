@@ -111,7 +111,7 @@ export default function DashboardPage() {
   const [selectedSheetId, setSelectedSheetId] = useState<string>('')
   const [sheetData, setSheetData] = useState<SheetData[]>([])
   const [currentSheetRow, setCurrentSheetRow] = useState<SheetData | null>(null)
-  const [driveFolders, setDriveFolders] = useState<{ id: string; name: string }[]>([])
+  const [driveFolders, setDriveFolders] = useState<{ id: string; name: string; path: string; imageCount: number }[]>([])
   const [selectedFolderId, setSelectedFolderId] = useState<string>('')
   const [driveFolderId, setDriveFolderId] = useState<string>('')
   const [driveImages, setDriveImages] = useState<DriveImage[]>([])
@@ -1115,7 +1115,7 @@ export default function DashboardPage() {
                 <div className="space-y-3">
                   {/* Dropdown Select Folder */}
                   <select
-                    className="w-full border border-gray-300 rounded-lg p-2 text-gray-900"
+                    className="w-full border border-gray-300 rounded-lg p-2 text-gray-900 font-mono text-sm"
                     value={selectedFolderId}
                     onChange={(e) => {
                       setSelectedFolderId(e.target.value)
@@ -1124,11 +1124,17 @@ export default function DashboardPage() {
                     }}
                   >
                     <option value="">-- เลือกโฟลเดอร์ --</option>
-                    {driveFolders.map((folder) => (
-                      <option key={folder.id} value={folder.id}>
-                        📁 {folder.name}
-                      </option>
-                    ))}
+                    {driveFolders.map((folder) => {
+                      // Calculate indent level based on path depth
+                      const depth = (folder.path.match(/>/g) || []).length
+                      const indent = '  '.repeat(depth)
+                      
+                      return (
+                        <option key={folder.id} value={folder.id}>
+                          {indent}📁 {folder.path} ({folder.imageCount} รูป)
+                        </option>
+                      )
+                    })}
                   </select>
                   
                   {/* Manual Folder ID Input (Optional) */}
