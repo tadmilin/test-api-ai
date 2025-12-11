@@ -515,12 +515,12 @@ export default function DashboardPage() {
 
   function addImageSet() {
     if (!currentSheetRow) {
-      alert('❌ กรุณาเลือกข้อมูลจาก Google Sheet ก่อน')
+      console.warn('⚠️ No sheet row selected')
       return
     }
     
     if (currentImages.length === 0) {
-      alert('❌ กรุณาเลือกรูปอย่างน้อย 1 รูป')
+      console.warn('⚠️ No images selected')
       return
     }
 
@@ -570,13 +570,13 @@ export default function DashboardPage() {
   async function createJob() {
     // Validation for set-based selection
     if (imageSets.length === 0) {
-      alert('❌ กรุณาเพิ่มชุดรูปอย่างน้อย 1 ชุด')
+      console.warn('⚠️ No image sets added')
       return
     }
 
     const totalImages = getTotalImageCount()
     if (totalImages === 0) {
-      alert('❌ ไม่พบรูปภาพในชุดที่เพิ่ม')
+      console.warn('⚠️ No images found in sets')
       return
     }
 
