@@ -1086,30 +1086,17 @@ export default function DashboardPage() {
                   {currentSheetRow && (
                     <div className="mt-3 bg-gradient-to-br from-purple-50 to-blue-50 p-4 rounded-lg border-2 border-purple-200">
                       <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div>
-                          <span className="text-gray-600 font-medium">ชื่อสินค้า:</span>
-                          <div className="text-gray-900 font-semibold">{currentSheetRow['Product Name'] || '-'}</div>
-                        </div>
-                        <div>
-                          <span className="text-gray-600 font-medium">ประเภทภาพ:</span>
-                          <div>
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-purple-600 text-white mt-1">
-                              📷 {currentSheetRow['Photo_Type'] || '-'}
-                            </span>
-                          </div>
-                        </div>
-                        {currentSheetRow['Content_Topic'] && (
-                          <div>
-                            <span className="text-gray-600 font-medium">หัวข้อเนื้อหา:</span>
-                            <div className="text-gray-900">{currentSheetRow['Content_Topic']}</div>
-                          </div>
-                        )}
-                        {currentSheetRow['Post_Title_Headline'] && (
-                          <div>
-                            <span className="text-gray-600 font-medium">หัวข้อโพสต์:</span>
-                            <div className="text-gray-900">{currentSheetRow['Post_Title_Headline']}</div>
-                          </div>
-                        )}
+                        {Object.entries(currentSheetRow).map(([key, value]) => {
+                          // Skip internal fields
+                          if (key === 'id' || !value) return null
+                          
+                          return (
+                            <div key={key}>
+                              <span className="text-gray-600 font-medium">{key}:</span>
+                              <div className="text-gray-900">{value as string}</div>
+                            </div>
+                          )
+                        })}
                       </div>
                     </div>
                   )}
