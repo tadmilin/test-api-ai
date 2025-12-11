@@ -304,7 +304,7 @@ export default function DashboardPage() {
       }
       setStats(newStats)
 
-      setRecentJobs(jobs.slice(0, 10))
+      setRecentJobs(jobs)
 
       // Calculate user activities
       const userMap = new Map<string, UserActivity>()
@@ -1826,9 +1826,9 @@ export default function DashboardPage() {
         {/* Recent Jobs */}
         <div className="bg-white rounded-lg shadow mb-8">
           <div className="p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">งานล่าสุด</h2>
+            <h2 className="text-xl font-semibold text-gray-900">งานทั้งหมด ({recentJobs.length})</h2>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
