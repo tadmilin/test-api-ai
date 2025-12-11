@@ -40,9 +40,8 @@ export function FolderTree({ folders, onSelectFolder, selectedFolderId }: Folder
       if (hasChildren) {
         // If has children, toggle expand
         toggleExpand(folder.id)
-      }
-      if (hasImages) {
-        // If has images, select this folder
+      } else if (hasImages) {
+        // If no children but has images, select this folder
         onSelectFolder(folder.id)
       }
     }
