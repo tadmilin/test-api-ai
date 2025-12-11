@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { FolderTree, type TreeFolder } from '@/components/FolderTree'
+import { getGoogleDriveThumbnail, normalizeImageUrl } from '@/utilities/googleDriveUrl'
 
 interface CurrentUser {
   id: string
@@ -27,6 +28,7 @@ interface Job {
   productName: string
   status: string
   createdAt: string
+  updatedAt?: string
   contentTopic?: string
   postTitleHeadline?: string
   contentDescription?: string
@@ -137,6 +139,7 @@ export default function DashboardPage() {
   const [reviewMode, setReviewMode] = useState(false)
   const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null)
   const [_finalImageUrl, setFinalImageUrl] = useState<string | null>(null)
+  const [imageLoadErrors, setImageLoadErrors] = useState<Record<string, number>>({})
 
   // View Generated Images
   const [viewingJob, setViewingJob] = useState<Job | null>(null)
@@ -1632,32 +1635,98 @@ export default function DashboardPage() {
                       </div>
                     )}
                   </div>
-                  <button
-                    onClick={() => setViewingJob(null)}
-                    className="text-gray-500 hover:text-gray-700 text-2xl ml-4"
-                  >
-                    ×
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        // Clear all image errors to force reload
+                        setImageLoadErrors({})
+                      }}
+                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                      title="Refresh all images"
+                    >
+                      🔄 Refresh Images
+                    </button>
+                    <button
+                      onClick={() => setViewingJob(null)}
+                      className="text-gray-500 hover:text-gray-700 text-2xl ml-2"
+                    >
+                      ×
+                    </button>
+                  </div>
                 </div>
 
                 {/* Show Enhanced Images if available */}
                 {viewingJob.enhancedImageUrls && viewingJob.enhancedImageUrls.length > 0 ? (
                   <div>
+                    {/* Image loading status */}
+                    {Object.keys(imageLoadErrors).filter(k => k.startsWith(`modal-${viewingJob.id}`)).length > 0 && (
+                      <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <p className="text-sm text-yellow-800">
+                          ⚠️ บางรูปโหลดไม่สำเร็จ ({Object.keys(imageLoadErrors).filter(k => k.startsWith(`modal-${viewingJob.id}`)).length} รูป) - 
+                          <button 
+                            onClick={() => setImageLoadErrors({})} 
+                            className="ml-2 text-blue-600 hover:underline font-medium"
+                          >
+                            คลิกเพื่อโหลดใหม่
+                          </button>
+                        </p>
+                      </div>
+                    )}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {viewingJob.enhancedImageUrls.map((img, index) => {
                         const hasMetadata = img.photoType || img.contentTopic || img.postTitleHeadline
-                        console.log(`Image ${index + 1} URL:`, img.url, 'Status:', img.status)
-                        return img.url ? (
-                          <div key={index} className="bg-white rounded-lg border-2 border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+                        const imageUrl = img.url ? normalizeImageUrl(img.url) : null
+                        console.log(`Image ${index + 1} Original URL:`, img.url, 'Normalized:', imageUrl, 'Status:', img.status)
+                        return imageUrl ? (
+                          <div key={`modal-${viewingJob.id}-${index}`} className="bg-white rounded-lg border-2 border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
                             {/* Image */}
                             <div className="relative aspect-[4/3] bg-gray-100">
-                              <Image
-                                src={img.url}
-                                alt={`Enhanced ${index + 1}`}
-                                fill
-                                className="object-cover"
-                                unoptimized
-                              />
+                              {!imageLoadErrors[`modal-${viewingJob.id}-${index}`] ? (
+                                <Image
+                                  key={`modal-${viewingJob.id}-${index}-${viewingJob.updatedAt || viewingJob.createdAt}`}
+                                  src={imageUrl}
+                                  alt={`Enhanced ${index + 1}`}
+                                  fill
+                                  className="object-cover"
+                                  unoptimized
+                                  priority={index < 3}
+                                  onError={(e) => {
+                                    console.error('Modal image load error:', index, imageUrl)
+                                    setImageLoadErrors(prev => ({
+                                      ...prev,
+                                      [`modal-${viewingJob.id}-${index}`]: (prev[`modal-${viewingJob.id}-${index}`] || 0) + 1
+                                    }))
+                                    const target = e.target as HTMLImageElement
+                                    target.style.display = 'none'
+                                  }}
+                                  onLoad={() => {
+                                    setImageLoadErrors(prev => {
+                                      const newErrors = { ...prev }
+                                      delete newErrors[`modal-${viewingJob.id}-${index}`]
+                                      return newErrors
+                                    })
+                                  }}
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-gray-200">
+                                  <div className="text-center">
+                                    <span className="text-gray-400 text-4xl block mb-2">🖼️</span>
+                                    <span className="text-xs text-gray-500">ไม่สามารถโหลดรูปภาพ</span>
+                                    <button
+                                      onClick={() => {
+                                        setImageLoadErrors(prev => {
+                                          const newErrors = { ...prev }
+                                          delete newErrors[`modal-${viewingJob.id}-${index}`]
+                                          return newErrors
+                                        })
+                                      }}
+                                      className="mt-2 text-xs text-blue-600 hover:underline block mx-auto"
+                                    >
+                                      🔄 ลองใหม่
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                               {/* Image Number Badge */}
                               <div className="absolute top-2 left-2 bg-black/70 text-white text-xs font-bold px-2 py-1 rounded">
                                 #{index + 1}
@@ -1877,20 +1946,56 @@ export default function DashboardPage() {
                 ) : (
                   recentJobs.map((job) => {
                     const firstImage = job.enhancedImageUrls?.[0]
-                    const thumbnailUrl = firstImage?.url || firstImage?.originalUrl
+                    let thumbnailUrl = firstImage?.url || firstImage?.originalUrl
+                    
+                    // Normalize Google Drive URL if present
+                    if (thumbnailUrl) {
+                      thumbnailUrl = getGoogleDriveThumbnail(thumbnailUrl)
+                    }
+                    
+                    // Debug logging
+                    if (!thumbnailUrl && firstImage) {
+                      console.log('Missing thumbnail URL for job:', job.id, 'firstImage:', firstImage)
+                    }
+                    
                     return (
                     <tr key={job.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-3">
-                          {thumbnailUrl ? (
+                          {thumbnailUrl && !imageLoadErrors[`job-${job.id}`] ? (
                             <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
                               <Image
+                                key={`job-${job.id}-${job.updatedAt || job.createdAt}`}
                                 src={thumbnailUrl}
                                 alt="Thumbnail"
                                 fill
                                 className="object-cover"
                                 unoptimized
+                                priority={false}
+                                loading="lazy"
+                                onError={(e) => {
+                                  console.error('Thumbnail load error for job:', job.id, thumbnailUrl)
+                                  setImageLoadErrors(prev => ({
+                                    ...prev,
+                                    [`job-${job.id}`]: (prev[`job-${job.id}`] || 0) + 1
+                                  }))
+                                  const target = e.target as HTMLImageElement
+                                  target.style.display = 'none'
+                                }}
+                                onLoad={() => {
+                                  // Clear error on successful load
+                                  setImageLoadErrors(prev => {
+                                    const newErrors = { ...prev }
+                                    delete newErrors[`job-${job.id}`]
+                                    return newErrors
+                                  })
+                                }}
                               />
+                              {imageLoadErrors[`job-${job.id}`] && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-gray-200">
+                                  <span className="text-gray-400 text-2xl">🖼️</span>
+                                </div>
+                              )}
                             </div>
                           ) : (
                             <div className="w-16 h-16 rounded-lg bg-gray-200 flex items-center justify-center flex-shrink-0">
@@ -1951,7 +2056,11 @@ export default function DashboardPage() {
                           job.status === 'rejected') &&
                           (job.generatedImages || job.enhancedImageUrls) && (
                             <button
-                              onClick={() => setViewingJob(job)}
+                              onClick={() => {
+                                // Clear any previous error states when opening modal
+                                setImageLoadErrors({})
+                                setViewingJob(job)
+                              }}
                               className="text-purple-600 hover:text-purple-900 font-medium"
                             >
                               🖼️ ดูรูป

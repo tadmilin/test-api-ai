@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { google } from 'googleapis'
+import { getGoogleDriveThumbnail, getGoogleDriveImageUrl } from '@/utilities/googleDriveUrl'
 
 export async function GET() {
   try {
@@ -36,16 +37,13 @@ export async function GET() {
 
     const images = files.map(file => {
       const fileId = file.id || ''
-      const thumbnailUrl = file.thumbnailLink 
-        ? file.thumbnailLink.replace('=s220', '=s400')
-        : `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`
       
       return {
         id: fileId,
         name: file.name || '',
         mimeType: file.mimeType || '',
-        thumbnailUrl: thumbnailUrl,
-        url: `https://drive.google.com/uc?export=view&id=${fileId}`,
+        thumbnailUrl: getGoogleDriveThumbnail(`https://drive.google.com/file/d/${fileId}/view`),
+        url: getGoogleDriveImageUrl(`https://drive.google.com/file/d/${fileId}/view`, 'full'),
       }
     })
 
