@@ -33,6 +33,18 @@ export async function POST(req: Request) {
     const updatedUrls = job.enhancedImageUrls?.map((img) => {
       if (img.predictionId === predictionId) {
         const finalUrl = status === 'succeeded' && output ? (Array.isArray(output) ? output[0] : output) : img.url
+        
+        // Validate URL before assigning
+        const isValidUrl = typeof finalUrl === 'string' && finalUrl.length > 10 && 
+                          (finalUrl.startsWith('http://') || finalUrl.startsWith('https://'))
+        
+        if (status === 'succeeded' && !isValidUrl) {
+          console.error('[Webhook] Invalid URL from Replicate:', finalUrl)
+          console.error('[Webhook] Full output:', output)
+          // Don't update URL with invalid value
+          return img
+        }
+        
         const errorMsg = body.error || (status === 'failed' ? 'Unknown error' : undefined)
         console.log('[Webhook] Updating image:', { predictionId, status, finalUrl, error: errorMsg })
         return {

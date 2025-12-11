@@ -58,6 +58,17 @@ export async function GET(request: NextRequest) {
               
               if (data.status === 'succeeded' && (data.imageUrl || data.output)) {
                 const finalUrl = data.imageUrl || (Array.isArray(data.output) ? data.output[0] : data.output)
+                
+                // Validate URL before assigning
+                const isValidUrl = finalUrl && typeof finalUrl === 'string' && finalUrl.length > 10 && 
+                                  (finalUrl.startsWith('http://') || finalUrl.startsWith('https://'))
+                
+                if (!isValidUrl) {
+                  console.error(`   ❌ Invalid URL returned for image ${index + 1}:`, finalUrl)
+                  console.error(`   Response data:`, JSON.stringify(data, null, 2))
+                  return img // Don't update with invalid URL
+                }
+                
                 console.log(`   ✅ Image ${index + 1} completed: ${finalUrl}`)
                 // Update image with completed URL while preserving all metadata
                 return {

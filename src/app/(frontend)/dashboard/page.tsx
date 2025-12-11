@@ -1752,14 +1752,6 @@ export default function DashboardPage() {
                               <div className="absolute top-2 left-2 bg-black/70 text-white text-xs font-bold px-2 py-1 rounded">
                                 #{index + 1}
                               </div>
-                              {/* URL Type Badge - Warning for Replicate */}
-                              {urlType.includes('Replicate') && (
-                                <div className="absolute top-2 right-2">
-                                  <span className="bg-orange-500 text-white text-xs font-bold px-2 py-1 rounded flex items-center gap-1" title="URL จาก Replicate อาจหมดอายุแล้ว">
-                                    ⚠️ Expired?
-                                  </span>
-                                </div>
-                              )}
                             </div>
                             
                             {/* Metadata Section */}
@@ -1975,10 +1967,9 @@ export default function DashboardPage() {
                 ) : (
                   recentJobs.map((job) => {
                     const firstImage = job.enhancedImageUrls?.[0]
-                    let thumbnailUrl: string | undefined = firstImage?.url || firstImage?.originalUrl
                     
                     // Validate URL is actually a valid URL
-                    const isValidUrl = (url: string) => {
+                    const isValidUrl = (url: string | undefined) => {
                       if (!url || url.length < 10) return false
                       try {
                         new URL(url)
@@ -1988,20 +1979,17 @@ export default function DashboardPage() {
                       }
                     }
                     
-                    // Only use valid URLs
-                    if (thumbnailUrl && !isValidUrl(thumbnailUrl)) {
-                      console.warn('Invalid thumbnail URL for job:', job.id, thumbnailUrl)
-                      thumbnailUrl = undefined
+                    // Choose the best valid URL: prefer url if valid, otherwise use originalUrl
+                    let thumbnailUrl: string | undefined
+                    if (firstImage && isValidUrl(firstImage.url)) {
+                      thumbnailUrl = firstImage.url
+                    } else if (firstImage && isValidUrl(firstImage.originalUrl)) {
+                      thumbnailUrl = firstImage.originalUrl
                     }
                     
                     // Only normalize Google Drive URLs, leave others as-is
                     if (thumbnailUrl && isGoogleDriveUrl(thumbnailUrl)) {
                       thumbnailUrl = getGoogleDriveThumbnail(thumbnailUrl)
-                    }
-                    
-                    // Debug logging
-                    if (!thumbnailUrl && firstImage) {
-                      console.log('Missing thumbnail URL for job:', job.id, 'firstImage:', firstImage)
                     }
                     
                     return (
