@@ -41,8 +41,8 @@ export function getGoogleDriveImageUrl(url: string, size?: 'thumbnail' | 'full')
 
   const fileId = extractGoogleDriveFileId(url)
   if (!fileId) {
-    console.warn('Could not extract file ID from URL:', url)
-    return url // Return original if we can't parse it
+    // Not a Google Drive URL, return original without warning
+    return url
   }
 
   // Use Google'susercontent domain which works better
