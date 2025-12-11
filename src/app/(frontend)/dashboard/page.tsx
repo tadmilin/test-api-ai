@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { FolderTree, type TreeFolder } from '@/components/FolderTree'
-import { getGoogleDriveThumbnail, normalizeImageUrl } from '@/utilities/googleDriveUrl'
+import { getGoogleDriveThumbnail, normalizeImageUrl, isGoogleDriveUrl } from '@/utilities/googleDriveUrl'
 
 interface CurrentUser {
   id: string
@@ -1948,8 +1948,8 @@ export default function DashboardPage() {
                     const firstImage = job.enhancedImageUrls?.[0]
                     let thumbnailUrl = firstImage?.url || firstImage?.originalUrl
                     
-                    // Normalize Google Drive URL if present
-                    if (thumbnailUrl) {
+                    // Only normalize Google Drive URLs, leave others as-is
+                    if (thumbnailUrl && isGoogleDriveUrl(thumbnailUrl)) {
                       thumbnailUrl = getGoogleDriveThumbnail(thumbnailUrl)
                     }
                     
