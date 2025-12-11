@@ -1675,8 +1675,29 @@ export default function DashboardPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {viewingJob.enhancedImageUrls.map((img, index) => {
                         const hasMetadata = img.photoType || img.contentTopic || img.postTitleHeadline
-                        const imageUrl = img.url ? normalizeImageUrl(img.url) : null
-                        console.log(`Image ${index + 1} Original URL:`, img.url, 'Normalized:', imageUrl, 'Status:', img.status)
+                        
+                        // Validate URL before normalizing
+                        let imageUrl: string | null = null
+                        if (img.url) {
+                          try {
+                            new URL(img.url) // Validate it's a real URL
+                            imageUrl = normalizeImageUrl(img.url)
+                          } catch (e) {
+                            console.error(`Invalid URL for image ${index + 1}:`, img.url)
+                            imageUrl = null
+                          }
+                        }
+                        
+                        // Detect URL type for debugging
+                        const urlType = imageUrl 
+                          ? imageUrl.includes('replicate.delivery') ? 'Replicate (อาจหมดอายุ)' 
+                          : imageUrl.includes('vercel-storage.com') ? 'Vercel Storage'
+                          : imageUrl.includes('drive.google.com') || imageUrl.includes('googleusercontent.com') ? 'Google Drive'
+                          : 'Unknown'
+                          : 'No URL'
+                        
+                        console.log(`Image ${index + 1} Original:`, img.url, 'Normalized:', imageUrl, 'Status:', img.status, 'Type:', urlType)
+                        
                         return imageUrl ? (
                           <div key={`modal-${viewingJob.id}-${index}`} className="bg-white rounded-lg border-2 border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
                             {/* Image */}
@@ -1731,6 +1752,14 @@ export default function DashboardPage() {
                               <div className="absolute top-2 left-2 bg-black/70 text-white text-xs font-bold px-2 py-1 rounded">
                                 #{index + 1}
                               </div>
+                              {/* URL Type Badge - Warning for Replicate */}
+                              {urlType.includes('Replicate') && (
+                                <div className="absolute top-2 right-2">
+                                  <span className="bg-orange-500 text-white text-xs font-bold px-2 py-1 rounded flex items-center gap-1" title="URL จาก Replicate อาจหมดอายุแล้ว">
+                                    ⚠️ Expired?
+                                  </span>
+                                </div>
+                              )}
                             </div>
                             
                             {/* Metadata Section */}
@@ -1946,7 +1975,24 @@ export default function DashboardPage() {
                 ) : (
                   recentJobs.map((job) => {
                     const firstImage = job.enhancedImageUrls?.[0]
-                    let thumbnailUrl = firstImage?.url || firstImage?.originalUrl
+                    let thumbnailUrl: string | undefined = firstImage?.url || firstImage?.originalUrl
+                    
+                    // Validate URL is actually a valid URL
+                    const isValidUrl = (url: string) => {
+                      if (!url || url.length < 10) return false
+                      try {
+                        new URL(url)
+                        return true
+                      } catch {
+                        return false
+                      }
+                    }
+                    
+                    // Only use valid URLs
+                    if (thumbnailUrl && !isValidUrl(thumbnailUrl)) {
+                      console.warn('Invalid thumbnail URL for job:', job.id, thumbnailUrl)
+                      thumbnailUrl = undefined
+                    }
                     
                     // Only normalize Google Drive URLs, leave others as-is
                     if (thumbnailUrl && isGoogleDriveUrl(thumbnailUrl)) {
