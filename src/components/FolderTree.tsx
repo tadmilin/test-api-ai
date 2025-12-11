@@ -38,12 +38,13 @@ export function FolderTree({ folders, onSelectFolder, selectedFolderId }: Folder
 
     const handleFolderClick = () => {
       if (hasChildren) {
-        // If has children, toggle expand
+        // Parent folder: only toggle expand/collapse
         toggleExpand(folder.id)
       } else if (hasImages) {
-        // If no children but has images, select this folder
+        // Leaf folder with images: select for loading
         onSelectFolder(folder.id)
       }
+      // If no children and no images: do nothing (no alert)
     }
 
     return (
