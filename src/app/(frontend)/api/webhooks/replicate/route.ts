@@ -33,11 +33,13 @@ export async function POST(req: Request) {
     const updatedUrls = job.enhancedImageUrls?.map((img) => {
       if (img.predictionId === predictionId) {
         const finalUrl = status === 'succeeded' && output ? (Array.isArray(output) ? output[0] : output) : img.url
-        console.log('[Webhook] Updating image:', { predictionId, status, finalUrl })
+        const errorMsg = body.error || (status === 'failed' ? 'Unknown error' : undefined)
+        console.log('[Webhook] Updating image:', { predictionId, status, finalUrl, error: errorMsg })
         return {
           ...img,
-          status: (status === 'succeeded' ? 'completed' : 'failed') as 'completed' | 'failed',
+          status: (status === 'succeeded' ? 'completed' : status === 'failed' ? 'failed' : img.status) as 'pending' | 'completed' | 'failed',
           url: finalUrl,
+          error: errorMsg,
         }
       }
       return img

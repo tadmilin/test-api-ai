@@ -246,7 +246,7 @@ export async function POST(request: NextRequest) {
             safety_filter_level: 'block_only_high',
           },
           webhook: `${process.env.NEXT_PUBLIC_SERVER_URL}/api/webhooks/replicate`,
-          webhook_events_filter: ['completed'],
+          webhook_events_filter: ['start', 'completed'],
         })
         
         console.log(`✅ Prediction created: ${nanoBananaPrediction.id}`)

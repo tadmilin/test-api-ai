@@ -222,7 +222,7 @@ export default function DashboardPage() {
   }
   
   async function pollJobStatus(jobId: string) {
-    const maxPolls = 120
+    const maxPolls = 60  // 5 นาที (ลดจาก 10 นาที)
     let polls = 0
     
     while (polls < maxPolls) {
@@ -273,14 +273,32 @@ export default function DashboardPage() {
         const progress = `${statusData.completed}/${statusData.total}`
         setProcessingStatus(`⏳ ประมวลผลแล้ว ${progress} รูป`)
         
+        // Check for failed images
+        const anyFailed = statusData.images?.some((img: { status?: string }) => img.status === 'failed')
+        if (anyFailed) {
+          const failedImg = statusData.images?.find((img: { status?: string; error?: string }) => img.status === 'failed')
+          const errorMsg = failedImg?.error || 'Unknown error'
+          setProcessingStatus(`❌ ประมวลผลล้มเหลว: ${errorMsg}`)
+          setProcessingJobId(null)
+          fetchDashboardData()  // Refresh to show failed status
+          break
+        }
+        
         if (statusData.allComplete) {
           setProcessingStatus('')
           setProcessingJobId(null)
+          fetchDashboardData()
           break
         }
       } catch (error) {
         console.error('Poll error:', error)
       }
+    }
+    
+    // Timeout warning
+    if (polls >= maxPolls) {
+      setProcessingStatus('⚠️ Timeout - กรุณารีเฟรชหน้าเพื่อดูสถานะล่าสุด')
+      setProcessingJobId(null)
     }
   }
 

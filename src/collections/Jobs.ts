@@ -268,6 +268,14 @@ export const Jobs: CollectionConfig = {
                     description: 'Content description from Sheet row',
                   },
                 },
+                {
+                  name: 'error',
+                  type: 'text',
+                  label: 'Error Message',
+                  admin: {
+                    description: 'Error message from Replicate if failed',
+                  },
+                },
               ],
               admin: {
                 description: 'Enhanced images with metadata from Sheet',
