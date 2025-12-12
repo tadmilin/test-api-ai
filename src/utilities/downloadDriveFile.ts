@@ -6,8 +6,9 @@ import { google } from 'googleapis'
  * @returns Buffer containing the file data
  */
 export async function downloadDriveFile(fileId: string): Promise<Buffer> {
+  // ✅ ใช้ชื่อเดียวกับโค้ดเดิม (ตรงกับ Vercel env)
   const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY
+  const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
 
   if (!serviceAccountEmail || !privateKey) {
     throw new Error('Google Service Account credentials not configured')
