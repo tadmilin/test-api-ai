@@ -40,12 +40,22 @@ export async function GET(request: NextRequest) {
         postTitleHeadline?: string | null
         contentDescription?: string | null
       }, index: number) => {
-        // Check if image is processing (has predictionId but no URL yet)
-        // Note: status might be 'pending' or 'processing' or 'regenerating'
-        const isProcessing = img.predictionId && (!img.url || img.url === '')
+        // Check if image needs processing:
+        // 1. Has predictionId but no Blob URL yet
+        // 2. Has originalUrl (Replicate) but no permanent Blob URL
+        const hasReplicateUrl = img.originalUrl && img.originalUrl.includes('replicate.delivery')
+        const hasBlobUrl = img.url && img.url.includes('blob.vercel-storage.com')
+        const isProcessing = img.predictionId && (!hasBlobUrl || (hasReplicateUrl && !hasBlobUrl))
         
         if (isProcessing) {
           console.log(`📡 Polling prediction ${index + 1}: ${img.predictionId}`)
+          
+          // If webhook already uploaded to Blob, no need to poll Replicate
+          if (hasBlobUrl) {
+            console.log(`   ✅ Already has Blob URL, skipping poll`)
+            return img
+          }
+          
           // Poll the enhance status endpoint
           try {
             const statusRes = await fetch(
@@ -56,34 +66,34 @@ export async function GET(request: NextRequest) {
               const data = await statusRes.json()
               console.log(`   Status: ${data.status}`)
               
-              if (data.status === 'succeeded' && (data.imageUrl || data.output)) {
-                const finalUrl = data.imageUrl || (Array.isArray(data.output) ? data.output[0] : data.output)
+              if (data.status === 'succeeded' && data.imageUrl) {
+                // enhance API returns imageUrl = Blob URL (already uploaded)
+                const blobUrl = data.imageUrl
                 
-                // Validate URL before assigning
-                const isValidUrl = finalUrl && typeof finalUrl === 'string' && finalUrl.length > 10 && 
-                                  (finalUrl.startsWith('http://') || finalUrl.startsWith('https://'))
+                // Validate it's actually a Blob URL
+                const isBlobUrl = blobUrl && typeof blobUrl === 'string' && 
+                                 blobUrl.includes('blob.vercel-storage.com')
                 
-                if (!isValidUrl) {
-                  console.error(`   ❌ Invalid URL returned for image ${index + 1}:`, finalUrl)
-                  console.error(`   Response data:`, JSON.stringify(data, null, 2))
-                  return img // Don't update with invalid URL
+                if (!isBlobUrl) {
+                  console.error(`   ❌ Expected Blob URL but got:`, blobUrl)
+                  return img // Don't update with non-Blob URL
                 }
                 
-                console.log(`   ✅ Image ${index + 1} completed: ${finalUrl}`)
-                // Update image with completed URL while preserving all metadata
+                console.log(`   ✅ Image ${index + 1} completed: ${blobUrl}`)
+                // Update image with Blob URL while preserving all metadata
                 return {
                   ...img, // Keep ALL existing fields (photoType, contentTopic, etc.)
-                  url: finalUrl,
-                  status: 'pending' as const, // Ready for review (keep as pending until approved)
+                  url: blobUrl, // Blob URL (ถาวร)
+                  originalUrl: data.originalUrl || img.originalUrl, // Keep Replicate URL as backup
+                  status: 'pending' as const, // Ready for review
                 }
               }
               
               if (data.status === 'failed' || data.status === 'canceled' || data.status === 'error') {
                 console.error(`   ❌ Image ${index + 1} ${data.status}:`, data.error || 'Unknown error')
-                // Mark as failed but keep trying
+                // Mark as failed
                 return {
                   ...img,
-                  url: '', // No URL yet
                   status: 'pending' as const,
                   error: data.error || 'Enhancement failed',
                 }
