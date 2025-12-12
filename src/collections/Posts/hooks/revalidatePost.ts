@@ -1,10 +1,20 @@
 import type { CollectionAfterChangeHook, CollectionAfterDeleteHook } from 'payload'
 
-import { revalidatePath, revalidateTag } from 'next/cache'
-
 import type { Post } from '../../../payload-types'
 
-export const revalidatePost: CollectionAfterChangeHook<Post> = ({
+const revalidate = async (path?: string, tag?: string) => {
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
+    if (path) {
+      await fetch(`${baseUrl}/api/revalidate?path=${encodeURIComponent(path)}`, { method: 'POST' }).catch(() => {})
+    }
+    if (tag) {
+      await fetch(`${baseUrl}/api/revalidate?tag=${tag}`, { method: 'POST' }).catch(() => {})
+    }
+  } catch {}
+}
+
+export const revalidatePost: CollectionAfterChangeHook<Post> = async ({
   doc,
   previousDoc,
   req: { payload, context },
@@ -12,33 +22,24 @@ export const revalidatePost: CollectionAfterChangeHook<Post> = ({
   if (!context.disableRevalidate) {
     if (doc._status === 'published') {
       const path = `/posts/${doc.slug}`
-
       payload.logger.info(`Revalidating post at path: ${path}`)
-
-      revalidatePath(path)
-      revalidateTag('posts-sitemap')
+      await revalidate(path, 'posts-sitemap')
     }
 
     // If the post was previously published, we need to revalidate the old path
     if (previousDoc._status === 'published' && doc._status !== 'published') {
       const oldPath = `/posts/${previousDoc.slug}`
-
       payload.logger.info(`Revalidating old post at path: ${oldPath}`)
-
-      revalidatePath(oldPath)
-      revalidateTag('posts-sitemap')
+      await revalidate(oldPath, 'posts-sitemap')
     }
   }
   return doc
 }
 
-export const revalidateDelete: CollectionAfterDeleteHook<Post> = ({ doc, req: { context } }) => {
+export const revalidateDelete: CollectionAfterDeleteHook<Post> = async ({ doc, req: { context } }) => {
   if (!context.disableRevalidate) {
     const path = `/posts/${doc?.slug}`
-
-    revalidatePath(path)
-    revalidateTag('posts-sitemap')
+    await revalidate(path, 'posts-sitemap')
   }
-
   return doc
 }
