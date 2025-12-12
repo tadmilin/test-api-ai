@@ -26,6 +26,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 })
     }
 
+    // ⚠️ GUARD: Prevent duplicate processing
+    if (job.status === 'processing' || job.status === 'enhancing') {
+      console.log(`⚠️ Job ${jobId} is already being processed (status: ${job.status})`)
+      return NextResponse.json({ 
+        error: 'Job is already being processed',
+        status: job.status,
+        message: 'Please wait for current processing to complete'
+      }, { status: 409 })
+    }
+
     console.log(`🚀 Starting job ${jobId}`)
 
     // Update job status
@@ -55,6 +65,8 @@ export async function POST(request: NextRequest) {
       if (referenceUrls.length === 0) {
         throw new Error('No reference images found')
       }
+
+      console.log(`🎯 Starting loop for ${referenceUrls.length} images...`)
 
       // Get sheetRows data for per-image metadata
       const sheetRows = (job as { sheetRows?: Array<{ productName?: string; photoType?: string; contentTopic?: string; postTitleHeadline?: string; contentDescription?: string }> }).sheetRows || []
@@ -174,24 +186,42 @@ export async function POST(request: NextRequest) {
         } catch (error: unknown) {
           const message = error instanceof Error ? error.message : 'Unknown error'
           console.error(`❌ Image ${i + 1} failed:`, message)
+          
+          // ⚠️ CRITICAL: Always push to maintain array length consistency
           predictionIds.push('') // Empty = failed
           
-          // Still store metadata even for failed images
+          // Store metadata with matching index
           imageMetadata.push({
             photoType: photoTypeFromSheet || 'generic',
             contentTopic: sheetRow.contentTopic || '',
             postTitleHeadline: sheetRow.postTitleHeadline || '',
             contentDescription: sheetRow.contentDescription || '',
           })
+          
+          // Log to job-logs for debugging
+          await payload.create({
+            collection: 'job-logs',
+            data: {
+              jobId,
+              level: 'error',
+              message: `Image ${i + 1}/${referenceUrls.length} failed: ${message}`,
+              timestamp: new Date().toISOString(),
+            },
+          })
         }
       }
 
+      console.log(`✅ Loop completed! Processed ${referenceUrls.length} images`)
+      console.log(`📊 Summary: ${predictionIds.filter(id => id).length}/${referenceUrls.length} images started successfully`)
+      console.log(`📋 Prediction IDs:`, predictionIds)
+      
       // Update job with prediction IDs and metadata
+      // CRITICAL: Ensure arrays are same length (predictionIds.length === referenceUrls.length)
       const initialImages = predictionIds.map((id, index) => ({
-        url: '', // Will be filled by polling
+        url: '', // Will be filled by polling/webhook
         predictionId: id || null,
         originalUrl: referenceUrls[index] as string,
-        status: 'pending' as const,
+        status: id ? ('pending' as const) : ('failed' as const), // Failed if no predictionId
         photoType: imageMetadata[index]?.photoType || job.photoTypeFromSheet || '',
         contentTopic: job.contentTopic || '',
         postTitleHeadline: job.postTitleHeadline || '',

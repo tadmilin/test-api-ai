@@ -667,13 +667,14 @@ export default function DashboardPage() {
         }
       }
       
-      console.log(`✅ Created ${jobIds.length} jobs total`)
+      console.log(`✅ Created ${jobIds.length} jobs`)
 
       // Process all jobs sequentially
       const allEnhancedImages: typeof enhancedImages = []
       
       for (let i = 0; i < jobIds.length; i++) {
         const jobId = jobIds[i]
+        console.log(`\n🎯 Job ${i + 1}/${jobIds.length}: ${jobId}`)
         
         setCurrentJobId(jobId)
         setProcessingJobId(jobId)
@@ -688,6 +689,7 @@ export default function DashboardPage() {
 
         if (!processRes.ok) {
           const errorData = await processRes.json().catch(() => ({ error: 'Unknown error' }))
+          console.error(`❌ Process failed:`, errorData)
           throw new Error(errorData.error || 'Processing failed')
         }
 
@@ -704,30 +706,35 @@ export default function DashboardPage() {
             if (!statusRes.ok) continue
             
             const statusData = await statusRes.json()
-            console.log(`📊 Job ${i + 1}: ${statusData.completed}/${statusData.total} complete`)
             
-            if (statusData.allComplete && statusData.images?.[0]?.url) {
-              // Image completed with all metadata!
-              allEnhancedImages.push({
-                ...statusData.images[0],
-                photoType: statusData.images[0].photoType || '',
-                contentTopic: statusData.images[0].contentTopic || '',
-                postTitleHeadline: statusData.images[0].postTitleHeadline || '',
-                contentDescription: statusData.images[0].contentDescription || '',
-              })
-              console.log(`✅ Image ${i + 1} completed with metadata`)
+            // Break when job is complete (success or failed)
+            if (statusData.jobStatus === 'completed' || statusData.allComplete) {
+              const firstImage = statusData.images?.[0]
+              if (firstImage?.url) {
+                allEnhancedImages.push({
+                  ...firstImage,
+                  photoType: firstImage.photoType || '',
+                  contentTopic: firstImage.contentTopic || '',
+                  postTitleHeadline: firstImage.postTitleHeadline || '',
+                  contentDescription: firstImage.contentDescription || '',
+                })
+                console.log(`✅ Job ${i + 1}/${jobIds.length} done`)
+              } else {
+                console.log(`❌ Job ${i + 1}/${jobIds.length} failed`)
+              }
               break
             }
           } catch (error) {
-            console.error(`Poll error for job ${i + 1}:`, error)
+            console.error(`Poll error:`, error)
           }
         }
         
         if (polls >= maxPolls) {
-          throw new Error(`Timeout for image ${i + 1}`)
+          throw new Error(`Timeout for job ${i + 1}`)
         }
       }
       
+      console.log(`✅ All ${jobIds.length} jobs completed`)
       // All jobs complete
       console.log(`✅ All ${allEnhancedImages.length} images completed`)
       setEnhancedImages(allEnhancedImages)
@@ -1687,6 +1694,9 @@ export default function DashboardPage() {
                       {viewingJob.enhancedImageUrls.map((img, index) => {
                         const hasMetadata = img.photoType || img.contentTopic || img.postTitleHeadline
                         
+                        // Check if image failed
+                        const isFailed = img.status === 'failed' || (!img.url && !img.predictionId)
+                        
                         // Validate URL before normalizing
                         let imageUrl: string | null = null
                         if (img.url) {
@@ -1708,6 +1718,28 @@ export default function DashboardPage() {
                           : 'No URL'
                         
                         console.log(`Image ${index + 1} Original:`, img.url, 'Normalized:', imageUrl, 'Status:', img.status, 'Type:', urlType)
+                        
+                        // Show failed images with error placeholder
+                        if (isFailed) {
+                          return (
+                            <div key={`modal-${viewingJob.id}-${index}`} className="bg-white rounded-lg border-2 border-red-200 shadow-sm overflow-hidden">
+                              <div className="relative aspect-[4/3] bg-red-50 flex items-center justify-center">
+                                <div className="text-center p-4">
+                                  <span className="text-red-400 text-5xl block mb-3">❌</span>
+                                  <span className="text-sm font-semibold text-red-600 block mb-1">รูปที่ {index + 1} ไม่สำเร็จ</span>
+                                  <span className="text-xs text-red-500">ไม่สามารถสร้างรูปนี้ได้</span>
+                                </div>
+                              </div>
+                              {hasMetadata && (
+                                <div className="p-3 bg-gray-50 border-t border-red-200">
+                                  {img.photoType && <p className="text-xs text-gray-600 mb-1"><strong>ประเภท:</strong> {img.photoType}</p>}
+                                  {img.contentTopic && <p className="text-xs text-gray-600 mb-1"><strong>หัวข้อ:</strong> {img.contentTopic}</p>}
+                                  {img.postTitleHeadline && <p className="text-xs text-gray-600"><strong>หัวเรื่อง:</strong> {img.postTitleHeadline}</p>}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        }
                         
                         return imageUrl ? (
                           <div key={`modal-${viewingJob.id}-${index}`} className="bg-white rounded-lg border-2 border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">

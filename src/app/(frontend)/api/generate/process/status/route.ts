@@ -25,7 +25,18 @@ export async function GET(request: NextRequest) {
     const enhancedImages = job.enhancedImageUrls || []
     const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
     
-    console.log(`🔍 Checking ${enhancedImages.length} images for job ${jobId}`)
+    console.log(`\n🔍 ===== STATUS CHECK: Job ${jobId} =====`)
+    console.log(`📊 Job status: ${job.status}`)
+    console.log(`🖼️ Total images: ${enhancedImages.length}`)
+    console.log(`📋 Image states:`, enhancedImages.map((img, i) => ({
+      index: i + 1,
+      hasUrl: !!img.url,
+      hasPredictionId: !!img.predictionId,
+      status: img.status,
+      urlType: img.url?.includes('blob.vercel-storage.com') ? 'Blob' : 
+               img.url?.includes('replicate.delivery') ? 'Replicate' : 
+               img.url ? 'Other' : 'None'
+    })))
     
     // Check each image that's still processing
     const updatedImages = await Promise.all(
@@ -178,11 +189,19 @@ export async function GET(request: NextRequest) {
     // We are done if nothing is processing (either completed or failed)
     const allComplete = processing === 0
     
+    console.log(`\n📊 Final counts for job ${jobId}:`)
+    console.log(`   ✅ Completed: ${completed}/${updatedImages.length}`)
+    console.log(`   🔄 Processing: ${processing}/${updatedImages.length}`)
+    console.log(`   ❌ Failed: ${failed}/${updatedImages.length}`)
+    console.log(`   🎯 All complete: ${allComplete}`)
+    
     // Get current job to check status
     const currentJob = await payload.findByID({
       collection: 'jobs',
       id: jobId,
     })
+    
+    console.log(`📌 Current job status: ${currentJob.status}`)
     
     // Update job status if all complete
     if (allComplete && (job.status === 'enhancing' || job.status === 'processing')) {
@@ -205,6 +224,8 @@ export async function GET(request: NextRequest) {
         },
       })
     }
+
+    console.log(`===== END STATUS CHECK =====\n`)
 
     return NextResponse.json({
       success: true,
