@@ -8,9 +8,20 @@ export async function POST(req: Request) {
     const body = await req.json()
     const payload = await getPayload({ config: configPromise })
 
-    const { id: predictionId, status, output } = body
+    const { id: predictionId, status, output, error: replicateError, logs } = body
 
-    console.log('[Webhook] Received from Replicate:', { predictionId, status, output })
+    console.log('[Webhook] ========== Replicate Webhook ==========')
+    console.log('[Webhook] Prediction ID:', predictionId)
+    console.log('[Webhook] Status:', status)
+    console.log('[Webhook] Output:', output)
+    if (replicateError) {
+      console.error('[Webhook] ❌ Replicate Error:', replicateError)
+    }
+    if (logs) {
+      console.log('[Webhook] 📝 Replicate Logs:', logs)
+    }
+    console.log('[Webhook] Full body:', JSON.stringify(body, null, 2))
+    console.log('[Webhook] ===========================================')
 
     // ค้นหา Job ที่มี predictionId นี้
     const jobs = await payload.find({
@@ -35,8 +46,8 @@ export async function POST(req: Request) {
       if (img.predictionId === predictionId) {
         // กรณี failed - update status ทันที
         if (status === 'failed') {
-          const errorMsg = body.error || 'Unknown error'
-          console.log('[Webhook] Enhancement failed:', errorMsg)
+          const errorMsg = replicateError || body.error || logs || 'Unknown error - check Replicate dashboard'
+          console.error('[Webhook] ❌ Enhancement failed:', errorMsg)
           return {
             ...img,
             status: 'failed' as const,
