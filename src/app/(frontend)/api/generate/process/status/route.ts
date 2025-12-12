@@ -41,20 +41,17 @@ export async function GET(request: NextRequest) {
         contentDescription?: string | null
       }, index: number) => {
         // Check if image needs processing:
-        // 1. Has predictionId but no Blob URL yet
-        // 2. Has originalUrl (Replicate) but no permanent Blob URL
-        const hasReplicateUrl = img.originalUrl && img.originalUrl.includes('replicate.delivery')
+        // 1. Has predictionId AND
+        // 2. Either no URL at all OR has Replicate URL but no Blob URL
         const hasBlobUrl = img.url && img.url.includes('blob.vercel-storage.com')
-        const isProcessing = img.predictionId && (!hasBlobUrl || (hasReplicateUrl && !hasBlobUrl))
+        const hasReplicateUrl = img.originalUrl && img.originalUrl.includes('replicate.delivery')
+        
+        // Process if: has predictionId AND (no url OR no blob url yet)
+        const isProcessing = img.predictionId && !hasBlobUrl
         
         if (isProcessing) {
           console.log(`📡 Polling prediction ${index + 1}: ${img.predictionId}`)
-          
-          // If webhook already uploaded to Blob, no need to poll Replicate
-          if (hasBlobUrl) {
-            console.log(`   ✅ Already has Blob URL, skipping poll`)
-            return img
-          }
+          console.log(`   Current state: url=${img.url ? 'exists' : 'empty'}, hasBlobUrl=${hasBlobUrl}, hasReplicateUrl=${hasReplicateUrl}`)
           
           // Poll the enhance status endpoint
           try {

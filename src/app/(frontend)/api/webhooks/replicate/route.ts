@@ -33,26 +33,48 @@ export async function POST(req: Request) {
     // อัปเดตสถานะรูปภาพที่ตรงกับ predictionId
     const updatedUrls = await Promise.all(job.enhancedImageUrls?.map(async (img) => {
       if (img.predictionId === predictionId) {
-        const replicateUrl = status === 'succeeded' && output ? (Array.isArray(output) ? output[0] : output) : img.url
-        
-        // Validate Replicate URL
-        const isValidUrl = typeof replicateUrl === 'string' && replicateUrl.length > 10 && 
-                          (replicateUrl.startsWith('http://') || replicateUrl.startsWith('https://'))
-        
-        if (status === 'succeeded' && !isValidUrl) {
-          console.error('[Webhook] Invalid URL from Replicate:', replicateUrl)
-          console.error('[Webhook] Full output:', output)
+        // กรณี failed - update status ทันที
+        if (status === 'failed') {
+          const errorMsg = body.error || 'Unknown error'
+          console.log('[Webhook] Enhancement failed:', errorMsg)
           return {
             ...img,
             status: 'failed' as const,
-            error: 'Invalid URL received from Replicate',
+            error: errorMsg,
           }
         }
         
-        // ถ้าสำเร็จ ให้ download และ upload ไป Blob Storage
-        if (status === 'succeeded' && replicateUrl) {
+        // กรณี succeeded - ต้องมี output
+        if (status === 'succeeded') {
+          if (!output) {
+            console.error('[Webhook] No output received despite succeeded status')
+            return {
+              ...img,
+              status: 'failed' as const,
+              error: 'No output URL received from Replicate',
+            }
+          }
+          
+          const replicateUrl = Array.isArray(output) ? output[0] : output
+          
+          // Validate Replicate URL
+          const isValidUrl = typeof replicateUrl === 'string' && replicateUrl.length > 10 && 
+                            (replicateUrl.startsWith('http://') || replicateUrl.startsWith('https://'))
+          
+          if (!isValidUrl) {
+            console.error('[Webhook] Invalid URL from Replicate:', replicateUrl)
+            console.error('[Webhook] Full output:', output)
+            return {
+              ...img,
+              status: 'failed' as const,
+              error: 'Invalid URL received from Replicate',
+            }
+          }
+          
+          // Download และ upload ไป Blob Storage
+          // Download และ upload ไป Blob Storage
           try {
-            console.log('[Webhook] Downloading image from Replicate...')
+            console.log('[Webhook] Downloading image from Replicate:', replicateUrl)
             const imageResponse = await fetch(replicateUrl)
             
             if (!imageResponse.ok) {
@@ -90,29 +112,20 @@ export async function POST(req: Request) {
             }
           } catch (uploadError) {
             console.error('[Webhook] ❌ Failed to upload to Blob:', uploadError)
-            // ถ้า upload ล้มเหลว ให้เก็บ Replicate URL ไว้ชั่วคราว และ mark ว่ายัง pending
+            // ถ้า upload ล้มเหลว ให้เก็บ Replicate URL ไว้ใน originalUrl
             // Polling จะมาจัดการต่อ
             return {
               ...img,
               status: 'pending' as const, // ยังไม่เสร็จสมบูรณ์
+              url: '', // ไม่เก็บ URL ใน url field ถ้ายังไม่ได้ upload ไป Blob
               originalUrl: replicateUrl, // เก็บไว้ให้ polling ลองใหม่
               error: `Upload failed: ${uploadError instanceof Error ? uploadError.message : 'Unknown error'}`,
             }
           }
         }
         
-        // กรณี failed
-        if (status === 'failed') {
-          const errorMsg = body.error || 'Unknown error'
-          console.log('[Webhook] Enhancement failed:', errorMsg)
-          return {
-            ...img,
-            status: 'failed' as const,
-            error: errorMsg,
-          }
-        }
-        
-        // กรณีอื่นๆ (processing, starting)
+        // กรณีอื่นๆ (processing, starting, canceled) - ไม่ต้องทำอะไร
+        console.log('[Webhook] Status:', status, '- No action needed')
         return img
       }
       return img
