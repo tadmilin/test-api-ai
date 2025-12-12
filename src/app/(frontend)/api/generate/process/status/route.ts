@@ -178,6 +178,12 @@ export async function GET(request: NextRequest) {
     // We are done if nothing is processing (either completed or failed)
     const allComplete = processing === 0
     
+    // Get current job to check status
+    const currentJob = await payload.findByID({
+      collection: 'jobs',
+      id: jobId,
+    })
+    
     // Update job status if all complete
     if (allComplete && (job.status === 'enhancing' || job.status === 'processing')) {
       console.log(`🎉 All images complete! Updating job to completed`)
@@ -203,6 +209,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       jobId,
+      jobStatus: allComplete ? 'completed' : currentJob.status, // Return actual job status
       status: allComplete ? 'completed' : 'enhancing',
       total: updatedImages.length,
       processing,

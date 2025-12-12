@@ -225,11 +225,11 @@ export default function DashboardPage() {
   }
   
   async function pollJobStatus(jobId: string) {
-    const maxPolls = 60  // 5 นาที (ลดจาก 10 นาที)
+    const maxPolls = 120  // 10 นาที (120 * 5 วินาที = 600 วินาที)
     let polls = 0
     
     while (polls < maxPolls) {
-      await new Promise(resolve => setTimeout(resolve, 5000))
+      await new Promise(resolve => setTimeout(resolve, 2000)) // ลดเหลือ 2 วินาที
       polls++
       
       try {
@@ -276,11 +276,21 @@ export default function DashboardPage() {
         const progress = `${statusData.completed}/${statusData.total}`
         setProcessingStatus(`⏳ ประมวลผลแล้ว ${progress} รูป`)
         
+        // Check job status first - if completed/failed, stop polling
+        if (statusData.jobStatus === 'completed' || statusData.jobStatus === 'failed') {
+          console.log(`🛑 Job ${jobId} status: ${statusData.jobStatus} - stopping poll`)
+          setProcessingStatus('')
+          setProcessingJobId(null)
+          fetchDashboardData()  // Refresh to show latest status
+          break
+        }
+        
         // Check for failed images
         const anyFailed = statusData.images?.some((img: { status?: string }) => img.status === 'failed')
         if (anyFailed) {
           const failedImg = statusData.images?.find((img: { status?: string; error?: string }) => img.status === 'failed')
           const errorMsg = failedImg?.error || 'Unknown error'
+          console.log(`❌ Image failed: ${errorMsg}`)
           setProcessingStatus(`❌ ประมวลผลล้มเหลว: ${errorMsg}`)
           setProcessingJobId(null)
           fetchDashboardData()  // Refresh to show failed status
@@ -288,6 +298,7 @@ export default function DashboardPage() {
         }
         
         if (statusData.allComplete) {
+          console.log(`✅ All images complete for job ${jobId}`)
           setProcessingStatus('')
           setProcessingJobId(null)
           fetchDashboardData()

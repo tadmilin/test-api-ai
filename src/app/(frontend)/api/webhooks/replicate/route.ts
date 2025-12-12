@@ -55,7 +55,7 @@ export async function POST(req: Request) {
           }
         }
         
-        // กรณี succeeded - ต้องมี output
+        // กรณี succeeded - เก็บ Replicate URL ไว้ชั่วคราว
         if (status === 'succeeded') {
           if (!output) {
             console.error('[Webhook] No output received despite succeeded status')
@@ -82,56 +82,13 @@ export async function POST(req: Request) {
             }
           }
           
-          // Download และ upload ไป Blob Storage
-          // Download และ upload ไป Blob Storage
-          try {
-            console.log('[Webhook] Downloading image from Replicate:', replicateUrl)
-            const imageResponse = await fetch(replicateUrl)
-            
-            if (!imageResponse.ok) {
-              throw new Error(`Failed to download: ${imageResponse.statusText}`)
-            }
-            
-            const imageBuffer = await imageResponse.arrayBuffer()
-            const contentType = imageResponse.headers.get('content-type') || 'image/png'
-            
-            // Detect extension
-            let extension = 'png'
-            if (contentType.includes('jpeg') || contentType.includes('jpg')) extension = 'jpg'
-            if (contentType.includes('webp')) extension = 'webp'
-            
-            const timestamp = Date.now()
-            const randomSuffix = Math.random().toString(36).substring(2, 8)
-            const filename = `enhanced-${timestamp}-${randomSuffix}.${extension}`
-            const blobPath = `jobs/${job.id}/${filename}`
-            
-            console.log('[Webhook] Uploading to Blob Storage...')
-            const blob = await put(blobPath, imageBuffer, {
-              access: 'public',
-              contentType: contentType,
-            })
-            
-            console.log('[Webhook] ✅ Uploaded to Blob:', blob.url)
-            
-            // เก็บ Blob URL ใน url, เก็บ Replicate URL ใน originalUrl
-            return {
-              ...img,
-              status: 'completed' as const,
-              url: blob.url, // Blob URL (ถาวร)
-              originalUrl: replicateUrl, // Replicate URL (สำรอง)
-              error: undefined,
-            }
-          } catch (uploadError) {
-            console.error('[Webhook] ❌ Failed to upload to Blob:', uploadError)
-            // ถ้า upload ล้มเหลว ให้เก็บ Replicate URL ไว้ใน originalUrl
-            // Polling จะมาจัดการต่อ
-            return {
-              ...img,
-              status: 'pending' as const, // ยังไม่เสร็จสมบูรณ์
-              url: '', // ไม่เก็บ URL ใน url field ถ้ายังไม่ได้ upload ไป Blob
-              originalUrl: replicateUrl, // เก็บไว้ให้ polling ลองใหม่
-              error: `Upload failed: ${uploadError instanceof Error ? uploadError.message : 'Unknown error'}`,
-            }
+          // ✅ เก็บ Replicate URL ชั่วคราว - ให้ Polling ทำ upload
+          console.log('[Webhook] ✅ Replicate completed, storing URL for polling to upload')
+          return {
+            ...img,
+            status: 'pending' as const, // Still pending until uploaded to Blob
+            originalUrl: replicateUrl, // Replicate URL (ชั่วคราว)
+            error: undefined,
           }
         }
         
