@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { FolderTree, type TreeFolder } from '@/components/FolderTree'
 import { getGoogleDriveThumbnail, normalizeImageUrl, isGoogleDriveUrl } from '@/utilities/googleDriveUrl'
 import { JobProgress } from '@/components/JobProgress'
+import { logToJob } from '@/utilities/jobLogger'
 
 interface CurrentUser {
   id: string
@@ -624,8 +625,9 @@ export default function DashboardPage() {
     try {
       // Create separate job for each image
       const jobIds: string[] = []
+      const totalJobs = imageSets.reduce((sum, set) => sum + set.images.length, 0)
       
-      console.log(`📦 Creating ${imageSets.reduce((sum, set) => sum + set.images.length, 0)} separate jobs...`)
+      console.log(`📦 Creating ${totalJobs} separate jobs...`)
       
       for (const set of imageSets) {
         for (const img of set.images) {
@@ -665,6 +667,9 @@ export default function DashboardPage() {
           
           jobIds.push(jobId)
           console.log(`✅ Job created: ${jobId} (${img.photoType})`)
+          
+          // Log to database
+          await logToJob(jobId, 'info', `📋 Job created for: ${img.photoType || 'image'}`).catch(console.error)
         }
       }
       
@@ -680,6 +685,9 @@ export default function DashboardPage() {
         setCurrentJobId(jobId)
         setProcessingJobId(jobId)
         setProcessingStatus(`🎨 Processing image ${i + 1}/${jobIds.length}...`)
+        
+        // Log processing start
+        await logToJob(jobId, 'info', `🎯 Processing job ${i + 1}/${jobIds.length}`).catch(console.error)
 
         // Start enhancement
         const processRes = await fetch('/api/generate/process', {
@@ -720,8 +728,10 @@ export default function DashboardPage() {
                   contentDescription: firstImage.contentDescription || '',
                 })
                 console.log(`✅ Job ${i + 1}/${jobIds.length} done`)
+                await logToJob(jobId, 'info', `✅ Job ${i + 1}/${jobIds.length} completed successfully`).catch(console.error)
               } else {
                 console.log(`❌ Job ${i + 1}/${jobIds.length} failed`)
+                await logToJob(jobId, 'error', `❌ Job ${i + 1}/${jobIds.length} failed - no image URL`).catch(console.error)
               }
               break
             }
@@ -738,6 +748,13 @@ export default function DashboardPage() {
       console.log(`✅ All ${jobIds.length} jobs completed`)
       // All jobs complete
       console.log(`✅ All ${allEnhancedImages.length} images completed`)
+      
+      // Log final summary to last job
+      if (jobIds.length > 0) {
+        const lastJobId = jobIds[jobIds.length - 1]
+        await logToJob(lastJobId, 'info', `🎉 All ${jobIds.length} jobs completed - ${allEnhancedImages.length} images generated`).catch(console.error)
+      }
+      
       setEnhancedImages(allEnhancedImages)
       setReviewMode(true)
       setProcessingStatus('')
