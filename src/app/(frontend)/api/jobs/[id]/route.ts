@@ -14,9 +14,9 @@ export const runtime = 'nodejs'
  */
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id } = params
+  const { id } = await params
   try {
     // ✅ Get authenticated user from session
     const cookieStore = await cookies()
@@ -163,9 +163,9 @@ export async function PATCH(
  */
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id } = params
+  const { id } = await params
   try {
     const payload = await getPayload({ config })
 
