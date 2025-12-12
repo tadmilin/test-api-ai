@@ -227,40 +227,20 @@ export async function POST(request: NextRequest) {
       try {
         console.log(`🎯 Creating prediction (attempt ${attempt + 1}/${MAX_RETRIES + 1})...`)
         
-        // Using nano-banana (not Pro) for better reliability and speed
-        // Use fetch() instead of replicate.predictions.create() to support Cancel-After header
-        const replicateResponse = await fetch('https://api.replicate.com/v1/predictions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${process.env.REPLICATE_API_TOKEN}`,
-            'Content-Type': 'application/json',
-            'Cancel-After': '10m', // ✅ Auto-cancel after 10 minutes to prevent hanging
+        // Using SDK with nano-banana-pro for stability
+        nanoBananaPrediction = await replicate.predictions.create({
+          model: 'google/nano-banana-pro',
+          input: {
+            image_input: [processedImageUrl],
+            prompt: prompt,
+            resolution: '1K',
+            aspect_ratio: 'match_input_image',
+            output_format: 'jpg',
+            safety_filter_level: 'block_only_high',
           },
-          body: JSON.stringify({
-            model: 'google/nano-banana',
-            input: {
-              image_input: [processedImageUrl],
-              prompt: prompt,
-              resolution: '1K',
-              aspect_ratio: 'match_input_image',
-              output_format: 'jpg',
-              safety_filter_level: 'block_only_high',
-            },
-            webhook: `${process.env.NEXT_PUBLIC_SERVER_URL}/api/webhooks/replicate`,
-            webhook_events_filter: ['start', 'completed'],
-          }),
+          webhook: `${process.env.NEXT_PUBLIC_SERVER_URL}/api/webhooks/replicate`,
+          webhook_events_filter: ['start', 'completed'],
         })
-        
-        if (!replicateResponse.ok) {
-          const errorBody = await replicateResponse.text()
-          // ✅ Throw error พร้อม status เพื่อให้ retry logic ทำงานได้
-          const error = new Error(`Replicate API error ${replicateResponse.status}: ${errorBody}`) as any
-          error.status = replicateResponse.status
-          error.response = { status: replicateResponse.status }
-          throw error
-        }
-        
-        nanoBananaPrediction = await replicateResponse.json()
         
         console.log(`✅ Prediction created: ${nanoBananaPrediction.id}`)
         console.log(`🔗 https://replicate.com/p/${nanoBananaPrediction.id}`)
@@ -269,7 +249,7 @@ export async function POST(request: NextRequest) {
       } catch (error: unknown) {
         lastError = error
         const errorMsg = error instanceof Error ? error.message : String(error)
-        // ✅ อ่าน status จาก error object ที่ throw มา
+        // Read status from error
         const status = (error as any)?.status || (error as any)?.response?.status || 0
         
         console.log(`⚠️ Error: ${errorMsg}`)
