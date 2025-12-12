@@ -165,26 +165,43 @@ export async function POST(request: NextRequest) {
               const roundTo64 = (val: number) => Math.max(64, Math.floor(val / 64) * 64)
               
               const MAX_DIMENSION = 1024
+              const TARGET_ASPECT_RATIO = 1.5 // 3:2 ratio for nano-banana-pro
+              
               let pipeline = sharp(fileBuffer)
               let newWidth = width
               let newHeight = height
               
-              // Resize if needed
+              // Calculate target dimensions maintaining 3:2 ratio
               if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+                // Scale down maintaining aspect ratio first
                 const scale = Math.min(MAX_DIMENSION / width, MAX_DIMENSION / height)
-                newWidth = roundTo64(width * scale)
-                newHeight = roundTo64(height * scale)
-                console.log(`🔽 Resizing to ${newWidth}x${newHeight}`)
-                pipeline = pipeline.resize(newWidth, newHeight, { fit: 'fill' })
-              } else {
-                // Round to 64 even if not resizing
-                newWidth = roundTo64(width)
-                newHeight = roundTo64(height)
-                if (newWidth !== width || newHeight !== height) {
-                  console.log(`📏 Rounding to ${newWidth}x${newHeight} (divisible by 64)`)
-                  pipeline = pipeline.resize(newWidth, newHeight, { fit: 'fill' })
-                }
+                newWidth = width * scale
+                newHeight = height * scale
               }
+              
+              // Force 3:2 ratio (1.5:1) for Replicate compatibility
+              const currentRatio = newWidth / newHeight
+              if (Math.abs(currentRatio - TARGET_ASPECT_RATIO) > 0.01) {
+                // Adjust to exact 3:2 ratio
+                if (currentRatio > TARGET_ASPECT_RATIO) {
+                  // Too wide - reduce width
+                  newWidth = newHeight * TARGET_ASPECT_RATIO
+                } else {
+                  // Too tall - reduce height
+                  newHeight = newWidth / TARGET_ASPECT_RATIO
+                }
+                console.log(`📐 Adjusted to 3:2 ratio: ${currentRatio.toFixed(3)} → ${TARGET_ASPECT_RATIO}`)
+              }
+              
+              // Round to 64 (required by Flux models)
+              newWidth = roundTo64(newWidth)
+              newHeight = roundTo64(newHeight)
+              
+              console.log(`🔽 Resizing to ${newWidth}x${newHeight} (ratio: ${(newWidth/newHeight).toFixed(2)})`)
+              pipeline = pipeline.resize(newWidth, newHeight, { 
+                fit: 'inside',  // Don't distort - maintain aspect ratio
+                withoutEnlargement: true 
+              })
               
               // Compress with dynamic quality
               let quality = 80
@@ -198,7 +215,10 @@ export async function POST(request: NextRequest) {
                 console.log(`⚠️ Still ${processedMB.toFixed(2)} MB > 8MB, reducing quality to 70`)
                 quality = 70
                 processedBuffer = await sharp(fileBuffer)
-                  .resize(newWidth, newHeight, { fit: 'fill' })
+                  .resize(newWidth, newHeight, { 
+                    fit: 'inside',
+                    withoutEnlargement: true 
+                  })
                   .jpeg({ quality, chromaSubsampling: '4:4:4' })
                   .toBuffer()
               }
