@@ -28,6 +28,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'imageUrl is required' }, { status: 400 })
     }
 
+    // ✅ Safe logging (non-blocking)
+    try {
+      const { logToJob } = await import('@/utilities/jobLogger')
+      await logToJob(jobId, 'info', `✨ Creating prediction for ${photoType || 'image'}...`)
+    } catch (logError) {
+      // Ignore log errors
+    }
+
     if (!prompt) {
       return NextResponse.json({ error: 'prompt is required' }, { status: 400 })
     }
@@ -244,6 +252,15 @@ export async function POST(request: NextRequest) {
         
         console.log(`✅ Prediction created: ${nanoBananaPrediction.id}`)
         console.log(`🔗 https://replicate.com/p/${nanoBananaPrediction.id}`)
+        
+        // ✅ Safe logging
+        try {
+          const { logToJob } = await import('@/utilities/jobLogger')
+          await logToJob(jobId, 'info', `✅ Prediction created: ${nanoBananaPrediction.id.substring(0, 8)}...`)
+        } catch (logError) {
+          // Ignore
+        }
+        
         break // Success! Exit retry loop
         
       } catch (error: unknown) {

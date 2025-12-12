@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { FolderTree, type TreeFolder } from '@/components/FolderTree'
 import { getGoogleDriveThumbnail, normalizeImageUrl, isGoogleDriveUrl } from '@/utilities/googleDriveUrl'
+import { JobProgress } from '@/components/JobProgress'
 
 interface CurrentUser {
   id: string
@@ -2163,6 +2164,13 @@ export default function DashboardPage() {
           </div>
         </div>
         </div>
+
+        {/* Log Viewer at Bottom */}
+        {currentJobId && (
+          <div className="mt-8">
+            <JobProgress jobId={currentJobId} />
+          </div>
+        )}
       </div>
     </div>
   )
