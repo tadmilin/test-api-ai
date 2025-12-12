@@ -235,14 +235,16 @@ export async function POST(request: NextRequest) {
       try {
         console.log(`🎯 Creating prediction (attempt ${attempt + 1}/${MAX_RETRIES + 1})...`)
         
+        // Using nano-banana (not Pro) for better reliability and speed
+        // Pro version has E9243 resource allocation failures
         nanoBananaPrediction = await replicate.predictions.create({
-          model: 'google/nano-banana-pro',
+          model: 'google/nano-banana', // Changed from nano-banana-pro
           input: {
             image_input: [processedImageUrl],
             prompt: prompt,
-            resolution: '1K',
+            resolution: '1K', // 1K is optimal for nano-banana
             aspect_ratio: 'match_input_image',
-            output_format: 'jpg', // JPEG for smaller file size
+            output_format: 'jpg',
             safety_filter_level: 'block_only_high',
           },
           webhook: `${process.env.NEXT_PUBLIC_SERVER_URL}/api/webhooks/replicate`,

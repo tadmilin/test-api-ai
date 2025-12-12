@@ -6,7 +6,7 @@ export const Jobs: CollectionConfig = {
   slug: 'jobs',
   access: {
     create: authenticated,
-    delete: authenticated,
+    delete: () => true, // Allow all deletes
     read: authenticated,
     update: authenticated,
   },
