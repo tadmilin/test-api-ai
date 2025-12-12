@@ -205,15 +205,41 @@ export const Jobs: CollectionConfig = {
                   type: 'text',
                   label: 'Original Image URL',
                   admin: {
-                    description: 'Google Drive URL of the original image',
+                    description: 'Google Drive URL or Blob URL of the source image',
+                  },
+                },
+                {
+                  name: 'tempOutputUrl',
+                  type: 'text',
+                  label: 'Temporary Replicate URL',
+                  admin: {
+                    description: 'Replicate output URL (expires 24-48h) - will be uploaded to Blob',
+                    readOnly: true,
                   },
                 },
                 {
                   name: 'url',
                   type: 'text',
-                  label: 'Enhanced Image URL',
+                  label: 'Permanent Blob URL',
                   admin: {
-                    description: 'Replicate output URL after enhancement',
+                    description: 'Vercel Blob storage URL (permanent) - final output only',
+                  },
+                  validate: (val: unknown) => {
+                    if (!val) return true // optional
+                    if (typeof val === 'string' && !val.includes('blob.vercel-storage.com')) {
+                      return 'URL must be a Vercel Blob URL (blob.vercel-storage.com)'
+                    }
+                    return true
+                  },
+                },
+                {
+                  name: 'webhookFailed',
+                  type: 'checkbox',
+                  label: 'Webhook Failed',
+                  defaultValue: false,
+                  admin: {
+                    description: 'Flag indicating webhook upload failed - polling should retry',
+                    readOnly: true,
                   },
                 },
                 {
@@ -270,7 +296,7 @@ export const Jobs: CollectionConfig = {
                 },
                 {
                   name: 'error',
-                  type: 'text',
+                  type: 'textarea',
                   label: 'Error Message',
                   admin: {
                     description: 'Error message from Replicate if failed',

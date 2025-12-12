@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPayload } from 'payload'
 import config from '@payload-config'
 
+// ✅ Force Node.js runtime
+export const runtime = 'nodejs'
+
 /**
  * SIMPLIFIED Process API - enhance images with Nano-Banana Pro
  * Clean, fast, no complex logic
@@ -72,7 +75,37 @@ export async function POST(request: NextRequest) {
       const sheetRows = (job as { sheetRows?: Array<{ productName?: string; photoType?: string; contentTopic?: string; postTitleHeadline?: string; contentDescription?: string }> }).sheetRows || []
       console.log(`📋 Sheet rows data:`, sheetRows.length > 0 ? `${sheetRows.length} rows` : 'none (fallback to job photoType)')
 
-      // Process images with stagger delay (2s between each)
+      // ✅ STEP 1: Create placeholders in DB first (visible immediately)
+      console.log(`📝 Creating placeholders for ${referenceUrls.length} images...`)
+      const placeholders = referenceUrls.map((url, index) => {
+        const sheetRow = sheetRows[index] || {}
+        return {
+          originalUrl: url as string,
+          url: null, // No Blob URL yet
+          tempOutputUrl: null, // No Replicate URL yet
+          predictionId: null, // Will be filled after create prediction
+          status: 'pending' as const,
+          photoType: sheetRow.photoType || job.photoTypeFromSheet || 'generic',
+          contentTopic: sheetRow.contentTopic || job.contentTopic || '',
+          postTitleHeadline: sheetRow.postTitleHeadline || job.postTitleHeadline || '',
+          contentDescription: sheetRow.contentDescription || job.contentDescription || '',
+        }
+      })
+      
+      await payload.update({
+        collection: 'jobs',
+        id: jobId,
+        data: {
+          status: 'enhancing',
+          enhancedImageUrls: placeholders,
+        },
+      })
+      console.log(`✅ Placeholders created, job status: enhancing`)
+
+      // ✅ STEP 2: Keep local copy in memory (avoid DB reads in loop)
+      const localEnhanced = [...placeholders]
+
+      // ✅ STEP 3: Process images sequentially with stagger delay
       const STAGGER_DELAY_MS = 2000
       const predictionIds: string[] = []
       const imageMetadata: Array<{
@@ -106,20 +139,78 @@ export async function POST(request: NextRequest) {
           let processedImageUrl = imageUrl
           
           if (imageUrl.includes('drive.google.com') || imageUrl.includes('googleusercontent.com')) {
-            console.log(`📤 Uploading Google Drive image to Blob Storage...`)
+            console.log(`📤 Downloading from Google Drive and uploading to Blob Storage...`)
             
             try {
-              const downloadRes = await fetch(imageUrl)
-              if (!downloadRes.ok) {
-                throw new Error(`Failed to download: ${downloadRes.status}`)
+              const { downloadDriveFile, extractDriveFileId } = await import('@/utilities/downloadDriveFile')
+              const fileId = extractDriveFileId(imageUrl)
+              
+              if (!fileId) {
+                throw new Error('Could not extract Drive file ID from URL')
               }
               
-              const blob = await downloadRes.blob()
-              const filename = `job-${jobId}-img-${i + 1}-${Date.now()}.jpg`
+              console.log(`📥 Downloading Drive file: ${fileId}`)
+              const fileBuffer = await downloadDriveFile(fileId)
+              const originalMB = fileBuffer.length / 1024 / 1024
+              console.log(`📊 Original: ${originalMB.toFixed(2)} MB`)
               
+              // ✅ CRITICAL: Resize + Compress to prevent E9243
+              const sharp = (await import('sharp')).default
+              const metadata = await sharp(fileBuffer).metadata()
+              const width = metadata.width || 0
+              const height = metadata.height || 0
+              console.log(`📐 Original dimensions: ${width}x${height}`)
+              
+              // Helper: Round to 64
+              const roundTo64 = (val: number) => Math.max(64, Math.floor(val / 64) * 64)
+              
+              const MAX_DIMENSION = 1024
+              let pipeline = sharp(fileBuffer)
+              let newWidth = width
+              let newHeight = height
+              
+              // Resize if needed
+              if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+                const scale = Math.min(MAX_DIMENSION / width, MAX_DIMENSION / height)
+                newWidth = roundTo64(width * scale)
+                newHeight = roundTo64(height * scale)
+                console.log(`🔽 Resizing to ${newWidth}x${newHeight}`)
+                pipeline = pipeline.resize(newWidth, newHeight, { fit: 'fill' })
+              } else {
+                // Round to 64 even if not resizing
+                newWidth = roundTo64(width)
+                newHeight = roundTo64(height)
+                if (newWidth !== width || newHeight !== height) {
+                  console.log(`📏 Rounding to ${newWidth}x${newHeight} (divisible by 64)`)
+                  pipeline = pipeline.resize(newWidth, newHeight, { fit: 'fill' })
+                }
+              }
+              
+              // Compress with dynamic quality
+              let quality = 80
+              let processedBuffer = await pipeline
+                .jpeg({ quality, chromaSubsampling: '4:4:4' })
+                .toBuffer()
+              
+              // If still > 8MB, reduce quality
+              const processedMB = processedBuffer.length / 1024 / 1024
+              if (processedMB > 8) {
+                console.log(`⚠️ Still ${processedMB.toFixed(2)} MB > 8MB, reducing quality to 70`)
+                quality = 70
+                processedBuffer = await sharp(fileBuffer)
+                  .resize(newWidth, newHeight, { fit: 'fill' })
+                  .jpeg({ quality, chromaSubsampling: '4:4:4' })
+                  .toBuffer()
+              }
+              
+              const finalMB = processedBuffer.length / 1024 / 1024
+              console.log(`✅ Optimized: ${originalMB.toFixed(2)} MB → ${finalMB.toFixed(2)} MB (${newWidth}x${newHeight}, Q${quality})`)
+              
+              const filename = `jobs/${jobId}/source-${i + 1}.jpg`
               const { put } = await import('@vercel/blob')
-              const { url: blobUrl } = await put(filename, blob, {
+              const { url: blobUrl } = await put(filename, processedBuffer, {
                 access: 'public',
+                contentType: 'image/jpeg',
                 addRandomSuffix: true,
               })
               
@@ -127,7 +218,7 @@ export async function POST(request: NextRequest) {
               processedImageUrl = blobUrl
               
             } catch (uploadError) {
-              console.error(`❌ Blob upload failed:`, uploadError)
+              console.error(`❌ Drive download/upload failed:`, uploadError)
               throw new Error(`Cannot upload image to stable storage: ${uploadError instanceof Error ? uploadError.message : 'Unknown'}`)
             }
           } else if (imageUrl.includes('replicate.delivery')) {
@@ -182,10 +273,45 @@ export async function POST(request: NextRequest) {
           predictionIds.push(predictionId)
           
           console.log(`✅ Image ${i + 1} started: ${predictionId}`)
+          
+          // ✅ STEP 4: Update local array + DB (no findByID needed)
+          try {
+            localEnhanced[i] = {
+              ...localEnhanced[i],
+              predictionId: predictionId,
+            }
+            
+            await payload.update({
+              collection: 'jobs',
+              id: jobId,
+              data: { enhancedImageUrls: localEnhanced as any },
+            })
+            console.log(`   ✅ Updated placeholder ${i} with predictionId`)
+          } catch (updateErr) {
+            console.warn(`   ⚠️ Failed to update placeholder:`, updateErr)
+            // Don't fail - webhook will handle
+          }
 
         } catch (error: unknown) {
           const message = error instanceof Error ? error.message : 'Unknown error'
           console.error(`❌ Image ${i + 1} failed:`, message)
+          
+          // ✅ Mark placeholder as failed (use local array)
+          try {
+            localEnhanced[i] = {
+              ...localEnhanced[i],
+              status: 'failed' as const,
+              error: message,
+            } as any
+            
+            await payload.update({
+              collection: 'jobs',
+              id: jobId,
+              data: { enhancedImageUrls: localEnhanced as any },
+            })
+          } catch (updateErr) {
+            console.warn(`   ⚠️ Failed to update failed status:`, updateErr)
+          }
           
           // ⚠️ CRITICAL: Always push to maintain array length consistency
           predictionIds.push('') // Empty = failed
@@ -215,28 +341,7 @@ export async function POST(request: NextRequest) {
       console.log(`📊 Summary: ${predictionIds.filter(id => id).length}/${referenceUrls.length} images started successfully`)
       console.log(`📋 Prediction IDs:`, predictionIds)
       
-      // Update job with prediction IDs and metadata
-      // CRITICAL: Ensure arrays are same length (predictionIds.length === referenceUrls.length)
-      const initialImages = predictionIds.map((id, index) => ({
-        url: '', // Will be filled by polling/webhook
-        predictionId: id || null,
-        originalUrl: referenceUrls[index] as string,
-        status: id ? ('pending' as const) : ('failed' as const), // Failed if no predictionId
-        photoType: imageMetadata[index]?.photoType || job.photoTypeFromSheet || '',
-        contentTopic: job.contentTopic || '',
-        postTitleHeadline: job.postTitleHeadline || '',
-        contentDescription: job.contentDescription || '',
-      }))
-      
-      await payload.update({
-        collection: 'jobs',
-        id: jobId,
-        data: {
-          status: 'enhancing',
-          enhancedImageUrls: initialImages,
-        },
-      })
-
+      // ✅ No need to update enhancedImageUrls again - already updated per-image above
       console.log(`✅ All ${referenceUrls.length} images queued`)
 
       return NextResponse.json({

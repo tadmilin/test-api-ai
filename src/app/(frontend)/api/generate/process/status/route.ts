@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPayload } from 'payload'
 import config from '@payload-config'
 
+// ✅ Force Node.js runtime (Payload CMS)
+export const runtime = 'nodejs'
+
 // GET: Check status of all image enhancements for a job and poll Replicate if needed
 export async function GET(request: NextRequest) {
   try {

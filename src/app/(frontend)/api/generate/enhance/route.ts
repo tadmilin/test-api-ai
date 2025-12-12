@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Replicate from 'replicate'
 import { put } from '@vercel/blob'
-import { google } from 'googleapis'
 import { getPayload } from 'payload'
 import config from '@payload-config'
 
@@ -16,6 +15,9 @@ function roundTo64(value: number): number {
 
 // Helper: Sleep utility for retries
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+// ✅ Force Node.js runtime (required for googleapis, sharp, Buffer, @vercel/blob)
+export const runtime = 'nodejs'
 
 // POST: Start image enhancement (returns predictionId immediately)
 export async function POST(request: NextRequest) {
@@ -74,43 +76,30 @@ export async function POST(request: NextRequest) {
       
       console.log('📎 Extracted file ID:', fileId)
       
-      // Setup Google Drive API
-      const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
-      const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
-
-      if (!serviceAccountEmail || !privateKey) {
-        throw new Error('Google Service Account credentials not configured')
-      }
-
-      const auth = new google.auth.GoogleAuth({
-        credentials: {
-          client_email: serviceAccountEmail,
-          private_key: privateKey.replace(/\\n/gm, '\n').replace(/^"|"$/g, ''),
-        },
-        scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-      })
-
-      const drive = google.drive({ version: 'v3', auth })
-
-      // Download image from Google Drive
-      const response = await drive.files.get(
-        { fileId, alt: 'media', supportsAllDrives: true },
-        { responseType: 'arraybuffer' }
-      )
-
-      const imageBuffer = Buffer.from(response.data as ArrayBuffer)
+      // Use utility function for downloading
+      const { downloadDriveFile } = await import('@/utilities/downloadDriveFile')
+      const imageBuffer = await downloadDriveFile(fileId)
       console.log(`Downloaded from Drive: ${(imageBuffer.byteLength / 1024).toFixed(2)} KB`)
 
-      // 🔥 CRITICAL FIX: Resize with dimensions divisible by 64 + Convert to JPEG
+      // 🔥 CRITICAL FIX: Resize + Compress if needed
       const sharp = (await import('sharp')).default
       const metadata = await sharp(imageBuffer).metadata()
-      console.log(`📐 Original dimensions: ${metadata.width}x${metadata.height}`)
+      console.log(`📐 Original: ${metadata.width}x${metadata.height}, ${(imageBuffer.byteLength / 1024 / 1024).toFixed(2)} MB`)
       
-      const MAX_DIMENSION = 1024 // Safe limit for Nano-Banana Pro
+      const MAX_DIMENSION = 1024 // Safe limit for Nano-Banana
+      const MAX_FILE_SIZE_MB = 8 // Max 8MB to avoid E9243
       const width = metadata.width || 0
       const height = metadata.height || 0
       
       let pipeline = sharp(imageBuffer)
+      let quality = 92 // High quality by default
+      
+      // Check file size first
+      const fileSizeMB = imageBuffer.byteLength / 1024 / 1024
+      if (fileSizeMB > MAX_FILE_SIZE_MB) {
+        console.log(`⚠️ File too large (${fileSizeMB.toFixed(2)}MB > ${MAX_FILE_SIZE_MB}MB), will compress`)
+        quality = 75 // Lower quality for large files
+      }
       
       // Calculate new dimensions if resizing needed
       if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
@@ -119,14 +108,13 @@ export async function POST(request: NextRequest) {
         const newHeight = roundTo64(height * scale)
         
         console.log(`📐 Resizing to ${newWidth}x${newHeight} (divisible by 64)`)
-        console.log(`   Check: ${newWidth} ÷ 64 = ${newWidth / 64}, ${newHeight} ÷ 64 = ${newHeight / 64}`)
         
         pipeline = pipeline.resize(newWidth, newHeight, {
-          fit: 'fill', // Ensure exact dimensions
+          fit: 'fill',
           position: 'centre',
         })
       } else {
-        // Even if not resizing, ensure dimensions are divisible by 64
+        // Ensure dimensions are divisible by 64
         const newWidth = roundTo64(width)
         const newHeight = roundTo64(height)
         
@@ -136,10 +124,14 @@ export async function POST(request: NextRequest) {
         }
       }
       
-      // 🔥 Convert to JPEG to remove alpha channel and reduce file size
+      // 🔥 Convert to JPEG with dynamic quality
+      console.log(`🗜️ Compressing with quality=${quality}`)
       const processedBuffer = await pipeline
-        .jpeg({ quality: 92, chromaSubsampling: '4:4:4' })
+        .jpeg({ quality: quality, chromaSubsampling: '4:4:4' })
         .toBuffer()
+      
+      const finalSizeMB = processedBuffer.byteLength / 1024 / 1024
+      console.log(`✅ Final size: ${finalSizeMB.toFixed(2)} MB`)
 
       // Upload to Vercel Blob as source image
       const timestamp = Date.now()
@@ -213,16 +205,16 @@ export async function POST(request: NextRequest) {
     console.log('📝 Prompt length:', prompt.length, 'chars')
     console.log('🎨 Photo type:', photoType)
     
-    // Validate URL is accessible before sending to Replicate
+    // ✅ Validate URL is accessible (warning only - some CDNs reject HEAD)
     try {
-      const headCheck = await fetch(processedImageUrl, { method: 'HEAD' })
+      const headCheck = await fetch(processedImageUrl, { method: 'HEAD', signal: AbortSignal.timeout(5000) })
       console.log(`🔍 Image URL check: ${headCheck.status} ${headCheck.statusText}`)
       if (!headCheck.ok) {
-        throw new Error(`Image URL not accessible: ${headCheck.status}`)
+        console.warn(`⚠️ Image URL returned ${headCheck.status}, but will try anyway (some CDNs reject HEAD)`)
       }
     } catch (checkError) {
-      console.error('❌ Image URL validation failed:', checkError)
-      throw checkError
+      console.warn('⚠️ Image URL HEAD check failed (may still work):', checkError)
+      // Don't throw - let Replicate try anyway
     }
     
     // Retry logic for E6716, E9243, and 429 errors
@@ -236,20 +228,39 @@ export async function POST(request: NextRequest) {
         console.log(`🎯 Creating prediction (attempt ${attempt + 1}/${MAX_RETRIES + 1})...`)
         
         // Using nano-banana (not Pro) for better reliability and speed
-        // Pro version has E9243 resource allocation failures
-        nanoBananaPrediction = await replicate.predictions.create({
-          model: 'google/nano-banana', // Changed from nano-banana-pro
-          input: {
-            image_input: [processedImageUrl],
-            prompt: prompt,
-            resolution: '1K', // 1K is optimal for nano-banana
-            aspect_ratio: 'match_input_image',
-            output_format: 'jpg',
-            safety_filter_level: 'block_only_high',
+        // Use fetch() instead of replicate.predictions.create() to support Cancel-After header
+        const replicateResponse = await fetch('https://api.replicate.com/v1/predictions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.REPLICATE_API_TOKEN}`,
+            'Content-Type': 'application/json',
+            'Cancel-After': '10m', // ✅ Auto-cancel after 10 minutes to prevent hanging
           },
-          webhook: `${process.env.NEXT_PUBLIC_SERVER_URL}/api/webhooks/replicate`,
-          webhook_events_filter: ['start', 'completed'],
+          body: JSON.stringify({
+            model: 'google/nano-banana',
+            input: {
+              image_input: [processedImageUrl],
+              prompt: prompt,
+              resolution: '1K',
+              aspect_ratio: 'match_input_image',
+              output_format: 'jpg',
+              safety_filter_level: 'block_only_high',
+            },
+            webhook: `${process.env.NEXT_PUBLIC_SERVER_URL}/api/webhooks/replicate`,
+            webhook_events_filter: ['start', 'completed'],
+          }),
         })
+        
+        if (!replicateResponse.ok) {
+          const errorBody = await replicateResponse.text()
+          // ✅ Throw error พร้อม status เพื่อให้ retry logic ทำงานได้
+          const error = new Error(`Replicate API error ${replicateResponse.status}: ${errorBody}`) as any
+          error.status = replicateResponse.status
+          error.response = { status: replicateResponse.status }
+          throw error
+        }
+        
+        nanoBananaPrediction = await replicateResponse.json()
         
         console.log(`✅ Prediction created: ${nanoBananaPrediction.id}`)
         console.log(`🔗 https://replicate.com/p/${nanoBananaPrediction.id}`)
@@ -258,9 +269,11 @@ export async function POST(request: NextRequest) {
       } catch (error: unknown) {
         lastError = error
         const errorMsg = error instanceof Error ? error.message : String(error)
-        const status = (error as { response?: { status?: number } })?.response?.status || 0
+        // ✅ อ่าน status จาก error object ที่ throw มา
+        const status = (error as any)?.status || (error as any)?.response?.status || 0
         
         console.log(`⚠️ Error: ${errorMsg}`)
+        console.log(`   HTTP Status: ${status}`)
         
         // Handle 429 Rate Limit (insufficient credits or throttled)
         if (status === 429 || errorMsg.includes('429') || errorMsg.includes('throttled')) {
@@ -405,14 +418,12 @@ export async function GET(request: NextRequest) {
           
           console.log(`📊 Job has ${job.enhancedImageUrls?.length || 0} images`)
           
-          // Check if this prediction already has a Blob URL cached
-          // Must check: 1) same predictionId, 2) has url, 3) url is Blob storage, 4) status is 'pending' (processed)
+          // ✅ Cache hit: มี Blob URL แล้ว → return ทันที (read-only fast path)
           const cachedImage = job.enhancedImageUrls?.find(
             (img: { predictionId?: string | null; url?: string | null; status?: string | null }) => 
               img.predictionId === predictionId && 
               img.url && 
-              img.url.includes('blob.vercel-storage.com') &&
-              img.status === 'pending'  // Must be processed, not 'processing'
+              img.url.includes('blob.vercel-storage.com')
           )
           
           if (cachedImage?.url) {
@@ -427,15 +438,31 @@ export async function GET(request: NextRequest) {
             })
           }
           
-          console.log('❌ Cache MISS - No matching cached image found')
-          console.log('   Looking for:', { predictionId, mustHaveUrl: true, mustBeBlob: true, mustBePending: true })
+          // ⚠️ Check webhook status
+          const pendingImage = job.enhancedImageUrls?.find(
+            (img: any) => img.predictionId === predictionId
+          )
+          
+          // If webhook is uploading (no webhookFailed flag) → tell client to wait
+          if (pendingImage && !(pendingImage as any).webhookFailed && (pendingImage as any).tempOutputUrl) {
+            console.log('⏳ Webhook is uploading, client should wait...')
+            return NextResponse.json({
+              success: true,
+              status: 'persisting', // New status: webhook is handling upload
+              message: 'กำลังบันทึกผลลัพธ์...',
+              predictionId,
+            })
+          }
+          
+          console.log('❌ Cache MISS - proceeding with upload...')
+          console.log('   Webhook failed flag:', (pendingImage as any)?.webhookFailed || false)
         } catch (cacheError) {
           console.log('⚠️ Cache check failed, proceeding with download...', cacheError)
         }
       }
 
-      // Download and upload to Vercel Blob for permanence (only once)
-      console.log('📥 Downloading from Replicate...')
+      // ⚠️ Fallback: Webhook failed or no jobId → polling uploads Blob
+      console.log('📥 Downloading from Replicate (fallback path)...')
       try {
         const finalImageResponse = await fetch(enhancedImageUrl)
         if (!finalImageResponse.ok) {
@@ -465,8 +492,44 @@ export async function GET(request: NextRequest) {
 
         console.log(`📦 Uploaded to Blob: ${blob.url}`)
 
+        // ✅ CRITICAL: Update DB with Blob URL (idempotent)
         if (jobId) {
           const payload = await getPayload({ config })
+          
+          try {
+            const job = await payload.findByID({ collection: 'jobs', id: jobId })
+            
+            const updatedImages = (job.enhancedImageUrls || []).map((img: any) => {
+              if (img.predictionId === predictionId) {
+                // ✅ Guard: ถ้ามี blob แล้วไม่ต้องทับ (idempotent)
+                if (img.url && String(img.url).includes('blob.vercel-storage.com')) {
+                  console.log(`   ℹ️ Already has Blob URL, skipping update`)
+                  return img
+                }
+                console.log(`   ✅ Updating image with Blob URL`)
+                return { 
+                  ...img, 
+                  url: blob.url, // ✅ Permanent Blob URL
+                  tempOutputUrl: enhancedImageUrl, // Keep temp URL for debugging
+                  status: 'completed',
+                  webhookFailed: undefined, // Clear flag
+                }
+              }
+              return img
+            })
+            
+            await payload.update({
+              collection: 'jobs',
+              id: jobId,
+              data: { enhancedImageUrls: updatedImages },
+            })
+            
+            console.log(`💾 DB updated with Blob URL`)
+          } catch (updateError) {
+            console.error('⚠️ Failed to update DB:', updateError)
+            // Don't fail the request if DB update fails
+          }
+          
           await payload.create({
             collection: 'job-logs',
             data: {
