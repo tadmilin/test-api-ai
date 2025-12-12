@@ -80,6 +80,7 @@ export async function POST(request: NextRequest) {
         console.log(`\n🖼️ Processing image ${i + 1}/${referenceUrls.length}`)
         console.log(`📋 Sheet row:`, sheetRow.productName || 'N/A')
         console.log(`📷 PhotoType:`, photoTypeFromSheet || 'generic')
+        console.log(`🔗 Original URL:`, imageUrl.substring(0, 80) + '...')
         
         // Stagger requests
         if (i > 0) {
@@ -88,6 +89,44 @@ export async function POST(request: NextRequest) {
         }
 
         try {
+          // ⚠️ CRITICAL: Upload Google Drive URL to Blob Storage first
+          // Replicate can't access Google Drive URLs due to auth requirements
+          let processedImageUrl = imageUrl
+          
+          if (imageUrl.includes('drive.google.com') || imageUrl.includes('googleusercontent.com')) {
+            console.log(`📤 Uploading Google Drive image to Blob Storage...`)
+            
+            try {
+              const downloadRes = await fetch(imageUrl)
+              if (!downloadRes.ok) {
+                throw new Error(`Failed to download: ${downloadRes.status}`)
+              }
+              
+              const blob = await downloadRes.blob()
+              const filename = `job-${jobId}-img-${i + 1}-${Date.now()}.jpg`
+              
+              const { put } = await import('@vercel/blob')
+              const { url: blobUrl } = await put(filename, blob, {
+                access: 'public',
+                addRandomSuffix: true,
+              })
+              
+              console.log(`✅ Uploaded to Blob: ${blobUrl}`)
+              processedImageUrl = blobUrl
+              
+            } catch (uploadError) {
+              console.error(`❌ Blob upload failed:`, uploadError)
+              throw new Error(`Cannot upload image to stable storage: ${uploadError instanceof Error ? uploadError.message : 'Unknown'}`)
+            }
+          } else if (imageUrl.includes('replicate.delivery')) {
+            console.log(`⚠️ Using Replicate URL (may expire in 24-48h)`)
+          } else if (imageUrl.includes('blob.vercel-storage.com')) {
+            console.log(`✅ Already Blob URL`)
+          } else {
+            console.log(`🌐 Using external URL:`, imageUrl.substring(0, 50))
+          }
+          
+
           // Get prompt for this specific image
           console.log(`📝 Getting prompt for ${photoTypeFromSheet || 'generic'}...`)
           const promptRes = await fetch(`${baseUrl}/api/generate/prompt`, {
@@ -111,12 +150,12 @@ export async function POST(request: NextRequest) {
             contentDescription: sheetRow.contentDescription || '',
           })
 
-          // Start enhancement
+          // Start enhancement with processed URL
           const enhanceRes = await fetch(`${baseUrl}/api/generate/enhance`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              imageUrl,
+              imageUrl: processedImageUrl, // Use Blob URL instead of Google Drive
               prompt,
               photoType,
               jobId,
