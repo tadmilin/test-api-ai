@@ -150,6 +150,8 @@ export default function DashboardPage() {
   // Processing status
   const [processingJobId, setProcessingJobId] = useState<string | null>(null)
   const [processingStatus, setProcessingStatus] = useState<string>('')
+  const [completedCount, setCompletedCount] = useState<number>(0)
+  const [showSuccess, setShowSuccess] = useState<boolean>(false)
 
   const [_loading, setLoading] = useState(true)
 
@@ -621,6 +623,8 @@ export default function DashboardPage() {
     setCreating(true)
     setReviewMode(false)
     setFinalImageUrl(null)
+    setShowSuccess(false)
+    setCompletedCount(0)
 
     try {
       // Create separate job for each image
@@ -744,6 +748,10 @@ export default function DashboardPage() {
       setReviewMode(true)
       setProcessingStatus('')
       setProcessingJobId(null)
+      
+      // Show success message
+      setCompletedCount(allEnhancedImages.length)
+      setShowSuccess(true)
 
       // Refresh dashboard
       fetchDashboardData()
@@ -754,6 +762,7 @@ export default function DashboardPage() {
       setProcessingJobId(null)
       setProcessingStatus('')
       setCurrentJobId(null)
+      setShowSuccess(false)
     } finally {
       setCreating(false)
     }
@@ -1060,8 +1069,33 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* Success Banner */}
+        {showSuccess && completedCount > 0 && (
+          <div className="bg-green-50 border-2 border-green-200 rounded-lg p-6 mb-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center">
+                  <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-green-900">✅ เสร็จแล้ว! สร้างรูปสำเร็จ {completedCount} ภาพ</h3>
+                  <p className="text-green-700 text-sm mt-1">สามารถดูและดาวน์โหลดรูปได้ด้านล่าง</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSuccess(false)}
+                className="text-green-600 hover:text-green-800 text-sm font-medium"
+              >
+                ปิด
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Create Job Form */}
-        {showCreateForm && (
+        {showCreateForm && !creating && (
           <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
             <h2 className="text-xl font-bold mb-4 text-black">สร้างงานสร้างภาพใหม่</h2>
 
