@@ -67,14 +67,6 @@ export async function POST(req: Request) {
           const errorMsg = replicateError || body.error || logs || 'Unknown error - check Replicate dashboard'
           console.error('[Webhook] ❌ Enhancement failed:', errorMsg)
           
-          // ✅ Safe logging
-          try {
-            const { logToJob } = await import('@/utilities/jobLogger')
-            await logToJob(job.id, 'error', `❌ Image failed: ${errorMsg.substring(0, 100)}...`)
-          } catch (logError) {
-            // Ignore
-          }
-          
           return {
             ...img,
             status: 'failed' as const,
@@ -113,7 +105,7 @@ export async function POST(req: Request) {
           try {
             console.log('[Webhook] 🚀 Attempting to upload to Blob (fast path)...')
             const controller = new AbortController()
-            const timeoutId = setTimeout(() => controller.abort(), 8000) // 8s timeout
+            const timeoutId = setTimeout(() => controller.abort(), 5000) // 5s timeout (safe for Vercel free tier)
             
             const imageResponse = await fetch(replicateUrl, { 
               signal: controller.signal,
@@ -143,14 +135,6 @@ export async function POST(req: Request) {
             })
             
             console.log('[Webhook] ✅ Blob uploaded successfully:', blobResult.url)
-            
-            // ✅ Safe logging
-            try {
-              const { logToJob } = await import('@/utilities/jobLogger')
-              await logToJob(job.id, 'info', `✅ Image completed: ${predictionId.substring(0, 8)}...`)
-            } catch (logError) {
-              // Ignore
-            }
             
             return {
               ...img,

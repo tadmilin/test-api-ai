@@ -5,7 +5,6 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { FolderTree, type TreeFolder } from '@/components/FolderTree'
 import { getGoogleDriveThumbnail, normalizeImageUrl, isGoogleDriveUrl } from '@/utilities/googleDriveUrl'
-import { JobProgress } from '@/components/JobProgress'
 
 interface CurrentUser {
   id: string
@@ -53,6 +52,7 @@ interface Job {
     contentTopic?: string
     postTitleHeadline?: string
     contentDescription?: string
+    error?: string
   }>
 }
 
@@ -135,6 +135,7 @@ export default function DashboardPage() {
     contentTopic?: string
     postTitleHeadline?: string
     contentDescription?: string
+    error?: string
   }>>([])
   const [expandedImageIds, setExpandedImageIds] = useState<Set<number | string>>(new Set())
   const [reviewMode, setReviewMode] = useState(false)
@@ -802,7 +803,7 @@ export default function DashboardPage() {
     setRegeneratingIndex(index)
 
     try {
-      console.log(`🔄 Retrying image ${index + 1}...`)
+      console.log(`🔄 เจนรูปใหม่ ${index + 1}...`)
       
       const res = await fetch('/api/generate/process/retry', {
         method: 'POST',
@@ -815,11 +816,11 @@ export default function DashboardPage() {
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ error: 'Unknown error' }))
-        throw new Error(errorData.error || 'Failed to retry image')
+        throw new Error(errorData.error || 'Failed to regenerate image')
       }
 
       const data = await res.json()
-      console.log(`✅ Retry started:`, data)
+      console.log(`✅ เริ่มเจนใหม่:`, data)
       
       // Update local state to show processing
       const updated = [...enhancedImages]
@@ -834,10 +835,10 @@ export default function DashboardPage() {
       // Resume polling
       pollJobStatus(currentJobId)
 
-      alert('🔄 เริ่มสร้างรูปใหม่แล้ว กรุณารอสักครู่...')
+      alert('🎨 เริ่มเจนรูปใหม่แล้ว กรุณารอสักครู่...')
     } catch (error) {
-      console.error('Retry error:', error)
-      alert('ไม่สามารถลองใหม่ได้: ' + (error instanceof Error ? error.message : 'Unknown error'))
+      console.error('Regenerate error:', error)
+      alert('❌ ไม่สามารถเจนใหม่ได้: ' + (error instanceof Error ? error.message : 'Unknown error'))
     } finally {
       setRegeneratingIndex(null)
     }
@@ -1603,17 +1604,26 @@ export default function DashboardPage() {
                           <span>ดาวน์โหลด</span>
                         </button>
                       ) : img.status === 'failed' ? (
-                        <button
-                          onClick={() => handleRegenerateImage(index)}
-                          disabled={regeneratingIndex === index}
-                          className="w-full bg-amber-600 text-white py-2.5 rounded-lg hover:bg-amber-700 font-medium text-sm disabled:bg-gray-400 shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2"
-                        >
-                          <span>{regeneratingIndex === index ? '⏳' : '🔄'}</span>
-                          <span>{regeneratingIndex === index ? 'กำลังสร้าง...' : 'ลองใหม่'}</span>
-                        </button>
+                        <div className="w-full bg-red-50 border border-red-200 rounded-lg p-3">
+                          <div className="text-sm text-red-800 space-y-1">
+                            <div className="font-semibold">❌ เกิดข้อผิดพลาด</div>
+                            {img.error && (
+                              <div className="text-xs text-red-600 line-clamp-2 mb-2">
+                                {img.error}
+                              </div>
+                            )}
+                            <div className="text-xs text-red-700">
+                              กรุณากดปุ่ม "สร้างรูป" เพื่อเจนใหม่
+                            </div>
+                          </div>
+                        </div>
                       ) : (
-                        <div className="w-full bg-gray-100 text-gray-500 py-2.5 rounded-lg font-medium text-sm text-center">
-                          ⏳ รอสักครู่...
+                        <div className="w-full bg-blue-50 border border-blue-200 text-blue-700 py-2.5 rounded-lg font-medium text-sm text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <div className="animate-spin">⏳</div>
+                            <span>กำลังเจนรูป...</span>
+                          </div>
+                          <div className="text-xs text-blue-600 mt-1">โปรดรอ 30-60 วินาที</div>
                         </div>
                       )}
                     </div>
@@ -2165,13 +2175,6 @@ export default function DashboardPage() {
           </div>
         </div>
         </div>
-
-        {/* Log Viewer at Bottom */}
-        {currentJobId && (
-          <div className="mt-8">
-            <JobProgress jobId={currentJobId} />
-          </div>
-        )}
       </div>
     </div>
   )

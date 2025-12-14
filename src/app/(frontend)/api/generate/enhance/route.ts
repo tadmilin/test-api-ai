@@ -28,14 +28,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'imageUrl is required' }, { status: 400 })
     }
 
-    // ✅ Safe logging (non-blocking)
-    try {
-      const { logToJob } = await import('@/utilities/jobLogger')
-      await logToJob(jobId, 'info', `✨ Creating prediction for ${photoType || 'image'}...`)
-    } catch (logError) {
-      // Ignore log errors
-    }
-
     if (!prompt) {
       return NextResponse.json({ error: 'prompt is required' }, { status: 400 })
     }
@@ -225,110 +217,25 @@ export async function POST(request: NextRequest) {
       // Don't throw - let Replicate try anyway
     }
     
-    // Retry logic for E6716, E9243, and 429 errors
-    const MAX_RETRIES = 5 // Increased for 429 handling
+    // ✅ Create prediction once - no retry (fail fast for better UX)
+    console.log('🎯 Creating prediction...')
     
-    let nanoBananaPrediction
-    let lastError
+    const nanoBananaPrediction = await replicate.predictions.create({
+      model: 'google/nano-banana-pro',
+      input: {
+        image_input: [processedImageUrl],
+        prompt: prompt,
+        resolution: '1K',
+        aspect_ratio: 'match_input_image',
+        output_format: 'jpg',
+        safety_filter_level: 'block_only_high',
+      },
+      webhook: `${process.env.NEXT_PUBLIC_SERVER_URL}/api/webhooks/replicate`,
+      webhook_events_filter: ['start', 'completed'],
+    })
     
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        console.log(`🎯 Creating prediction (attempt ${attempt + 1}/${MAX_RETRIES + 1})...`)
-        
-        // Using SDK with nano-banana-pro for stability
-        nanoBananaPrediction = await replicate.predictions.create({
-          model: 'google/nano-banana-pro',
-          input: {
-            image_input: [processedImageUrl],
-            prompt: prompt,
-            resolution: '1K',
-            aspect_ratio: 'match_input_image',
-            output_format: 'jpg',
-            safety_filter_level: 'block_only_high',
-          },
-          webhook: `${process.env.NEXT_PUBLIC_SERVER_URL}/api/webhooks/replicate`,
-          webhook_events_filter: ['start', 'completed'],
-        })
-        
-        console.log(`✅ Prediction created: ${nanoBananaPrediction.id}`)
-        console.log(`🔗 https://replicate.com/p/${nanoBananaPrediction.id}`)
-        
-        // ✅ Safe logging
-        try {
-          const { logToJob } = await import('@/utilities/jobLogger')
-          await logToJob(jobId, 'info', `✅ Prediction created: ${nanoBananaPrediction.id.substring(0, 8)}...`)
-        } catch (logError) {
-          // Ignore
-        }
-        
-        break // Success! Exit retry loop
-        
-      } catch (error: unknown) {
-        lastError = error
-        const errorMsg = error instanceof Error ? error.message : String(error)
-        // Read status from error
-        const status = (error as any)?.status || (error as any)?.response?.status || 0
-        
-        console.log(`⚠️ Error: ${errorMsg}`)
-        console.log(`   HTTP Status: ${status}`)
-        
-        // Handle 429 Rate Limit (insufficient credits or throttled)
-        if (status === 429 || errorMsg.includes('429') || errorMsg.includes('throttled')) {
-          if (attempt < MAX_RETRIES) {
-            console.log(`🛑 Rate Limit (429). Waiting 30 seconds...`)
-            await payload.create({
-              collection: 'job-logs',
-              data: {
-                jobId,
-                level: 'warning',
-                message: `Rate limit hit (429), waiting 30s... (attempt ${attempt + 1})`,
-                timestamp: new Date().toISOString(),
-              },
-            })
-            await sleep(30000) // Wait 30 seconds for rate limit
-            continue
-          }
-        }
-        
-        // Handle E6716 (timeout) or E9243 (director error) or 5xx errors
-        const isRetryableError = 
-          errorMsg.includes('E6716') || 
-          errorMsg.includes('E9243') || 
-          status >= 500
-        
-        if (isRetryableError && attempt < MAX_RETRIES) {
-          const delay = 3000 * (attempt + 1) // 3s, 6s, 9s, 12s, 15s
-          const errorCode = errorMsg.includes('E9243') 
-            ? 'E9243 (Director error)' 
-            : errorMsg.includes('E6716') 
-            ? 'E6716 (timeout)' 
-            : `Server error (${status})`
-          
-          console.log(`⏳ ${errorCode}, retrying in ${delay/1000}s...`)
-          
-          await payload.create({
-            collection: 'job-logs',
-            data: {
-              jobId,
-              level: 'warning',
-              message: `${errorCode} on attempt ${attempt + 1}, retrying in ${delay/1000}s...`,
-              timestamp: new Date().toISOString(),
-            },
-          })
-          
-          await sleep(delay)
-          continue
-        }
-        
-        // Not retryable or max retries reached
-        console.error(`❌ Failed to create prediction:`, error)
-        throw error
-      }
-    }
-    
-    if (!nanoBananaPrediction) {
-      throw new Error(`Failed after ${MAX_RETRIES + 1} attempts: ${lastError}`)
-    }
+    console.log(`✅ Prediction created: ${nanoBananaPrediction.id}`)
+    console.log(`🔗 https://replicate.com/p/${nanoBananaPrediction.id}`)
 
     // Store prediction ID in metadata for polling
     await payload.create({
