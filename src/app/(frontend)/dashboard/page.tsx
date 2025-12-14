@@ -1613,7 +1613,7 @@ export default function DashboardPage() {
                               </div>
                             )}
                             <div className="text-xs text-red-700">
-                              กรุณากดปุ่ม "สร้างรูป" เพื่อเจนใหม่
+                              กรุณากดปุ่ม &quot;สร้างรูป&quot; เพื่อเจนใหม่
                             </div>
                           </div>
                         </div>
@@ -1715,7 +1715,7 @@ export default function DashboardPage() {
                           try {
                             new URL(img.url) // Validate it's a real URL
                             imageUrl = normalizeImageUrl(img.url)
-                          } catch (e) {
+                          } catch {
                             console.error(`Invalid URL for image ${index + 1}:`, img.url)
                             imageUrl = null
                           }
