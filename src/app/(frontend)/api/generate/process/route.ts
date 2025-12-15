@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     const job = await payload.findByID({
       collection: 'jobs',
       id: jobId,
-    })
+    }) as any  // Type assertion to access customPrompt
 
     if (!job) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 })
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
 
       // ✅ STEP 1: Create placeholders in DB first (visible immediately)
       console.log(`📝 Creating placeholders for ${referenceUrls.length} images...`)
-      const placeholders = referenceUrls.map((url, index) => {
+      const placeholders = referenceUrls.map((url: any, index: number) => {
         const sheetRow = sheetRows[index] || {}
         return {
           originalUrl: url as string,
@@ -252,18 +252,33 @@ export async function POST(request: NextRequest) {
 
           // Get prompt for this specific image
           console.log(`📝 Getting prompt for ${photoTypeFromSheet || 'generic'}...`)
-          const promptRes = await fetch(`${baseUrl}/api/generate/prompt`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ photoTypeFromSheet }),
-          })
+          
+          let prompt: string
+          let photoType: string
+          
+          // Check if custom prompt exists
+          if (job.customPrompt && job.customPrompt.trim()) {
+            prompt = job.customPrompt.trim()
+            photoType = photoTypeFromSheet || 'custom'
+            console.log(`✅ Using custom prompt (${prompt.length} chars)`)
+            console.log(`📄 Custom prompt: ${prompt.substring(0, 100)}...`)
+          } else {
+            // Use auto-generated prompt (original behavior)
+            const promptRes = await fetch(`${baseUrl}/api/generate/prompt`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ photoTypeFromSheet }),
+            })
 
-          if (!promptRes.ok) {
-            throw new Error(`Prompt API failed: ${promptRes.status}`)
+            if (!promptRes.ok) {
+              throw new Error(`Prompt API failed: ${promptRes.status}`)
+            }
+
+            const promptData = await promptRes.json()
+            prompt = promptData.prompt
+            photoType = promptData.photoType
+            console.log(`✅ Using auto-generated prompt for: ${photoType}`)
           }
-
-          const { prompt, photoType } = await promptRes.json()
-          console.log(`✅ Using prompt for: ${photoType}`)
           
           // Store metadata for this image
           imageMetadata.push({

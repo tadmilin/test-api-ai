@@ -166,8 +166,13 @@ export async function POST(req: Request) {
     }) || [])
 
     // ตรวจสอบว่ารูปทั้งหมดเสร็จหรือยัง
-    const allCompleted = updatedUrls?.every(
+    const allDone = updatedUrls?.every(
       (img) => img.status === 'completed' || img.status === 'failed',
+    )
+    
+    // ตรวจสอบว่ามีรูปที่ failed หรือไม่
+    const hasFailed = updatedUrls?.some(
+      (img) => img.status === 'failed'
     )
     
     // ✅ ตรวจสอบว่ามีรูปที่กำลัง persist อยู่หรือไม่
@@ -177,8 +182,9 @@ export async function POST(req: Request) {
     
     // ✅ ตัดสินใจ job status อย่างชัดเจน
     let newJobStatus = job.status
-    if (allCompleted) {
-      newJobStatus = 'completed'
+    if (allDone) {
+      // ถ้ามีรูป failed แม้แค่รูปเดียว → job failed
+      newJobStatus = hasFailed ? 'failed' : 'completed'
     } else if (hasPending) {
       // มีรูปยัง pending (รออัปโหลด/กำลัง persist)
       newJobStatus = 'enhancing' // หรือ 'persisting' ถ้ามี status นี้

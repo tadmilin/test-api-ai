@@ -77,10 +77,14 @@ export async function POST(request: NextRequest) {
       photoTypeFromSheet,
       targetPlatforms,
       referenceImageUrls,
+      customPrompt,
       status = 'pending',
     } = body
 
     console.log('📥 Received photoType:', photoTypeFromSheet)
+    if (customPrompt) {
+      console.log('📝 Received custom prompt:', customPrompt.substring(0, 50) + '...')
+    }
 
     if (!productName) {
       return NextResponse.json(
@@ -118,6 +122,7 @@ export async function POST(request: NextRequest) {
         postTitleHeadline: postTitleHeadline || undefined,
         contentDescription: contentDescription || undefined,
         photoTypeFromSheet: photoTypeFromSheet || undefined,
+        customPrompt: customPrompt || undefined,
         targetPlatforms: targetPlatforms || ['facebook', 'instagram_feed'],
         referenceImageUrls: referenceImageUrls || [],
         status,

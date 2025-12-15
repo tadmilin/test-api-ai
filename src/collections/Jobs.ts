@@ -118,6 +118,15 @@ export const Jobs: CollectionConfig = {
               },
             },
             {
+              name: 'customPrompt',
+              type: 'textarea',
+              label: 'Custom Prompt',
+              admin: {
+                description: 'Custom prompt for image enhancement (overrides auto-generated prompt from photo type)',
+                placeholder: 'Enter custom prompt for AI image enhancement...',
+              },
+            },
+            {
               name: 'mood',
               type: 'text',
             },
