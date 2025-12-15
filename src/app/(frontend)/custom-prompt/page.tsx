@@ -251,8 +251,9 @@ export default function CustomPromptPage() {
 
       setProcessingStatus('✅ เริ่มประมวลผลสำเร็จ! กำลังเปลี่ยนหน้า...')
       
-      // Set flag for dashboard to auto-resume
+      // Set flag and jobId for dashboard to auto-resume
       localStorage.setItem('fromCustomPrompt', 'true')
+      localStorage.setItem('processingJobId', jobId)
       
       setTimeout(() => {
         router.push('/dashboard')

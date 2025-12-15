@@ -247,54 +247,20 @@ export default function DashboardPage() {
       
       // Check if coming from custom-prompt page
       const fromCustomPrompt = localStorage.getItem('fromCustomPrompt')
-      if (fromCustomPrompt === 'true') {
+      const savedJobId = localStorage.getItem('processingJobId')
+      
+      if (fromCustomPrompt === 'true' && savedJobId) {
         localStorage.removeItem('fromCustomPrompt')
+        localStorage.removeItem('processingJobId')
         
-        // Show processing status IMMEDIATELY so user knows something is happening
-        setProcessingStatus('⏳ กำลังเตรียมการประมวลผล... กรุณารอสักครู่')
-        setProcessingJobId('pending') // Set dummy value to trigger banner display
+        // Show processing status IMMEDIATELY
+        setProcessingStatus('⏳ กำลังเตรียมการประมวลผล...')
+        setProcessingJobId(savedJobId)
+        setCurrentJobId(savedJobId)
         
-        // Then start polling for the actual job
-        const pollForJob = async () => {
-          let attempts = 0
-          const maxAttempts = 30 // 30 seconds
-          
-          const checkInterval = setInterval(async () => {
-            attempts++
-            console.log(`🔍 Polling attempt ${attempts}/${maxAttempts}...`)
-            
-            try {
-              // Check for BOTH 'processing' AND 'enhancing' status
-              const [processingRes, enhancingRes] = await Promise.all([
-                fetch('/api/jobs?status=processing'),
-                fetch('/api/jobs?status=enhancing')
-              ])
-              
-              const processingData = await processingRes.json()
-              const enhancingData = await enhancingRes.json()
-              
-              const allJobs = [
-                ...(processingData.jobs || []),
-                ...(enhancingData.jobs || [])
-              ]
-              
-              if (allJobs.length > 0) {
-                console.log('✅ Found job!', allJobs[0].id, allJobs[0].status)
-                clearInterval(checkInterval)
-                resumeProcessingJobs()
-              } else if (attempts >= maxAttempts) {
-                console.log('⏰ Max attempts reached, stopping poll')
-                clearInterval(checkInterval)
-                setProcessingStatus('')
-                setProcessingJobId(null)
-              }
-            } catch (error) {
-              console.error('Error polling for job:', error)
-            }
-          }, 1000) // Check every second
-        }
-        
-        pollForJob()
+        // Start polling directly with the jobId (much faster!)
+        console.log(`🎯 Direct polling for job ${savedJobId}`)
+        setTimeout(() => pollJobStatus(savedJobId), 500)
       }
     }
   }, [currentUser, resumeProcessingJobs])
