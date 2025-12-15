@@ -336,14 +336,14 @@ export default function CustomPromptPage() {
             {/* 1. Select Sheet */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                1️⃣ เลือก Google Sheet (แสดงข้อมูล Product/Topic)
+                เลือกชีท Google
               </label>
               <select
                 value={selectedSheetId}
                 onChange={(e) => handleSheetSelect(e.target.value)}
-                className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                className="w-full border border-gray-300 rounded-lg p-2 text-gray-900"
               >
-                <option value="">-- เลือก Sheet --</option>
+                <option value="">-- เลือกชีท --</option>
                 {spreadsheets.map((sheet) => (
                   <option key={sheet.id} value={sheet.id}>{sheet.name}</option>
                 ))}
@@ -352,91 +352,134 @@ export default function CustomPromptPage() {
 
             {/* Sheet Data Preview */}
             {sheetData.length > 0 && (
-              <div className="bg-gray-50 p-4 rounded-lg">
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  เลือกแถวข้อมูล:
+                  1️⃣ เลือกข้อมูลจาก Google Sheet
                 </label>
                 <select
                   value={selectedRowIndex}
                   onChange={(e) => setSelectedRowIndex(Number(e.target.value))}
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-2 mb-3"
+                  className="w-full border border-gray-300 rounded-lg p-2 text-gray-900"
                 >
+                  <option value="">-- เลือกข้อมูล --</option>
                   {sheetData.map((row, index) => (
                     <option key={index} value={index}>
-                      {row['Product Name'] || row['Content_Topic'] || `Row ${index + 1}`}
+                      {row['Product Name'] || `Row ${index + 1}`}
+                      {row['Content_Topic'] && ` | ${row['Content_Topic']}`}
                     </option>
                   ))}
                 </select>
-                <div className="text-sm text-gray-700 space-y-1">
-                  {selectedRow['Product Name'] && <p><strong>Product:</strong> {selectedRow['Product Name']}</p>}
-                  {selectedRow['Content_Topic'] && <p><strong>Topic:</strong> {selectedRow['Content_Topic']}</p>}
-                  {selectedRow['Product Description'] && <p><strong>Description:</strong> {selectedRow['Product Description']}</p>}
-                </div>
+
+                {/* Show Selected Row Details */}
+                {selectedRow && Object.keys(selectedRow).length > 0 && (
+                  <div className="mt-3 bg-gradient-to-br from-purple-50 to-blue-50 p-4 rounded-lg border-2 border-purple-200">
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      {Object.entries(selectedRow).map(([key, value]) => {
+                        if (!value) return null
+                        return (
+                          <div key={key}>
+                            <span className="text-gray-600 font-medium">{key}:</span>
+                            <div className="text-gray-900">{value as string}</div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* 2. Select Drive Folder */}
+            {/* 2. Google Drive Images */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                2️⃣ เลือก Drive  
+                รูปอ้างอิงจาก Google Drive
               </label>
-              {driveFolders.length > 0 && (
-                <select
-                  value={driveFolderId}
-                  onChange={(e) => handleDriveFolderChange(e.target.value)}
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 mb-4 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                >
-                  <option value="">-- เลือก Drive --</option>
-                  {driveFolders.map((drive) => (
-                    <option key={drive.driveId} value={drive.driveId}>{drive.driveName}</option>
-                  ))}
-                </select>
-              )}
-              
-              {driveFolderId && driveFolders.find(d => d.driveId === driveFolderId)?.folders && (
-                <>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    เลือก Folder (รูปอ้างอิง)
-                  </label>
-                  <FolderTree
-                    folders={driveFolders.find(d => d.driveId === driveFolderId)?.folders || []}
-                    onSelectFolder={handleFolderSelect}
-                    selectedFolderId={selectedFolderId}
-                  />
-                </>
-              )}
+              <div className="space-y-3">
+                {/* Folder Tree View */}
+                {driveFolders.map((drive) => (
+                  <div key={drive.driveId} className="mb-6">
+                    <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                      <span>📱</span>
+                      <span>{drive.driveName}</span>
+                    </h3>
+                    <FolderTree
+                      folders={drive.folders}
+                      onSelectFolder={(folderId) => {
+                        setSelectedFolderId(folderId)
+                        setDriveFolderId(drive.driveId)
+                        handleFolderSelect(folderId)
+                      }}
+                      selectedFolderId={selectedFolderId}
+                    />
+                  </div>
+                ))}
+                
+                {driveFolders.length === 0 && (
+                  <div className="text-sm text-gray-500 text-center py-8 border border-gray-300 rounded-lg">
+                    กำลังโหลดโฟลเดอร์...
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* 3. Select Images */}
+            {/* Image Gallery */}
             {driveImages.length > 0 && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  3️⃣ เลือกรูป ({selectedImages.size} รูป)
-                </label>
-                <div className="grid grid-cols-4 gap-4">
-                  {driveImages.map((image) => {
-                    const isSelected = selectedImages.has(image.id)
+              <div className="mt-6 bg-gradient-to-br from-gray-50 to-gray-100 p-6 rounded-xl border border-gray-200">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">2️⃣ เลือกรูปสำหรับ Custom Prompt</h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                      คลิกรูปเพื่อเลือก
+                    </p>
+                  </div>
+                  <div className={`px-4 py-2 rounded-lg font-semibold ${
+                    selectedImages.size > 0
+                      ? 'bg-purple-100 text-purple-700' 
+                      : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {selectedImages.size} รูป
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  {driveImages.map((img) => {
+                    const isSelected = selectedImages.has(img.id)
                     return (
                       <div
-                        key={image.id}
-                        onClick={() => toggleImageSelection(image.id)}
-                        className={`relative cursor-pointer rounded-lg overflow-hidden border-4 transition-all ${
-                          isSelected ? 'border-purple-500 shadow-lg' : 'border-gray-200 hover:border-purple-300'
+                        key={img.id}
+                        onClick={() => toggleImageSelection(img.id)}
+                        className={`group relative rounded-xl overflow-hidden transition-all duration-300 ${
+                          isSelected
+                            ? 'ring-4 ring-purple-500 shadow-xl scale-[1.02] cursor-pointer'
+                            : 'ring-2 ring-gray-300 hover:ring-gray-400 hover:shadow-lg cursor-pointer'
                         }`}
                       >
-                        <Image
-                          src={image.thumbnailUrl}
-                          alt={image.name}
-                          width={200}
-                          height={200}
-                          className="w-full h-32 object-cover"
-                          unoptimized
-                        />
+                        <div className="aspect-[4/3] relative bg-gray-200">
+                          <Image
+                            src={img.thumbnailUrl}
+                            alt={img.name}
+                            fill
+                            className="object-cover"
+                            unoptimized
+                          />
+                        </div>
+                        {/* Overlay */}
+                        <div className={`absolute inset-0 transition-opacity duration-300 ${
+                          isSelected 
+                            ? 'bg-purple-500/20' 
+                            : 'bg-black/0 group-hover:bg-black/10'
+                        }`} />
+                        {/* Checkmark */}
                         {isSelected && (
-                          <div className="absolute top-2 right-2 bg-purple-500 text-white rounded-full w-8 h-8 flex items-center justify-center">
-                            ✓
+                          <div className="absolute top-3 right-3 bg-purple-500 text-white rounded-full w-10 h-10 flex items-center justify-center shadow-lg animate-in zoom-in duration-200">
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
                           </div>
                         )}
+                        {/* Image Name */}
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3">
+                          <p className="text-white text-xs font-medium truncate">{img.name}</p>
+                        </div>
                       </div>
                     )
                   })}
@@ -444,42 +487,47 @@ export default function CustomPromptPage() {
               </div>
             )}
 
-            {/* 4. Custom Prompt */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                4️⃣ เขียน Prompt (คำสั่งให้ AI ตกแต่งรูป)
-              </label>
-              <textarea
-                value={customPrompt}
-                onChange={(e) => setCustomPrompt(e.target.value)}
-                rows={6}
-                placeholder="เช่น: ทำให้รูปสว่างขึ้น เพิ่มความคมชัด และปรับสีให้สดใส..."
-                className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              />
-              <p className="text-xs text-gray-500 mt-2">
-                💡 เคล็ดลับ: อธิบายให้ละเอียด ใช้ภาษาไทยหรืออังกฤษก็ได้ (ยาว {customPrompt.length} ตัวอักษร)
-              </p>
-            </div>
+            {/* 3. Custom Prompt */}
+            {selectedImages.size > 0 && (
+              <div className="mt-6 bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-xl border-2 border-purple-200">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  3️⃣ เขียน Prompt (คำสั่งให้ AI ตกแต่งรูป)
+                </label>
+                <textarea
+                  value={customPrompt}
+                  onChange={(e) => setCustomPrompt(e.target.value)}
+                  rows={6}
+                  placeholder="เช่น: ทำให้รูปสว่างขึ้น เพิ่มความคมชัด และปรับสีให้สดใส..."
+                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500 mt-2">
+                  💡 เคล็ดลับ: อธิบายให้ละเอียด ใช้ภาษาไทยหรืออังกฤษก็ได้ (ยาว {customPrompt.length} ตัวอักษร)
+                </p>
 
-            {/* Create Button */}
-            <div className="flex justify-end gap-3 pt-6 border-t">
-              <button
-                onClick={handleCreate}
-                disabled={creating || selectedImages.size === 0 || !customPrompt.trim()}
-                className="px-8 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl flex items-center gap-2"
-              >
-                {creating ? (
-                  <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                    กำลังสร้าง...
-                  </>
-                ) : (
-                  <>
-                    ✨ สร้างรูป ({selectedImages.size} รูป)
-                  </>
-                )}
-              </button>
-            </div>
+                {/* Create Button */}
+                <div className="mt-6 pt-6 border-t border-purple-200">
+                  <button
+                    onClick={handleCreate}
+                    disabled={creating || selectedImages.size === 0 || !customPrompt.trim()}
+                    className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-4 rounded-lg hover:from-purple-700 hover:to-blue-700 font-bold text-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+                  >
+                    {creating ? (
+                      <>
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                        กำลังสร้าง...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        ✨ สร้างรูปด้วย Custom Prompt ({selectedImages.size} รูป)
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
