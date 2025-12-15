@@ -783,6 +783,10 @@ export interface Job {
    * Final photo type after hybrid detection (sheet + GPT Vision)
    */
   resolvedPhotoType?: ('bedroom' | 'dining' | 'lobby' | 'pool' | 'bathroom' | 'generic') | null;
+  /**
+   * Custom prompt for image enhancement (overrides auto-generated prompt from photo type)
+   */
+  customPrompt?: string | null;
   mood?: string | null;
   targetPlatforms?: ('facebook' | 'instagram_feed' | 'instagram_story')[] | null;
   referenceImageUrls?:
@@ -811,13 +815,21 @@ export interface Job {
   enhancedImageUrls?:
     | {
         /**
-         * Google Drive URL of the original image
+         * Google Drive URL or Blob URL of the source image
          */
         originalUrl?: string | null;
         /**
-         * Replicate output URL after enhancement
+         * Replicate output URL (expires 24-48h) - will be uploaded to Blob
+         */
+        tempOutputUrl?: string | null;
+        /**
+         * Vercel Blob storage URL (permanent) - final output only
          */
         url?: string | null;
+        /**
+         * Flag indicating webhook upload failed - polling should retry
+         */
+        webhookFailed?: boolean | null;
         status?: ('pending' | 'completed' | 'failed' | 'approved' | 'regenerating') | null;
         /**
          * Used for polling async prediction status
@@ -839,6 +851,10 @@ export interface Job {
          * Content description from Sheet row
          */
         contentDescription?: string | null;
+        /**
+         * Error message from Replicate if failed
+         */
+        error?: string | null;
         id?: string | null;
       }[]
     | null;
@@ -1464,6 +1480,7 @@ export interface JobsSelect<T extends boolean = true> {
   notes?: T;
   photoTypeFromSheet?: T;
   resolvedPhotoType?: T;
+  customPrompt?: T;
   mood?: T;
   targetPlatforms?: T;
   referenceImageUrls?:
@@ -1487,13 +1504,16 @@ export interface JobsSelect<T extends boolean = true> {
     | T
     | {
         originalUrl?: T;
+        tempOutputUrl?: T;
         url?: T;
+        webhookFailed?: T;
         status?: T;
         predictionId?: T;
         photoType?: T;
         contentTopic?: T;
         postTitleHeadline?: T;
         contentDescription?: T;
+        error?: T;
         id?: T;
       };
   reviewCompleted?: T;

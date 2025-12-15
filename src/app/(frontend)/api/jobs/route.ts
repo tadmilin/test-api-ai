@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
         referenceImageUrls: referenceImageUrls || [],
         status,
         createdBy: currentUser?.id || undefined,
-      },
+      } as any,  // Type assertion until types are regenerated
     })
 
     return NextResponse.json({
