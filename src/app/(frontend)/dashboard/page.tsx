@@ -239,11 +239,10 @@ export default function DashboardPage() {
       const fromCustomPrompt = localStorage.getItem('fromCustomPrompt')
       if (fromCustomPrompt === 'true') {
         localStorage.removeItem('fromCustomPrompt')
-        // Force resume processing jobs
+        // Force resume processing jobs again (in case first call missed the job)
         setTimeout(() => {
           resumeProcessingJobs()
-          setProcessingStatus('🔄 กำลังตรวจสอบสถานะการประมวลผล...')
-        }, 500)
+        }, 1000)
       }
     }
   }, [currentUser, resumeProcessingJobs])
@@ -1779,6 +1778,14 @@ export default function DashboardPage() {
                     {viewingJob.postTitleHeadline && (
                       <div className="text-sm text-gray-600 mt-1">
                         <span className="font-medium">postTitleHeadline</span> {viewingJob.postTitleHeadline}
+                      </div>
+                    )}
+                    {(viewingJob as any).customPrompt && (
+                      <div className="mt-3 p-3 bg-purple-50 border-2 border-purple-200 rounded-lg">
+                        <div className="flex items-start gap-2">
+                          <span className="text-purple-700 font-bold text-sm">⚡ Custom Prompt:</span>
+                          <p className="text-purple-900 text-sm whitespace-pre-wrap flex-1">{(viewingJob as any).customPrompt}</p>
+                        </div>
                       </div>
                     )}
                   </div>
