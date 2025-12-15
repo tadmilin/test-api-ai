@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { FolderTree, type TreeFolder } from '@/components/FolderTree'
 import { getGoogleDriveThumbnail, normalizeImageUrl, isGoogleDriveUrl } from '@/utilities/googleDriveUrl'
@@ -1058,12 +1059,12 @@ export default function DashboardPage() {
               >
                 ออกจากระบบ
               </button>
-              <a
+              <Link
                 href="/custom-prompt"
                 className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 font-semibold shadow-lg hover:shadow-xl transition-all inline-block"
               >
                 ⚡ Custom Prompt
-              </a>
+              </Link>
               <button
                 onClick={() => setShowCreateForm(!showCreateForm)}
                 className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-semibold shadow-lg hover:shadow-xl transition-all"
