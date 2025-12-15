@@ -248,11 +248,11 @@ export default function CustomPromptPage() {
         throw new Error(errorMsg)
       }
 
-      setProcessingStatus('✅ เริ่มประมวลผลสำเร็จ! รอ 30-60 วินาที...')
+      setProcessingStatus('✅ เริ่มประมวลผลสำเร็จ! กำลังเปลี่ยนหน้า...')
       
       setTimeout(() => {
-        router.push('/dashboard')
-      }, 2000)
+        router.push('/dashboard?processing=true')
+      }, 1500)
 
     } catch (error) {
       console.error('Error:', error)
@@ -381,7 +381,6 @@ export default function CustomPromptPage() {
                   onChange={(e) => setSelectedRowIndex(Number(e.target.value))}
                   className="w-full border border-gray-300 rounded-lg p-2 text-gray-900"
                 >
-                  <option value="">-- เลือกข้อมูล --</option>
                   {sheetData.map((row, index) => (
                     <option key={index} value={index}>
                       {row['Product Name'] || `Row ${index + 1}`}

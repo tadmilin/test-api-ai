@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { FolderTree, type TreeFolder } from '@/components/FolderTree'
 import { getGoogleDriveThumbnail, normalizeImageUrl, isGoogleDriveUrl } from '@/utilities/googleDriveUrl'
 
@@ -156,6 +156,7 @@ export default function DashboardPage() {
   const [processingError, setProcessingError] = useState<string>('')
 
   const [_loading, setLoading] = useState(true)
+  const searchParams = useSearchParams()
 
   const checkAuth = useCallback(async () => {
     try {
@@ -218,8 +219,20 @@ export default function DashboardPage() {
       
       // Auto-resume processing jobs
       resumeProcessingJobs()
+      
+      // Check if coming from custom-prompt page
+      const isProcessing = searchParams.get('processing')
+      if (isProcessing === 'true') {
+        // Clear the param from URL
+        window.history.replaceState({}, '', '/dashboard')
+        // Force resume processing jobs
+        setTimeout(() => {
+          resumeProcessingJobs()
+          setProcessingStatus('🔄 กำลังตรวจสอบสถานะการประมวลผล...')
+        }, 500)
+      }
     }
-  }, [currentUser, resumeProcessingJobs])
+  }, [currentUser, resumeProcessingJobs, searchParams])
 
   async function handleLogout() {
     try {
