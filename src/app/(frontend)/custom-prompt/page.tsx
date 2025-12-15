@@ -73,13 +73,17 @@ export default function CustomPromptPage() {
       fetchSpreadsheets()
       fetchDriveFolders()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser])
 
   async function fetchSpreadsheets() {
     try {
-      const res = await fetch('/api/google-sheets/list')
-      const data = await res.json()
-      setSpreadsheets(data.spreadsheets || [])
+      const res = await fetch('/api/sheets/list')
+      if (res.ok) {
+        const data = await res.json()
+        console.log('📊 Spreadsheets:', data)
+        setSpreadsheets(data.spreadsheets || [])
+      }
     } catch (error) {
       console.error('Error fetching spreadsheets:', error)
     }
@@ -87,9 +91,12 @@ export default function CustomPromptPage() {
 
   async function fetchDriveFolders() {
     try {
-      const res = await fetch('/api/google-drive/folders')
-      const data = await res.json()
-      setDriveFolders(data.drives || [])
+      const res = await fetch('/api/drive/list-folders')
+      if (res.ok) {
+        const data = await res.json()
+        console.log('📁 Drive folders:', data)
+        setDriveFolders(data.drives || [])
+      }
     } catch (error) {
       console.error('Error fetching Drive folders:', error)
     }
@@ -105,9 +112,11 @@ export default function CustomPromptPage() {
     }
 
     try {
-      const res = await fetch(`/api/google-sheets/read?spreadsheetId=${sheetId}`)
-      const data = await res.json()
-      setSheetData(data.rows || [])
+      const res = await fetch(`/api/sheets/read?spreadsheetId=${sheetId}`)
+      if (res.ok) {
+        const data = await res.json()
+        setSheetData(data.rows || [])
+      }
     } catch (error) {
       console.error('Error reading sheet:', error)
     }
@@ -123,17 +132,19 @@ export default function CustomPromptPage() {
     }
 
     try {
-      const res = await fetch(`/api/google-drive/images?folderId=${folderId}&driveId=${driveFolderId}`)
-      const data = await res.json()
-      
-      const images = (data.files || []).map((file: { id: string; name: string; thumbnailLink?: string; webContentLink?: string }) => ({
-        id: file.id,
-        name: file.name,
-        thumbnailUrl: getGoogleDriveThumbnail(file.id),
-        url: file.webContentLink || `https://drive.google.com/uc?export=view&id=${file.id}`,
-      }))
-      
-      setDriveImages(images)
+      const res = await fetch(`/api/drive/images?folderId=${folderId}&driveId=${driveFolderId}`)
+      if (res.ok) {
+        const data = await res.json()
+        
+        const images = (data.files || []).map((file: { id: string; name: string; thumbnailLink?: string; webContentLink?: string }) => ({
+          id: file.id,
+          name: file.name,
+          thumbnailUrl: getGoogleDriveThumbnail(file.id),
+          url: file.webContentLink || `https://drive.google.com/uc?export=view&id=${file.id}`,
+        }))
+        
+        setDriveImages(images)
+      }
     } catch (error) {
       console.error('Error fetching images:', error)
     }
@@ -314,6 +325,14 @@ export default function CustomPromptPage() {
 
           {/* Form */}
           <div className="space-y-6">
+            {/* Debug Info */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded p-2 text-xs">
+                <p>User: {currentUser?.email || 'Not logged in'}</p>
+                <p>Sheets: {spreadsheets.length} | Drives: {driveFolders.length}</p>
+              </div>
+            )}
+            
             {/* 1. Select Sheet */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
