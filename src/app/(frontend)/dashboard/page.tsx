@@ -152,6 +152,7 @@ export default function DashboardPage() {
   const [processingStatus, setProcessingStatus] = useState<string>('')
   const [completedCount, setCompletedCount] = useState<number>(0)
   const [showSuccess, setShowSuccess] = useState<boolean>(false)
+  const [processingError, setProcessingError] = useState<string>('')
 
   const [_loading, setLoading] = useState(true)
 
@@ -625,6 +626,7 @@ export default function DashboardPage() {
     setFinalImageUrl(null)
     setShowSuccess(false)
     setCompletedCount(0)
+    setProcessingError('')
 
     try {
       // Create separate job for each image
@@ -697,7 +699,18 @@ export default function DashboardPage() {
         if (!processRes.ok) {
           const errorData = await processRes.json().catch(() => ({ error: 'Unknown error' }))
           console.error(`❌ Process failed:`, errorData)
-          throw new Error(errorData.error || 'Processing failed')
+          
+          // Check if it's a payment/credit error
+          const errorMsg = errorData.error || 'Processing failed'
+          if (errorMsg.includes('402') || errorMsg.includes('Payment Required') || errorMsg.includes('Insufficient credit')) {
+            setProcessingError('⚠️ Replicate หมดเครดิต - กรุณาเติมเครดิตที่ https://replicate.com/account/billing')
+          } else {
+            setProcessingError(`❌ Server Error: ${errorMsg}`)
+          }
+          
+          setProcessingStatus('')
+          setProcessingJobId(null)
+          throw new Error(errorMsg)
         }
 
         // Poll for completion
@@ -758,7 +771,17 @@ export default function DashboardPage() {
       
     } catch (error) {
       console.error('Error creating job:', error)
-      alert('Failed to create job: ' + (error instanceof Error ? error.message : 'Unknown error'))
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error'
+      
+      // Set error message if not already set
+      if (!processingError) {
+        if (errorMsg.includes('402') || errorMsg.includes('Payment Required') || errorMsg.includes('Insufficient credit')) {
+          setProcessingError('⚠️ Replicate หมดเครดิต - กรุณาเติมเครดิตที่ https://replicate.com/account/billing')
+        } else {
+          setProcessingError(`❌ เกิดข้อผิดพลาด: ${errorMsg}`)
+        }
+      }
+      
       setProcessingJobId(null)
       setProcessingStatus('')
       setCurrentJobId(null)
@@ -1064,6 +1087,32 @@ export default function DashboardPage() {
                 className="text-blue-600 hover:text-blue-800 text-sm font-medium"
               >
                 ซ่อน
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Error Banner */}
+        {processingError && (
+          <div className="bg-red-50 border-2 border-red-200 rounded-lg p-6 mb-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center">
+                  <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-red-900">เกิดข้อผิดพลาด</h3>
+                  <p className="text-red-700 text-sm mt-1 whitespace-pre-wrap">{processingError}</p>
+                  <p className="text-red-600 text-xs mt-2">กรุณาแก้ไขปัญหาแล้วกดปุ่ม &quot;สร้างรูป&quot; อีกครั้ง</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setProcessingError('')}
+                className="text-red-600 hover:text-red-800 text-sm font-medium"
+              >
+                ปิด
               </button>
             </div>
           </div>

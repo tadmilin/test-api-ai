@@ -256,11 +256,28 @@ export async function POST(request: NextRequest) {
       message: 'Enhancement started',
     })
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Failed to start enhancement'
     console.error('Error starting enhancement:', error)
+    
+    // Check if it's a Replicate API error with status code
+    let statusCode = 500
+    let errorMessage = 'Failed to start enhancement'
+    
+    if (error && typeof error === 'object' && 'response' in error) {
+      const replicateError = error as { response?: { status?: number }; message?: string }
+      statusCode = replicateError.response?.status || 500
+      errorMessage = replicateError.message || errorMessage
+      
+      // Add context for payment errors
+      if (statusCode === 402) {
+        errorMessage = `402 Payment Required: ${errorMessage}`
+      }
+    } else if (error instanceof Error) {
+      errorMessage = error.message
+    }
+    
     return NextResponse.json(
       { error: errorMessage },
-      { status: 500 }
+      { status: statusCode }
     )
   }
 }

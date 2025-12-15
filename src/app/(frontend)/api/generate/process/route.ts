@@ -286,7 +286,11 @@ export async function POST(request: NextRequest) {
           })
 
           if (!enhanceRes.ok) {
-            throw new Error(`Enhance API failed: ${enhanceRes.status}`)
+            const errorData = await enhanceRes.json().catch(() => ({ error: 'Unknown error' }))
+            const errorMsg = errorData.error || `HTTP ${enhanceRes.status}`
+            
+            // Propagate error message with status code
+            throw new Error(`[${enhanceRes.status}] ${errorMsg}`)
           }
 
           const { predictionId } = await enhanceRes.json()
@@ -327,22 +331,14 @@ export async function POST(request: NextRequest) {
             await payload.update({
               collection: 'jobs',
               id: jobId,
-              data: { enhancedImageUrls: localEnhanced as any },
+              data: { 
+                enhancedImageUrls: localEnhanced as any,
+                status: 'failed'  // Mark job as failed
+              },
             })
           } catch (updateErr) {
             console.warn(`   ⚠️ Failed to update failed status:`, updateErr)
           }
-          
-          // ⚠️ CRITICAL: Always push to maintain array length consistency
-          predictionIds.push('') // Empty = failed
-          
-          // Store metadata with matching index
-          imageMetadata.push({
-            photoType: photoTypeFromSheet || 'generic',
-            contentTopic: sheetRow.contentTopic || '',
-            postTitleHeadline: sheetRow.postTitleHeadline || '',
-            contentDescription: sheetRow.contentDescription || '',
-          })
           
           // Log to job-logs for debugging
           await payload.create({
@@ -354,6 +350,9 @@ export async function POST(request: NextRequest) {
               timestamp: new Date().toISOString(),
             },
           })
+          
+          // Throw error to stop processing and mark job as failed
+          throw error
         }
       }
 
