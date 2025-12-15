@@ -181,14 +181,24 @@ export default function DashboardPage() {
   // Resume processing for any jobs stuck in processing/enhancing state
   const resumeProcessingJobs = useCallback(async () => {
     try {
-      const jobsRes = await fetch('/api/jobs?status=processing')
-      const jobsData = await jobsRes.json()
-      const processingJobs = jobsData.jobs || []
+      // Check BOTH 'processing' AND 'enhancing' status
+      const [processingRes, enhancingRes] = await Promise.all([
+        fetch('/api/jobs?status=processing'),
+        fetch('/api/jobs?status=enhancing')
+      ])
       
-      console.log(`📋 Found ${processingJobs.length} processing jobs`)
+      const processingData = await processingRes.json()
+      const enhancingData = await enhancingRes.json()
+      
+      const allJobs = [
+        ...(processingData.jobs || []),
+        ...(enhancingData.jobs || [])
+      ]
+      
+      console.log(`📋 Found ${allJobs.length} jobs (processing + enhancing)`)
       
       // Find jobs with predictions that might still be running
-      for (const job of processingJobs) {
+      for (const job of allJobs) {
         console.log(`🔍 Checking job ${job.id}`)
         
         // Check if job has enhancedImageUrls (started processing)
@@ -239,10 +249,52 @@ export default function DashboardPage() {
       const fromCustomPrompt = localStorage.getItem('fromCustomPrompt')
       if (fromCustomPrompt === 'true') {
         localStorage.removeItem('fromCustomPrompt')
-        // Force resume processing jobs again (in case first call missed the job)
-        setTimeout(() => {
-          resumeProcessingJobs()
-        }, 1000)
+        
+        // Show processing status IMMEDIATELY so user knows something is happening
+        setProcessingStatus('⏳ กำลังเตรียมการประมวลผล... กรุณารอสักครู่')
+        setProcessingJobId('pending') // Set dummy value to trigger banner display
+        
+        // Then start polling for the actual job
+        const pollForJob = async () => {
+          let attempts = 0
+          const maxAttempts = 30 // 30 seconds
+          
+          const checkInterval = setInterval(async () => {
+            attempts++
+            console.log(`🔍 Polling attempt ${attempts}/${maxAttempts}...`)
+            
+            try {
+              // Check for BOTH 'processing' AND 'enhancing' status
+              const [processingRes, enhancingRes] = await Promise.all([
+                fetch('/api/jobs?status=processing'),
+                fetch('/api/jobs?status=enhancing')
+              ])
+              
+              const processingData = await processingRes.json()
+              const enhancingData = await enhancingRes.json()
+              
+              const allJobs = [
+                ...(processingData.jobs || []),
+                ...(enhancingData.jobs || [])
+              ]
+              
+              if (allJobs.length > 0) {
+                console.log('✅ Found job!', allJobs[0].id, allJobs[0].status)
+                clearInterval(checkInterval)
+                resumeProcessingJobs()
+              } else if (attempts >= maxAttempts) {
+                console.log('⏰ Max attempts reached, stopping poll')
+                clearInterval(checkInterval)
+                setProcessingStatus('')
+                setProcessingJobId(null)
+              }
+            } catch (error) {
+              console.error('Error polling for job:', error)
+            }
+          }, 1000) // Check every second
+        }
+        
+        pollForJob()
       }
     }
   }, [currentUser, resumeProcessingJobs])
