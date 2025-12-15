@@ -110,15 +110,16 @@ export default function CustomPromptPage() {
 
   async function loadSheetData() {
     if (!selectedSheetId) return
-
+    
     try {
-      const res = await fetch(`/api/sheets/read?spreadsheetId=${selectedSheetId}`)
+      const res = await fetch(`/api/sheets/${selectedSheetId}/data`)
       if (res.ok) {
         const data = await res.json()
-        setSheetData(data.rows || [])
+        setSheetData(data.data || [])
+        console.log('📊 Loaded', data.data?.length || 0, 'rows from sheet')
       }
     } catch (error) {
-      console.error('Error reading sheet:', error)
+      console.error('Error fetching sheet data:', error)
     }
   }
 
@@ -267,6 +268,7 @@ export default function CustomPromptPage() {
           setProcessingError(`❌ เกิดข้อผิดพลาด: ${errorMsg}`)
         }
       }
+      setProcessingStatus('')
     } finally {
       setCreating(false)
     }

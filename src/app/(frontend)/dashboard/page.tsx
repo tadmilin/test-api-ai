@@ -185,24 +185,40 @@ export default function DashboardPage() {
       const jobsData = await jobsRes.json()
       const processingJobs = jobsData.jobs || []
       
+      console.log(`📋 Found ${processingJobs.length} processing jobs`)
+      
       // Find jobs with predictions that might still be running
       for (const job of processingJobs) {
+        console.log(`🔍 Checking job ${job.id}`)
+        
+        // Check if job has enhancedImageUrls (started processing)
         if (job.enhancedImageUrls && job.enhancedImageUrls.length > 0) {
           const hasIncomplete = job.enhancedImageUrls.some(
             (img: { url?: string; status?: string }) => !img.url || img.status === 'processing'
           )
           
           if (hasIncomplete) {
-            console.log(`🔄 Resuming job ${job.id}...`)
+            console.log(`🔄 Resuming job ${job.id} with ${job.enhancedImageUrls.length} images...`)
             setProcessingJobId(job.id)
             setCurrentJobId(job.id)
             setEnhancedImages(job.enhancedImageUrls)
             setReviewMode(true)
+            setProcessingStatus(`🔄 กำลังประมวลผล ${job.enhancedImageUrls.length} รูป...`)
             
             // Start polling - pollJobStatus is defined later in the file
             setTimeout(() => pollJobStatus(job.id), 0)
             break // Only resume one job at a time
           }
+        } else {
+          // Job just created, hasn't started processing yet
+          console.log(`⏳ Job ${job.id} is pending, will poll for updates...`)
+          setProcessingJobId(job.id)
+          setCurrentJobId(job.id)
+          setProcessingStatus(`⏳ กำลังเตรียมประมวลผล...`)
+          
+          // Start polling to wait for enhancedImageUrls to appear
+          setTimeout(() => pollJobStatus(job.id), 2000)
+          break
         }
       }
     } catch (error) {
