@@ -105,14 +105,14 @@ export default function CustomPromptPage() {
   async function handleSheetSelect(sheetId: string) {
     setSelectedSheetId(sheetId)
     setSelectedRowIndex(0)
-    
-    if (!sheetId) {
-      setSheetData([])
-      return
-    }
+    setSheetData([])
+  }
+
+  async function loadSheetData() {
+    if (!selectedSheetId) return
 
     try {
-      const res = await fetch(`/api/sheets/read?spreadsheetId=${sheetId}`)
+      const res = await fetch(`/api/sheets/read?spreadsheetId=${selectedSheetId}`)
       if (res.ok) {
         const data = await res.json()
         setSheetData(data.rows || [])
@@ -124,29 +124,38 @@ export default function CustomPromptPage() {
 
   async function handleFolderSelect(folderId: string) {
     setSelectedFolderId(folderId)
+    setDriveImages([])
     setSelectedImages(new Set())
-    
-    if (!folderId || !driveFolderId) {
-      setDriveImages([])
+  }
+
+  async function loadDriveImages() {
+    if (!selectedFolderId) {
+      alert('กรุณาเลือกโฟลเดอร์ก่อน')
       return
     }
 
     try {
-      const res = await fetch(`/api/drive/images?folderId=${folderId}&driveId=${driveFolderId}`)
+      const res = await fetch('/api/drive/list-folder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderId: selectedFolderId }),
+      })
+
       if (res.ok) {
         const data = await res.json()
-        
-        const images = (data.files || []).map((file: { id: string; name: string; thumbnailLink?: string; webContentLink?: string }) => ({
-          id: file.id,
-          name: file.name,
-          thumbnailUrl: getGoogleDriveThumbnail(file.id),
-          url: file.webContentLink || `https://drive.google.com/uc?export=view&id=${file.id}`,
-        }))
-        
-        setDriveImages(images)
+        // Use images array from response
+        const validImages = (data.images || []).filter((img: DriveImage) => 
+          img && img.id && img.url && img.thumbnailUrl
+        )
+        setDriveImages(validImages)
+        console.log(`✅ Loaded ${validImages.length} valid images from folder`)
+      } else {
+        const errorData = await res.json().catch(() => ({}))
+        alert(`Failed to load images: ${errorData.error || 'Unknown error'}`)
       }
     } catch (error) {
       console.error('Error fetching images:', error)
+      alert('Error loading images')
     }
   }
 
@@ -350,6 +359,17 @@ export default function CustomPromptPage() {
               </select>
             </div>
 
+            {/* Load Sheet Data Button */}
+            {selectedSheetId && (
+              <button
+                type="button"
+                onClick={loadSheetData}
+                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+              >
+                โหลดข้อมูลสินค้าจากชีท
+              </button>
+            )}
+
             {/* Sheet Data Preview */}
             {sheetData.length > 0 && (
               <div>
@@ -405,7 +425,6 @@ export default function CustomPromptPage() {
                     <FolderTree
                       folders={drive.folders}
                       onSelectFolder={(folderId) => {
-                        setSelectedFolderId(folderId)
                         setDriveFolderId(drive.driveId)
                         handleFolderSelect(folderId)
                       }}
@@ -418,6 +437,17 @@ export default function CustomPromptPage() {
                   <div className="text-sm text-gray-500 text-center py-8 border border-gray-300 rounded-lg">
                     กำลังโหลดโฟลเดอร์...
                   </div>
+                )}
+
+                {/* Load Images Button */}
+                {selectedFolderId && driveFolderId && (
+                  <button
+                    type="button"
+                    onClick={loadDriveImages}
+                    className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 w-full font-medium"
+                  >
+                    📂 โหลดรูปจากโฟลเดอร์
+                  </button>
                 )}
               </div>
             </div>
