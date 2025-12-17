@@ -3,7 +3,7 @@ import { getPayload } from 'payload'
 import config from '@payload-config'
 
 // This endpoint is called AFTER user reviews and approves all images
-// It generates the final template using AI (Nano-Banana Pro)
+// Marks the job as completed
 export async function POST(request: NextRequest) {
   let jobId: string | null = null
   
@@ -63,16 +63,11 @@ export async function POST(request: NextRequest) {
 
     const templateType = job.templateType || 'triple'
 
-    console.log(`🎨 Template generation requested:`)
+    console.log(`🎨 Job finalization:`)
     console.log(`  - Type: ${templateType}`)
     console.log(`  - Images: ${approvedImages.length}`)
-    console.log(`⚠️ Template generation is currently disabled`)
 
-    // FEATURE DISABLED: Template generation
-    // Client requested to disable template generation feature
-    // Code is preserved for future re-enablement
-    
-    // Update status to completed (skip template generation)
+    // Mark job as completed
     await payload.update({
       collection: 'jobs',
       id: jobId,
@@ -82,54 +77,14 @@ export async function POST(request: NextRequest) {
       },
     })
     
-    console.log('✅ Job marked as completed (template generation skipped)')
+    console.log('✅ Job marked as completed')
 
     return NextResponse.json({
       success: true,
-      message: 'Job completed successfully (template generation disabled)',
+      message: 'Job completed successfully',
       jobId: jobId,
-      templateDisabled: true,
+      status: 'completed',
     })
-
-    /* TEMPLATE GENERATION CODE - DISABLED
-    // Update status
-    await payload.update({
-      collection: 'jobs',
-      id: jobId,
-      data: {
-        status: 'generating_template',
-      },
-    })
-
-    const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
-
-    // AI MODE: Start template generation (async)
-    console.log('🤖 Starting AI template generation...')
-
-    const aiResponse = await fetch(`${baseUrl}/api/generate/ai-template`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        imageUrls: approvedImages,
-        templateType: templateType,
-        jobId: jobId,
-      }),
-    })
-
-    if (!aiResponse.ok) {
-      throw new Error('Failed to start template generation')
-    }
-
-    const aiData = await aiResponse.json()
-    
-    // Return prediction ID for frontend to poll
-    return NextResponse.json({
-      success: true,
-      message: 'Template generation started',
-      predictionId: aiData.predictionId,
-      jobId: jobId,
-    })
-    */
 
   } catch (error: unknown) {
     console.error('❌ Template generation error:', error)
