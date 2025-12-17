@@ -42,10 +42,26 @@ export const AdminBar: React.FC<{
   ) as keyof typeof collectionLabels
   const router = useRouter()
 
-  const onAuthChange = React.useCallback((user: PayloadMeUser) => {
-    // Only show AdminBar for admin users
-    const isAdmin = user?.roles?.includes('admin') || user?.role === 'admin'
-    setShow(Boolean(user?.id) && isAdmin)
+  const onAuthChange = React.useCallback(async (user: PayloadMeUser) => {
+    if (!user?.id) {
+      setShow(false)
+      return
+    }
+
+    // Check if user is admin by fetching full user data
+    try {
+      const res = await fetch('/api/users/me')
+      if (res.ok) {
+        const userData = await res.json()
+        const isAdmin = userData?.user?.role === 'admin'
+        setShow(isAdmin)
+      } else {
+        setShow(false)
+      }
+    } catch (error) {
+      console.error('Failed to check admin status:', error)
+      setShow(false)
+    }
   }, [])
 
   return (
