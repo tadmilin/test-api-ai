@@ -4,6 +4,7 @@
  */
 
 import sharp from 'sharp'
+import { downloadDriveFile, extractDriveFileId } from './downloadDriveFile'
 
 export interface ImagePosition {
   x: number
@@ -24,7 +25,7 @@ export interface CompositeOptions {
 
 /**
  * Download image from URL with timeout and size limits
- * Includes basic SSRF protection and Google Drive URL normalization
+ * Includes basic SSRF protection and Google Drive API integration
  */
 export async function downloadImageFromUrl(
   url: string,
@@ -33,39 +34,25 @@ export async function downloadImageFromUrl(
   const { timeoutMs = 15000, maxBytes = 10 * 1024 * 1024 } = options // 15s, 10MB
 
   try {
-    // Normalize Google Drive URLs to direct download format
-    let downloadUrl = url
-    if (url.includes('drive.google.com')) {
-      // Extract file ID from various Google Drive URL formats
-      let fileId: string | null = null
+    // ✅ Use Google Drive API for Drive files (recommended: alt=media)
+    const driveFileId = extractDriveFileId(url)
+    if (driveFileId) {
+      console.log(`  📂 Downloading from Google Drive (file ID: ${driveFileId})`)
+      const buffer = await downloadDriveFile(driveFileId)
       
-      // Format 1: /uc?export=view&id=XXX or /uc?id=XXX
-      const ucMatch = url.match(/[?&]id=([^&]+)/)
-      if (ucMatch) {
-        fileId = ucMatch[1]
+      // Check size limit
+      if (buffer.byteLength > maxBytes) {
+        throw new Error(`Image too large: ${buffer.byteLength} bytes (max ${maxBytes})`)
       }
       
-      // Format 2: /file/d/XXX/view
-      const fileMatch = url.match(/\/file\/d\/([^/]+)/)
-      if (fileMatch) {
-        fileId = fileMatch[1]
-      }
-      
-      // Format 3: /open?id=XXX
-      const openMatch = url.match(/\/open\?id=([^&]+)/)
-      if (openMatch) {
-        fileId = openMatch[1]
-      }
-      
-      if (fileId) {
-        // Use direct download URL format
-        downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`
-        console.log(`  🔄 Normalized Google Drive URL: ${downloadUrl}`)
-      }
+      return buffer
     }
 
+    // ✅ For other URLs (Vercel Blob, Replicate, etc.)
+    console.log(`  🌐 Downloading from URL: ${url}`)
+    
     // Basic URL validation
-    const parsedUrl = new URL(downloadUrl)
+    const parsedUrl = new URL(url)
     if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
       throw new Error('Only http/https URLs are allowed')
     }
@@ -75,9 +62,9 @@ export async function downloadImageFromUrl(
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
     try {
-      const response = await fetch(downloadUrl, { 
+      const response = await fetch(url, { 
         signal: controller.signal,
-        redirect: 'follow', // Follow redirects (important for Google Drive)
+        redirect: 'follow',
       })
       
       if (!response.ok) {
