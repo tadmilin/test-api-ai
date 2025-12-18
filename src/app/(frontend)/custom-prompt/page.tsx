@@ -14,10 +14,6 @@ interface CurrentUser {
   role: string
 }
 
-interface SheetData {
-  [key: string]: string
-}
-
 interface DriveImage {
   id: string
   name: string
@@ -33,10 +29,6 @@ export default function CustomPromptPage() {
   const [authLoading, setAuthLoading] = useState(true)
   
   // Form state
-  const [spreadsheets, setSpreadsheets] = useState<{ id: string; name: string }[]>([])
-  const [selectedSheetId, setSelectedSheetId] = useState<string>('')
-  const [sheetData, setSheetData] = useState<SheetData[]>([])
-  const [selectedRowIndex, setSelectedRowIndex] = useState<number>(0)
   const [driveFolders, setDriveFolders] = useState<Array<{ driveId: string; driveName: string; folders: TreeFolder[] }>>([])
   const [selectedFolderId, setSelectedFolderId] = useState<string>('')
   const [driveFolderId, setDriveFolderId] = useState<string>('')
@@ -70,24 +62,10 @@ export default function CustomPromptPage() {
 
   useEffect(() => {
     if (currentUser) {
-      fetchSpreadsheets()
       fetchDriveFolders()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser])
-
-  async function fetchSpreadsheets() {
-    try {
-      const res = await fetch('/api/sheets/list')
-      if (res.ok) {
-        const data = await res.json()
-        console.log('📊 Spreadsheets:', data)
-        setSpreadsheets(data.spreadsheets || [])
-      }
-    } catch (error) {
-      console.error('Error fetching spreadsheets:', error)
-    }
-  }
 
   async function fetchDriveFolders() {
     try {
@@ -99,27 +77,6 @@ export default function CustomPromptPage() {
       }
     } catch (error) {
       console.error('Error fetching Drive folders:', error)
-    }
-  }
-
-  async function handleSheetSelect(sheetId: string) {
-    setSelectedSheetId(sheetId)
-    setSelectedRowIndex(0)
-    setSheetData([])
-  }
-
-  async function loadSheetData() {
-    if (!selectedSheetId) return
-    
-    try {
-      const res = await fetch(`/api/sheets/${selectedSheetId}/data`)
-      if (res.ok) {
-        const data = await res.json()
-        setSheetData(data.data || [])
-        console.log('📊 Loaded', data.data?.length || 0, 'rows from sheet')
-      }
-    } catch (error) {
-      console.error('Error fetching sheet data:', error)
     }
   }
 
@@ -195,7 +152,6 @@ export default function CustomPromptPage() {
     setProcessingStatus('กำลังสร้างงาน...')
 
     try {
-      const selectedRow = sheetData[selectedRowIndex] || {}
       const selectedImageUrls = driveImages
         .filter(img => selectedImages.has(img.id))
         .map(img => ({ url: img.url }))
@@ -205,11 +161,8 @@ export default function CustomPromptPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          productName: selectedRow['Product Name'] || 'Custom Prompt Job',
-          productDescription: selectedRow['Product Description'] || selectedRow['Description'] || '',
-          contentTopic: selectedRow['Content_Topic'] || '',
-          postTitleHeadline: selectedRow['Post_Title_Headline'] || '',
-          contentDescription: selectedRow['Content_Description'] || '',
+          productName: 'Custom Prompt Job',
+          productDescription: customPrompt.trim(),
           referenceImageUrls: selectedImageUrls,
           customPrompt: customPrompt.trim(),
           templateType: 'custom',
@@ -287,8 +240,6 @@ export default function CustomPromptPage() {
     return null
   }
 
-  const selectedRow = sheetData[selectedRowIndex] || {}
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50 p-8">
       <div className="max-w-7xl mx-auto">
@@ -340,81 +291,7 @@ export default function CustomPromptPage() {
 
           {/* Form */}
           <div className="space-y-6">
-            {/* Debug Info */}
-            {process.env.NODE_ENV === 'development' && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded p-2 text-xs">
-                <p>User: {currentUser?.email || 'Not logged in'}</p>
-                <p>Sheets: {spreadsheets.length} | Drives: {driveFolders.length}</p>
-              </div>
-            )}
-            
-            {/* 1. Select Sheet */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                เลือกชีท Google
-              </label>
-              <select
-                value={selectedSheetId}
-                onChange={(e) => handleSheetSelect(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg p-2 text-gray-900"
-              >
-                <option value="">-- เลือกชีท --</option>
-                {spreadsheets.map((sheet) => (
-                  <option key={sheet.id} value={sheet.id}>{sheet.name}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Load Sheet Data Button */}
-            {selectedSheetId && (
-              <button
-                type="button"
-                onClick={loadSheetData}
-                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-              >
-                โหลดข้อมูลสินค้าจากชีท
-              </button>
-            )}
-
-            {/* Sheet Data Preview */}
-            {sheetData.length > 0 && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  1️⃣ เลือกข้อมูลจาก Google Sheet
-                </label>
-                <select
-                  value={selectedRowIndex}
-                  onChange={(e) => setSelectedRowIndex(Number(e.target.value))}
-                  className="w-full border border-gray-300 rounded-lg p-2 text-gray-900"
-                >
-                  {sheetData.map((row, index) => (
-                    <option key={index} value={index}>
-                      {row['Product Name'] || `Row ${index + 1}`}
-                      {row['Content_Topic'] && ` | ${row['Content_Topic']}`}
-                    </option>
-                  ))}
-                </select>
-
-                {/* Show Selected Row Details */}
-                {selectedRow && Object.keys(selectedRow).length > 0 && (
-                  <div className="mt-3 bg-gradient-to-br from-purple-50 to-blue-50 p-4 rounded-lg border-2 border-purple-200">
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      {Object.entries(selectedRow).map(([key, value]) => {
-                        if (!value) return null
-                        return (
-                          <div key={key}>
-                            <span className="text-gray-600 font-medium">{key}:</span>
-                            <div className="text-gray-900">{value as string}</div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* 2. Google Drive Images */}
+            {/* 1. Google Drive Images */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 รูปอ้างอิงจาก Google Drive
