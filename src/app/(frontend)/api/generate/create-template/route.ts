@@ -2,62 +2,11 @@ import { NextResponse } from 'next/server'
 import { analyzeTemplateWithAI } from '@/utilities/aiVisionTemplate'
 import { downloadImageFromUrl, compositeImages } from '@/utilities/templateHelpers'
 import sharp from 'sharp'
-import { google } from 'googleapis'
-
-const SCOPES = ['https://www.googleapis.com/auth/drive']
-
-function getGoogleAuth() {
-  const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT || '{}')
-  return new google.auth.GoogleAuth({
-    credentials,
-    scopes: SCOPES,
-  })
-}
-
-async function uploadToGoogleDrive(
-  imageBuffer: Buffer,
-  fileName: string,
-  folderId?: string,
-): Promise<string> {
-  const auth = getGoogleAuth()
-  const drive = google.drive({ version: 'v3', auth })
-
-  const fileMetadata: any = {
-    name: fileName,
-    mimeType: 'image/png',
-  }
-
-  if (folderId) {
-    fileMetadata.parents = [folderId]
-  }
-
-  const media = {
-    mimeType: 'image/png',
-    body: require('stream').Readable.from(imageBuffer),
-  }
-
-  const file = await drive.files.create({
-    requestBody: fileMetadata,
-    media: media,
-    fields: 'id, webViewLink, webContentLink',
-  })
-
-  // Make file publicly accessible
-  await drive.permissions.create({
-    fileId: file.data.id!,
-    requestBody: {
-      role: 'reader',
-      type: 'anyone',
-    },
-  })
-
-  return `https://drive.google.com/uc?export=view&id=${file.data.id}`
-}
 
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { enhancedImageUrls, templateUrl, outputFolderId } = body
+    const { enhancedImageUrls, templateUrl } = body
 
     if (!enhancedImageUrls || !Array.isArray(enhancedImageUrls) || enhancedImageUrls.length === 0) {
       return NextResponse.json(
@@ -120,27 +69,21 @@ export async function POST(request: Request) {
     console.log('🎭 Step 4: Compositing images onto template...')
     const finalImageBuffer = await compositeImages(templateBuffer, imagesToComposite)
 
-    // Step 5: Upload to Google Drive
-    console.log('☁️ Step 5: Uploading to Google Drive...')
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-    const fileName = `template-${timestamp}.png`
-    
-    const uploadedUrl = await uploadToGoogleDrive(
-      finalImageBuffer,
-      fileName,
-      outputFolderId,
-    )
+    // Step 5: Convert to base64 for frontend display
+    console.log('📦 Step 5: Converting to base64...')
+    const base64Image = finalImageBuffer.toString('base64')
+    const dataUrl = `data:image/png;base64,${base64Image}`
 
-    console.log(`✅ Template generation complete: ${uploadedUrl}`)
+    console.log(`✅ Template generation complete (${(base64Image.length / 1024).toFixed(2)} KB)`)
 
     return NextResponse.json({
       success: true,
-      templateUrl: uploadedUrl,
+      templateUrl: dataUrl,
       metadata: {
         totalImages: enhancedImageUrls.length,
         positionsUsed: imagesToComposite.length,
         templateSize: analyzedTemplate.templateSize,
-        fileName,
+        sizeKB: Math.round(base64Image.length / 1024),
       },
     })
 

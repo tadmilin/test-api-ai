@@ -39,6 +39,7 @@ interface Job {
     email: string
   }
   generatedPrompt?: string
+  templateUrl?: string
   generatedImages?: {
     facebook?: { url: string; width: number; height: number }
     instagram_feed?: { url: string; width: number; height: number }
@@ -1827,9 +1828,60 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
+                {/* Show Template Result if available */}
+                {viewingJob.templateUrl && (
+                  <div className="mt-8 pt-8 border-t-4 border-blue-200">
+                    <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                      🎨 <span>Template ที่สร้างเสร็จแล้ว</span>
+                    </h3>
+                    <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-6 border-2 border-blue-300">
+                      <div className="max-w-3xl mx-auto">
+                        <div className="bg-white rounded-lg shadow-xl overflow-hidden border-2 border-gray-200">
+                          <img
+                            src={viewingJob.templateUrl}
+                            alt="Generated Template"
+                            className="w-full h-auto"
+                          />
+                        </div>
+                        <div className="flex gap-3 mt-4 justify-center">
+                          <a
+                            href={viewingJob.templateUrl}
+                            download={`template-${viewingJob.id}.png`}
+                            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            ดาวน์โหลด Template
+                          </a>
+                          <button
+                            onClick={() => {
+                              const link = document.createElement('a')
+                              link.href = viewingJob.templateUrl!
+                              link.download = `template-${viewingJob.id}.png`
+                              link.click()
+                            }}
+                            className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                            </svg>
+                            แชร์
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Show Enhanced Images if available */}
                 {viewingJob.enhancedImageUrls && viewingJob.enhancedImageUrls.length > 0 ? (
-                  <div>
+                  <div className={viewingJob.templateUrl ? "mt-8 pt-8 border-t-2 border-gray-200" : ""}>
+                    {viewingJob.templateUrl && (
+                      <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        🖼️ <span>รูปที่ปรับปรุงแล้ว (ใช้สร้าง Template)</span>
+                      </h3>
+                    )}
                     {/* Image loading status */}
                     {Object.keys(imageLoadErrors).filter(k => k.startsWith(`modal-${viewingJob.id}`)).length > 0 && (
                       <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">

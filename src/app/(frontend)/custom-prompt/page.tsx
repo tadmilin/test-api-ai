@@ -276,7 +276,16 @@ export default function CustomPromptPage() {
         }
 
         const templateData = await templateRes.json()
-        console.log('✅ Template generated:', templateData.templateUrl)
+        console.log('✅ Template generated:', templateData.templateUrl?.substring(0, 100))
+        
+        // Save template URL to job
+        await fetch(`/api/jobs/${jobId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            templateUrl: templateData.templateUrl,
+          }),
+        })
         
         setProcessingStatus('🎉 Template สำเร็จ! กำลังเปลี่ยนหน้า...')
       } else {

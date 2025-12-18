@@ -205,6 +205,14 @@ export const Jobs: CollectionConfig = {
               },
             },
             {
+              name: 'templateUrl',
+              type: 'text',
+              label: 'Generated Template URL',
+              admin: {
+                description: 'Base64 data URL or blob URL of the generated template composite',
+              },
+            },
+            {
               name: 'enhancedImageUrls',
               type: 'array',
               label: 'Enhanced Images',

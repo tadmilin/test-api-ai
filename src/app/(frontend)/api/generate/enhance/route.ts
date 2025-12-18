@@ -13,9 +13,6 @@ function roundTo64(value: number): number {
   return Math.floor(value / 64) * 64
 }
 
-// Helper: Sleep utility for retries
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-
 // ✅ Force Node.js runtime (required for googleapis, sharp, Buffer, @vercel/blob)
 export const runtime = 'nodejs'
 
@@ -361,11 +358,11 @@ export async function GET(request: NextRequest) {
           
           // ⚠️ Check webhook status
           const pendingImage = job.enhancedImageUrls?.find(
-            (img: any) => img.predictionId === predictionId
-          )
+            (img: unknown) => (img as { predictionId?: string }).predictionId === predictionId
+          ) as { webhookFailed?: boolean; tempOutputUrl?: string } | undefined
           
           // If webhook is uploading (no webhookFailed flag) → tell client to wait
-          if (pendingImage && !(pendingImage as any).webhookFailed && (pendingImage as any).tempOutputUrl) {
+          if (pendingImage && !pendingImage.webhookFailed && pendingImage.tempOutputUrl) {
             console.log('⏳ Webhook is uploading, client should wait...')
             return NextResponse.json({
               success: true,
@@ -376,7 +373,7 @@ export async function GET(request: NextRequest) {
           }
           
           console.log('❌ Cache MISS - proceeding with upload...')
-          console.log('   Webhook failed flag:', (pendingImage as any)?.webhookFailed || false)
+          console.log('   Webhook failed flag:', pendingImage?.webhookFailed || false)
         } catch (cacheError) {
           console.log('⚠️ Cache check failed, proceeding with download...', cacheError)
         }
