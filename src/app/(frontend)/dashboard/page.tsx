@@ -350,6 +350,59 @@ export default function DashboardPage() {
         
         if (statusData.allComplete) {
           console.log(`✅ All images complete for job ${jobId}`)
+          
+          // ✅ Check if template generation is pending (from custom-prompt)
+          const pendingTemplateUrl = localStorage.getItem('pendingTemplateUrl')
+          const pendingTemplateJobId = localStorage.getItem('pendingTemplateJobId')
+          
+          if (pendingTemplateUrl && pendingTemplateJobId === jobId) {
+            console.log('🎨 Starting template generation...')
+            setProcessingStatus('🎨 กำลังสร้าง Template...')
+            
+            try {
+              // Get enhanced image URLs
+              const enhancedImageUrls = statusData.images
+                .filter((img: any) => img.status === 'completed' && img.url)
+                .map((img: any) => img.url)
+              
+              // Generate template
+              const templateRes = await fetch('/api/generate/create-template', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  enhancedImageUrls,
+                  templateUrl: pendingTemplateUrl,
+                }),
+              })
+              
+              if (templateRes.ok) {
+                const templateData = await templateRes.json()
+                
+                // Save template URL to job
+                await fetch(`/api/jobs/${jobId}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    templateUrl: templateData.resultImageUrl || templateData.templateUrl,
+                  }),
+                })
+                
+                console.log('✅ Template generated successfully')
+                setProcessingStatus('✅ Template สำเร็จ!')
+              } else {
+                const errorData = await templateRes.json().catch(() => ({ error: 'Unknown error' }))
+                console.error('❌ Template generation failed:', errorData.error)
+                setProcessingStatus(`❌ Template ล้มเหลว: ${errorData.error}`)
+              }
+            } catch (error) {
+              console.error('❌ Template error:', error)
+            } finally {
+              // Clear pending template info
+              localStorage.removeItem('pendingTemplateUrl')
+              localStorage.removeItem('pendingTemplateJobId')
+            }
+          }
+          
           setProcessingStatus('')
           setProcessingJobId(null)
           fetchDashboardData()

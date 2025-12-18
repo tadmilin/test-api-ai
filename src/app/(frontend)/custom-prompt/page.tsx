@@ -243,81 +243,13 @@ export default function CustomPromptPage() {
         throw new Error(errorMsg)
       }
 
-      // If template is enabled, generate template composite
+      // ✅ Redirect to dashboard immediately (let dashboard handle polling & template)
+      setProcessingStatus('✅ เริ่มประมวลผลสำเร็จ! กำลังเปลี่ยนหน้า...')
+      
+      // Store template info in localStorage for dashboard to pick up
       if (enableTemplate && selectedTemplate) {
-        setProcessingStatus('✅ รูปสำเร็จ! กำลังรอรูปอัปโหลดเสร็จ...')
-        
-        // Poll until all enhanced images have URLs (max 30s)
-        let enhancedImageUrls: string[] = []
-        const maxAttempts = 30 // 30 seconds
-        let attempts = 0
-        
-        while (attempts < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1s between checks
-          
-          const jobStatusRes = await fetch(`/api/jobs/${jobId}/status`)
-          if (!jobStatusRes.ok) {
-            throw new Error('Failed to fetch job status')
-          }
-          const jobStatusData = await jobStatusRes.json()
-          
-          // Get URLs from completed images
-          enhancedImageUrls = (jobStatusData.images || [])
-            .filter((img: any) => img.status === 'completed' && img.url)
-            .map((img: any) => img.url)
-          
-          console.log(`🔄 Polling attempt ${attempts + 1}/${maxAttempts}: ${enhancedImageUrls.length} images ready`)
-          
-          // Check if all images are ready (match original count)
-          const totalImages = jobStatusData.progress?.total || jobStatusData.images?.length || 0
-          const completedImages = enhancedImageUrls.length
-          
-          if (completedImages > 0 && completedImages === totalImages) {
-            console.log('✅ All images ready!')
-            break
-          }
-          
-          attempts++
-        }
-        
-        if (enhancedImageUrls.length === 0) {
-          throw new Error('No enhanced images found after waiting. Please try again.')
-        }
-
-        setProcessingStatus(`✅ รูปพร้อม! กำลังสร้าง Template (${enhancedImageUrls.length} รูป)...`)
-
-        // Generate template
-        const templateRes = await fetch('/api/generate/create-template', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            enhancedImageUrls,
-            templateUrl: selectedTemplate,
-          }),
-        })
-
-        if (!templateRes.ok) {
-          const errorData = await templateRes.json().catch(() => ({ error: 'Unknown error' }))
-          throw new Error(errorData.error || 'Template generation failed')
-        }
-
-        const templateData = await templateRes.json()
-        console.log('✅ Template generated:', templateData.resultImageUrl?.substring(0, 100))
-        
-        // Save template URL to job (use resultImageUrl with fallback to templateUrl)
-        const finalTemplateUrl = templateData.resultImageUrl || templateData.templateUrl
-        
-        await fetch(`/api/jobs/${jobId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            templateUrl: finalTemplateUrl,
-          }),
-        })
-        
-        setProcessingStatus('🎉 Template สำเร็จ! กำลังเปลี่ยนหน้า...')
-      } else {
-        setProcessingStatus('✅ เริ่มประมวลผลสำเร็จ! กำลังเปลี่ยนหน้า...')
+        localStorage.setItem('pendingTemplateUrl', selectedTemplate)
+        localStorage.setItem('pendingTemplateJobId', jobId)
       }
       
       // Set flag and jobId for dashboard to auto-resume
