@@ -221,7 +221,7 @@ export async function POST(request: NextRequest) {
     console.log('🎯 Creating prediction...')
     
     const nanoBananaPrediction = await replicate.predictions.create({
-      model: 'google/nano-banana',
+      model: 'google/nano-banana-pro',
       input: {
         image_input: [processedImageUrl],
         prompt: prompt,
