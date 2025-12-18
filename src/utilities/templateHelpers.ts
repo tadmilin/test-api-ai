@@ -12,18 +12,65 @@ export interface ImagePosition {
   height: number
 }
 
+export interface DownloadOptions {
+  timeoutMs?: number
+  maxBytes?: number
+}
+
+export interface CompositeOptions {
+  format?: 'png' | 'jpeg'
+  quality?: number
+}
+
 /**
- * Download image from URL and return as Buffer
+ * Download image from URL with timeout and size limits
+ * Includes basic SSRF protection
  */
-export async function downloadImageFromUrl(url: string): Promise<Buffer> {
+export async function downloadImageFromUrl(
+  url: string,
+  options: DownloadOptions = {}
+): Promise<Buffer> {
+  const { timeoutMs = 15000, maxBytes = 10 * 1024 * 1024 } = options // 15s, 10MB
+
   try {
-    const response = await fetch(url)
-    if (!response.ok) {
-      throw new Error(`Failed to download image: ${response.statusText}`)
+    // Basic URL validation
+    const parsedUrl = new URL(url)
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      throw new Error('Only http/https URLs are allowed')
     }
-    const arrayBuffer = await response.arrayBuffer()
-    return Buffer.from(arrayBuffer)
+
+    // Setup timeout
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), timeoutMs)
+
+    try {
+      const response = await fetch(url, { signal: controller.signal })
+      
+      if (!response.ok) {
+        throw new Error(`Failed to download image: ${response.status} ${response.statusText}`)
+      }
+
+      // Check content-length header
+      const contentLength = response.headers.get('content-length')
+      if (contentLength && Number(contentLength) > maxBytes) {
+        throw new Error(`Image too large: ${contentLength} bytes (max ${maxBytes})`)
+      }
+
+      const arrayBuffer = await response.arrayBuffer()
+      
+      // Double-check actual size
+      if (arrayBuffer.byteLength > maxBytes) {
+        throw new Error(`Image too large: ${arrayBuffer.byteLength} bytes (max ${maxBytes})`)
+      }
+
+      return Buffer.from(arrayBuffer)
+    } finally {
+      clearTimeout(timeout)
+    }
   } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Download timeout after ${timeoutMs}ms`)
+    }
     console.error('Error downloading image:', error)
     throw error
   }
@@ -51,22 +98,32 @@ export async function resizeImageToFit(
 
 /**
  * Composite multiple images onto a base template
+ * Includes position clamping and format options
  */
 export async function compositeImages(
   templateBuffer: Buffer,
-  images: { buffer: Buffer; position: ImagePosition }[]
+  images: { buffer: Buffer; position: ImagePosition }[],
+  options: CompositeOptions = {}
 ): Promise<Buffer> {
+  const { format = 'png', quality = 90 } = options
+
   try {
+    // Normalize and clamp positions (ensure integers >= 0)
     const compositeInputs = images.map(({ buffer, position }) => ({
       input: buffer,
-      top: position.y,
-      left: position.x,
+      left: Math.max(0, Math.round(position.x)),
+      top: Math.max(0, Math.round(position.y)),
     }))
 
-    return await sharp(templateBuffer)
-      .composite(compositeInputs)
-      .jpeg({ quality: 90 })
-      .toBuffer()
+    const sharpInstance = sharp(templateBuffer).composite(compositeInputs)
+
+    // Output in correct format
+    if (format === 'jpeg') {
+      return await sharpInstance.jpeg({ quality }).toBuffer()
+    }
+    
+    // PNG (preserves transparency, better for templates with overlays)
+    return await sharpInstance.png({ compressionLevel: 6 }).toBuffer()
   } catch (error) {
     console.error('Error compositing images:', error)
     throw error
@@ -78,8 +135,9 @@ export async function compositeImages(
  */
 export async function downloadAndResize(
   url: string,
-  position: ImagePosition
+  position: ImagePosition,
+  downloadOptions?: DownloadOptions
 ): Promise<Buffer> {
-  const imageBuffer = await downloadImageFromUrl(url)
+  const imageBuffer = await downloadImageFromUrl(url, downloadOptions)
   return await resizeImageToFit(imageBuffer, position)
 }

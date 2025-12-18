@@ -250,10 +250,15 @@ export default function CustomPromptPage() {
         // Wait a bit for images to be fully enhanced
         await new Promise(resolve => setTimeout(resolve, 2000))
         
-        // Get enhanced image URLs from job
-        const jobStatusRes = await fetch(`/api/jobs/${jobId}`)
+        // Get enhanced image URLs from job status endpoint
+        const jobStatusRes = await fetch(`/api/jobs/${jobId}/status`)
+        if (!jobStatusRes.ok) {
+          throw new Error('Failed to fetch job status')
+        }
         const jobStatusData = await jobStatusRes.json()
-        const enhancedImageUrls = (jobStatusData.enhancedImageUrls || []).map((img: any) => img.url)
+        const enhancedImageUrls = (jobStatusData.job?.enhancedImageUrls || [])
+          .map((img: any) => img.url)
+          .filter((url: string) => url) // Filter out empty URLs
         
         if (enhancedImageUrls.length === 0) {
           throw new Error('No enhanced images found')
@@ -266,7 +271,6 @@ export default function CustomPromptPage() {
           body: JSON.stringify({
             enhancedImageUrls,
             templateUrl: selectedTemplate,
-            outputFolderId: selectedFolderId, // Save to same folder as source images
           }),
         })
 
@@ -276,14 +280,16 @@ export default function CustomPromptPage() {
         }
 
         const templateData = await templateRes.json()
-        console.log('✅ Template generated:', templateData.templateUrl?.substring(0, 100))
+        console.log('✅ Template generated:', templateData.resultImageUrl?.substring(0, 100))
         
-        // Save template URL to job
+        // Save template URL to job (use resultImageUrl with fallback to templateUrl)
+        const finalTemplateUrl = templateData.resultImageUrl || templateData.templateUrl
+        
         await fetch(`/api/jobs/${jobId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            templateUrl: templateData.templateUrl,
+            templateUrl: finalTemplateUrl,
           }),
         })
         

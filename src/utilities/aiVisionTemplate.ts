@@ -1,6 +1,6 @@
 /**
  * AI Vision Template Analyzer
- * Use GPT-4 Vision to detect photo positions in template images
+ * Use GPT-4o mini with structured outputs to detect photo positions
  */
 
 import OpenAI from 'openai'
@@ -17,51 +17,89 @@ export interface AnalyzedTemplate {
 }
 
 /**
- * Analyze template image using GPT-4 Vision
+ * Analyze template image using GPT-4o mini with structured outputs
  * Detects photo positions even if template already contains sample images
+ * 
+ * @param templateUrl - URL of template image
+ * @param actualSize - Actual template size from Sharp metadata (for scaling)
  */
 export async function analyzeTemplateWithAI(
-  templateUrl: string
+  templateUrl: string,
+  actualSize?: { width: number; height: number }
 ): Promise<AnalyzedTemplate> {
   try {
-    console.log('🤖 Analyzing template with AI Vision...')
+    console.log('🤖 Analyzing template with AI Vision (GPT-4o mini)...')
+    if (actualSize) {
+      console.log(`   Actual size: ${actualSize.width}x${actualSize.height}`)
+    }
+
+    // Define JSON schema for structured outputs (prevents parse errors)
+    const responseSchema = {
+      type: 'object',
+      properties: {
+        positions: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              x: { type: 'number', description: 'Left position in pixels' },
+              y: { type: 'number', description: 'Top position in pixels' },
+              width: { type: 'number', description: 'Width in pixels' },
+              height: { type: 'number', description: 'Height in pixels' },
+            },
+            required: ['x', 'y', 'width', 'height'],
+            additionalProperties: false,
+          },
+        },
+        totalPhotos: { type: 'number' },
+        templateSize: {
+          type: 'object',
+          properties: {
+            width: { type: 'number' },
+            height: { type: 'number' },
+          },
+          required: ['width', 'height'],
+          additionalProperties: false,
+        },
+      },
+      required: ['positions', 'totalPhotos', 'templateSize'],
+      additionalProperties: false,
+    }
+
+    const prompt = `Analyze this social media template. Find ALL rectangular photo/image placeholder areas.
+
+Rules:
+- Detect ONLY photo areas (ignore text, logos, backgrounds)
+- Order: largest area first (hero), then others
+- Exact pixel coordinates (x, y, width, height)
+- Estimate template dimensions
+
+Return valid JSON matching the schema.`
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4-vision-preview',
+      model: 'gpt-4o-mini', // Modern, stable, cheaper than vision-preview
       messages: [
         {
           role: 'user',
           content: [
-            {
-              type: 'text',
-              text: `Analyze this social media template image. Find ALL photo/image positions (even if they already contain sample photos).
-              
-I need exact coordinates for each photo area so I can replace them with new images.
-
-Return ONLY valid JSON (no markdown, no explanation) in this format:
-{
-  "positions": [
-    { "x": 100, "y": 50, "width": 650, "height": 540 },
-    { "x": 750, "y": 50, "width": 430, "height": 540 }
-  ],
-  "totalPhotos": 3,
-  "templateSize": { "width": 1080, "height": 1080 }
-}
-
-Rules:
-- x, y are top-left coordinates in pixels
-- Detect ALL rectangular photo areas (ignore text, logos, backgrounds)
-- Order positions: main/hero photo first, then smaller ones
-- Measure carefully - exact pixel values are critical`,
-            },
+            { type: 'text', text: prompt },
             {
               type: 'image_url',
-              image_url: { url: templateUrl },
+              image_url: { url: templateUrl, detail: 'high' },
             },
           ],
         },
       ],
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'template_analysis',
+          strict: true,
+          schema: responseSchema,
+        },
+      },
       max_tokens: 1000,
+      temperature: 0.1, // Low temp for consistency
     })
 
     const content = response.choices[0]?.message?.content
@@ -69,17 +107,80 @@ Rules:
       throw new Error('No response from AI Vision')
     }
 
-    // Parse JSON response
-    const result = JSON.parse(content) as AnalyzedTemplate
+    // Safe JSON parse (schema guarantees valid JSON)
+    let parsed: AnalyzedTemplate
+    try {
+      parsed = JSON.parse(content) as AnalyzedTemplate
+    } catch (parseError) {
+      console.error('❌ JSON parse failed:', parseError)
+      console.error('   Response:', content)
+      throw new Error('Invalid JSON from AI Vision')
+    }
 
-    console.log(`✅ AI Vision detected ${result.totalPhotos} photo positions`)
-    console.log('Positions:', result.positions)
+    // Validate
+    if (!parsed.positions || !Array.isArray(parsed.positions) || parsed.positions.length === 0) {
+      throw new Error('No photo positions detected')
+    }
 
-    return result
+    // Scale positions if actual size differs from AI estimate
+    if (actualSize && parsed.templateSize) {
+      const scaleX = actualSize.width / parsed.templateSize.width
+      const scaleY = actualSize.height / parsed.templateSize.height
+      
+      // Scale if difference > 5%
+      if (Math.abs(scaleX - 1) > 0.05 || Math.abs(scaleY - 1) > 0.05) {
+        console.log(`   📐 Scaling positions: ${scaleX.toFixed(2)}x, ${scaleY.toFixed(2)}y`)
+        parsed.positions = parsed.positions.map(pos => ({
+          x: Math.round(pos.x * scaleX),
+          y: Math.round(pos.y * scaleY),
+          width: Math.round(pos.width * scaleX),
+          height: Math.round(pos.height * scaleY),
+        }))
+        parsed.templateSize = actualSize
+      }
+    }
+
+    console.log(`✅ Detected ${parsed.positions.length} positions`)
+    return parsed
+
   } catch (error) {
-    console.error('❌ AI Vision analysis failed:', error)
+    console.error('❌ AI Vision failed:', error)
+    
+    // Retry once with simplified prompt
+    try {
+      console.log('🔄 Retrying with fallback...')
+      
+      const retryResponse = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'Find photo areas. Return JSON: {"positions":[{"x":0,"y":0,"width":100,"height":100}],"totalPhotos":1,"templateSize":{"width":800,"height":800}}' },
+              {
+                type: 'image_url',
+                image_url: { url: templateUrl, detail: 'low' },
+              },
+            ],
+          },
+        ],
+        max_tokens: 500,
+        temperature: 0,
+      })
+
+      const retryContent = retryResponse.choices[0]?.message?.content
+      if (retryContent) {
+        const retryParsed = JSON.parse(retryContent) as AnalyzedTemplate
+        if (actualSize) retryParsed.templateSize = actualSize
+        console.log('✅ Retry successful')
+        return retryParsed
+      }
+    } catch (retryError) {
+      console.error('❌ Retry failed:', retryError)
+    }
+
     throw new Error(
-      `Failed to analyze template: ${error instanceof Error ? error.message : 'Unknown error'}`
+      `AI Vision failed: ${error instanceof Error ? error.message : 'Unknown error'}`
     )
   }
 }
