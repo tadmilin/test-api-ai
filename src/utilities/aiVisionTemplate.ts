@@ -5,6 +5,7 @@
 
 import OpenAI from 'openai'
 import type { ImagePosition } from './templateHelpers'
+import { downloadDriveFile, extractDriveFileId } from './downloadDriveFile'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -31,6 +32,21 @@ export async function analyzeTemplateWithAI(
     console.log('🤖 Analyzing template with AI Vision (GPT-4o mini)...')
     if (actualSize) {
       console.log(`   Actual size: ${actualSize.width}x${actualSize.height}`)
+    }
+
+    // ✅ Convert Google Drive URLs to base64 (OpenAI Vision can't access private Drive files)
+    let imageUrlForAI = templateUrl
+    const driveFileId = extractDriveFileId(templateUrl)
+    
+    if (driveFileId) {
+      console.log(`   📂 Downloading Drive file for AI Vision: ${driveFileId}`)
+      const buffer = await downloadDriveFile(driveFileId)
+      
+      // Convert to base64 data URL
+      const base64 = buffer.toString('base64')
+      const mimeType = 'image/png' // Assume PNG, or detect with sharp if needed
+      imageUrlForAI = `data:${mimeType};base64,${base64}`
+      console.log(`   ✅ Converted to base64 (${Math.round(base64.length / 1024)}KB)`)
     }
 
     // Define JSON schema for structured outputs (prevents parse errors)
@@ -85,7 +101,7 @@ Return valid JSON matching the schema.`
             { type: 'text', text: prompt },
             {
               type: 'image_url',
-              image_url: { url: templateUrl, detail: 'high' },
+              image_url: { url: imageUrlForAI, detail: 'high' }, // Use base64 for Drive files
             },
           ],
         },
