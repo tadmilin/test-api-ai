@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
                   ...img, // Keep ALL existing fields (photoType, contentTopic, etc.)
                   url: blobUrl, // Blob URL (ถาวร)
                   originalUrl: data.originalUrl || img.originalUrl, // Keep Replicate URL as backup
-                  status: 'pending' as const, // Ready for review
+                  status: 'completed' as const, // ✅ Set to completed so template generation can find it
                 }
               }
               
