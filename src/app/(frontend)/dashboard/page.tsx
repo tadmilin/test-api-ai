@@ -327,6 +327,14 @@ export default function DashboardPage() {
         const progress = `${statusData.completed}/${statusData.total}`
         setProcessingStatus(`⏳ ประมวลผลแล้ว ${progress} รูป`)
         
+        // ✅ DEBUG: Log status before all checks
+        console.log(`📊 Poll status:`, {
+          allComplete: statusData.allComplete,
+          jobStatus: statusData.jobStatus,
+          completed: statusData.completed,
+          total: statusData.total,
+        })
+        
         // Check job status first - if completed/failed, stop polling
         if (statusData.jobStatus === 'completed' || statusData.jobStatus === 'failed') {
           console.log(`🛑 Job ${jobId} status: ${statusData.jobStatus} - stopping poll`)
@@ -354,6 +362,13 @@ export default function DashboardPage() {
           // ✅ Check if template generation is pending (from custom-prompt)
           const pendingTemplateUrl = localStorage.getItem('pendingTemplateUrl')
           const pendingTemplateJobId = localStorage.getItem('pendingTemplateJobId')
+          
+          console.log('🔍 Template check:', {
+            hasPendingUrl: !!pendingTemplateUrl,
+            pendingTemplateJobId,
+            currentJobId: jobId,
+            match: pendingTemplateJobId === jobId,
+          })
           
           if (pendingTemplateUrl && pendingTemplateJobId === jobId) {
             console.log('🎨 Starting template generation...')
