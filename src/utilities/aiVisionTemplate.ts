@@ -58,21 +58,21 @@ export async function analyzeTemplateWithAI(
           items: {
             type: 'object',
             properties: {
-              x: { type: 'number', description: 'Left position in pixels' },
-              y: { type: 'number', description: 'Top position in pixels' },
-              width: { type: 'number', description: 'Width in pixels' },
-              height: { type: 'number', description: 'Height in pixels' },
+              x: { type: 'integer', description: 'Left position in pixels' },
+              y: { type: 'integer', description: 'Top position in pixels' },
+              width: { type: 'integer', description: 'Width in pixels' },
+              height: { type: 'integer', description: 'Height in pixels' },
             },
             required: ['x', 'y', 'width', 'height'],
             additionalProperties: false,
           },
         },
-        totalPhotos: { type: 'number' },
+        totalPhotos: { type: 'integer' },
         templateSize: {
           type: 'object',
           properties: {
-            width: { type: 'number' },
-            height: { type: 'number' },
+            width: { type: 'integer' },
+            height: { type: 'integer' },
           },
           required: ['width', 'height'],
           additionalProperties: false,
@@ -82,15 +82,41 @@ export async function analyzeTemplateWithAI(
       additionalProperties: false,
     }
 
-    const prompt = `Analyze this social media template. Find ALL rectangular photo/image placeholder areas.
+    const prompt = `You are analyzing a social media DESIGN TEMPLATE image.
+Your task: detect ALL regions where a photo can be replaced (photo placeholders / photo frames).
 
-Rules:
-- Detect ONLY photo areas (ignore text, logos, backgrounds)
-- Order: largest area first (hero), then others
-- Exact pixel coordinates (x, y, width, height)
-- Estimate template dimensions
+Return ONLY JSON that matches the provided schema.
 
-Return valid JSON matching the schema.`
+Definitions:
+- "Photo placeholder" = an area that is intended to contain a replaceable photo.
+  It can be empty (solid gray/white), or already filled with a sample photo.
+  It may have a border, rounded corners, shadow, or paper frame.
+- We need the RECTANGLE where the new photo should be placed.
+  If there is a frame/border/shadow, return the INNER photo area (the area covered by the photo),
+  NOT the outer frame/shadow.
+
+Instructions (must follow strictly):
+1) Identify every replaceable photo area on the template.
+2) For each area, return a bounding box {x,y,width,height} in PIXELS relative to the full image.
+3) Use integer pixel values (round to nearest integer).
+4) Ignore text blocks, logos, icons, buttons, background decorations, and non-photo shapes.
+5) If a photo area is rotated or skewed, return the best axis-aligned bounding box that covers the INNER photo area.
+6) If there are overlapping photo frames, treat them as separate placeholders only if both are clearly intended for photos.
+
+Quality checks (before you answer):
+- Do NOT invent boxes. If unsure, do not include it.
+- Each box must tightly fit the photo area (inner area) with minimal extra margin.
+- Avoid returning boxes that include large amounts of text or background.
+- Ensure all boxes are within the image bounds.
+
+Ordering:
+- Sort positions by area (width*height) descending: hero first, then smaller ones.
+
+Template size:
+- Set templateSize.width and templateSize.height to the exact pixel dimensions of the input image.
+
+Output constraints:
+- Return JSON only. No markdown. No explanation.`
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini', // Modern, stable, cheaper than vision-preview
@@ -115,7 +141,7 @@ Return valid JSON matching the schema.`
         },
       },
       max_tokens: 1000,
-      temperature: 0.1, // Low temp for consistency
+      temperature: 0, // Zero temp for maximum consistency
     })
 
     const content = response.choices[0]?.message?.content
