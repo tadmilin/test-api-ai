@@ -245,24 +245,46 @@ export default function CustomPromptPage() {
 
       // If template is enabled, generate template composite
       if (enableTemplate && selectedTemplate) {
-        setProcessingStatus('✅ รูปสำเร็จ! กำลังสร้าง Template...')
+        setProcessingStatus('✅ รูปสำเร็จ! กำลังรอรูปอัปโหลดเสร็จ...')
         
-        // Wait a bit for images to be fully enhanced
-        await new Promise(resolve => setTimeout(resolve, 2000))
+        // Poll until all enhanced images have URLs (max 30s)
+        let enhancedImageUrls: string[] = []
+        const maxAttempts = 30 // 30 seconds
+        let attempts = 0
         
-        // Get enhanced image URLs from job status endpoint
-        const jobStatusRes = await fetch(`/api/jobs/${jobId}/status`)
-        if (!jobStatusRes.ok) {
-          throw new Error('Failed to fetch job status')
+        while (attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1s between checks
+          
+          const jobStatusRes = await fetch(`/api/jobs/${jobId}/status`)
+          if (!jobStatusRes.ok) {
+            throw new Error('Failed to fetch job status')
+          }
+          const jobStatusData = await jobStatusRes.json()
+          
+          // Get URLs from completed images
+          enhancedImageUrls = (jobStatusData.job?.enhancedImageUrls || [])
+            .filter((img: any) => img.status === 'completed' && img.url)
+            .map((img: any) => img.url)
+          
+          console.log(`🔄 Polling attempt ${attempts + 1}/${maxAttempts}: ${enhancedImageUrls.length} images ready`)
+          
+          // Check if all images are ready (match original count)
+          const totalImages = jobStatusData.job?.enhancedImageUrls?.length || 0
+          const completedImages = enhancedImageUrls.length
+          
+          if (completedImages > 0 && completedImages === totalImages) {
+            console.log('✅ All images ready!')
+            break
+          }
+          
+          attempts++
         }
-        const jobStatusData = await jobStatusRes.json()
-        const enhancedImageUrls = (jobStatusData.job?.enhancedImageUrls || [])
-          .map((img: any) => img.url)
-          .filter((url: string) => url) // Filter out empty URLs
         
         if (enhancedImageUrls.length === 0) {
-          throw new Error('No enhanced images found')
+          throw new Error('No enhanced images found after waiting. Please try again.')
         }
+
+        setProcessingStatus(`✅ รูปพร้อม! กำลังสร้าง Template (${enhancedImageUrls.length} รูป)...`)
 
         // Generate template
         const templateRes = await fetch('/api/generate/create-template', {
