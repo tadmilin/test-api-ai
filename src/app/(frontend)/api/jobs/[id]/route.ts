@@ -18,7 +18,27 @@ export async function PATCH(
 ) {
   const { id } = await params
   try {
-    // ✅ Get authenticated user from session
+    const payload = await getPayload({ config })
+    
+    // ✅ Check request body first (for templateUrl updates from backend)
+    const body = await request.json()
+    const { action, imageIndex, reason, templateUrl } = body
+
+    // ✅ Handle templateUrl update (no auth required for backend-to-backend)
+    if (templateUrl !== undefined) {
+      const updatedJob = await payload.update({
+        collection: 'jobs',
+        id,
+        data: { templateUrl } as any, // Type assertion for flexibility
+      })
+
+      return NextResponse.json({
+        success: true,
+        job: updatedJob,
+      })
+    }
+
+    // ✅ Get authenticated user from session (required for approve/reject)
     const cookieStore = await cookies()
     const token = cookieStore.get('payload-token')?.value
     
@@ -28,8 +48,6 @@ export async function PATCH(
         { status: 401 }
       )
     }
-
-    const payload = await getPayload({ config })
 
     // Verify token and get user
     const meUserReq = await fetch(`${request.headers.get('origin') || 'http://localhost:3000'}/api/users/me`, {
@@ -53,9 +71,6 @@ export async function PATCH(
         { status: 401 }
       )
     }
-
-    const body = await request.json()
-    const { action, imageIndex, reason } = body
 
     if (!action || !['approve', 'reject'].includes(action)) {
       return NextResponse.json(

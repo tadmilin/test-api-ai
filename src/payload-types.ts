@@ -810,6 +810,10 @@ export interface Job {
    */
   templateType?: ('single' | 'dual' | 'triple' | 'quad') | null;
   /**
+   * Base64 data URL or blob URL of the generated template composite
+   */
+  templateUrl?: string | null;
+  /**
    * Enhanced images with metadata from Sheet
    */
   enhancedImageUrls?:
@@ -1500,6 +1504,7 @@ export interface JobsSelect<T extends boolean = true> {
         id?: T;
       };
   templateType?: T;
+  templateUrl?: T;
   enhancedImageUrls?:
     | T
     | {
