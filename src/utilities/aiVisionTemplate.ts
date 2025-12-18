@@ -127,6 +127,16 @@ Return valid JSON matching the schema.`
     let parsed: AnalyzedTemplate
     try {
       parsed = JSON.parse(content) as AnalyzedTemplate
+      
+      // ✅ DEBUG: Log AI Vision raw response
+      console.log('🤖 AI Vision Analysis Result:')
+      console.log('   Template size (AI estimate):', parsed.templateSize)
+      console.log('   Total positions detected:', parsed.totalPhotos)
+      console.log('   Positions (raw from AI):')
+      parsed.positions.forEach((pos, i) => {
+        console.log(`     [${i + 1}] x:${pos.x}, y:${pos.y}, w:${pos.width}, h:${pos.height}`)
+      })
+      
     } catch (parseError) {
       console.error('❌ JSON parse failed:', parseError)
       console.error('   Response:', content)
@@ -143,20 +153,32 @@ Return valid JSON matching the schema.`
       const scaleX = actualSize.width / parsed.templateSize.width
       const scaleY = actualSize.height / parsed.templateSize.height
       
+      // ✅ DEBUG: Log scaling info
+      console.log('📐 Scaling Check:')
+      console.log(`   AI estimate: ${parsed.templateSize.width}x${parsed.templateSize.height}`)
+      console.log(`   Actual size: ${actualSize.width}x${actualSize.height}`)
+      console.log(`   Scale factor: ${scaleX.toFixed(3)}x, ${scaleY.toFixed(3)}y`)
+      
       // Scale if difference > 5%
       if (Math.abs(scaleX - 1) > 0.05 || Math.abs(scaleY - 1) > 0.05) {
-        console.log(`   📐 Scaling positions: ${scaleX.toFixed(2)}x, ${scaleY.toFixed(2)}y`)
-        parsed.positions = parsed.positions.map(pos => ({
-          x: Math.round(pos.x * scaleX),
-          y: Math.round(pos.y * scaleY),
-          width: Math.round(pos.width * scaleX),
-          height: Math.round(pos.height * scaleY),
-        }))
+        console.log(`   ✅ Applying scaling (difference > 5%)`)
+        parsed.positions = parsed.positions.map((pos, i) => {
+          const scaled = {
+            x: Math.round(pos.x * scaleX),
+            y: Math.round(pos.y * scaleY),
+            width: Math.round(pos.width * scaleX),
+            height: Math.round(pos.height * scaleY),
+          }
+          console.log(`     [${i + 1}] scaled: x:${scaled.x}, y:${scaled.y}, w:${scaled.width}, h:${scaled.height}`)
+          return scaled
+        })
         parsed.templateSize = actualSize
+      } else {
+        console.log(`   ⏭️ Skip scaling (difference < 5%)`)
       }
     }
-
-    console.log(`✅ Detected ${parsed.positions.length} positions`)
+    
+    console.log('✅ AI Vision analysis complete')
     return parsed
 
   } catch (error) {

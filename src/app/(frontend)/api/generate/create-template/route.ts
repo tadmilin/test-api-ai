@@ -124,8 +124,15 @@ export async function POST(request: Request) {
       const imageUrl = enhancedImageUrls[i]
       const position = analyzedTemplate.positions[i]
       
-      console.log(`  📍 Image ${i + 1}: Downloading from ${imageUrl.substring(0, 60)}...`)
+      console.log(`  📍 Image ${i + 1}:`)
+      console.log(`     Source: ${imageUrl.substring(0, 60)}...`)
+      console.log(`     Target position: x:${position.x}, y:${position.y}, w:${position.width}, h:${position.height}`)
+      
       const imageBuffer = await downloadImageFromUrl(imageUrl)
+      
+      // Get original image size
+      const originalMetadata = await sharp(imageBuffer).metadata()
+      console.log(`     Original size: ${originalMetadata.width}x${originalMetadata.height}`)
       
       // Resize to fit position
       const resizedBuffer = await sharp(imageBuffer)
@@ -135,6 +142,8 @@ export async function POST(request: Request) {
         })
         .toBuffer()
 
+      console.log(`     ✅ Resized to: ${position.width}x${position.height} (fit: cover)`)
+
       imagesToComposite.push({
         buffer: resizedBuffer,
         position: position,
@@ -143,10 +152,18 @@ export async function POST(request: Request) {
 
     // Step 4: Composite images onto template (PNG format to preserve transparency)
     console.log('🎭 Step 4: Compositing images onto template...')
+    console.log(`   Template size: ${actualSize.width}x${actualSize.height}`)
+    console.log(`   Images to composite: ${imagesToComposite.length}`)
+    imagesToComposite.forEach((img, i) => {
+      console.log(`   [${i + 1}] Place at: x:${img.position.x}, y:${img.position.y}`)
+    })
+    
     const finalImageBuffer = await compositeImages(templateBuffer, imagesToComposite, {
       format: 'png', // PNG preserves transparency, overlays, and rounded corners
       quality: 90,   // Not used for PNG, but good for documentation
     })
+    
+    console.log('   ✅ Composite complete')
 
     // Step 5: Upload to Vercel Blob (permanent storage)
     console.log('☁️ Step 5: Uploading to Vercel Blob...')
