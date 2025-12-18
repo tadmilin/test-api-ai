@@ -38,6 +38,12 @@ export default function CustomPromptPage() {
   const [creating, setCreating] = useState(false)
   const [processingStatus, setProcessingStatus] = useState<string>('')
   const [processingError, setProcessingError] = useState<string>('')
+  
+  // Template state
+  const [enableTemplate, setEnableTemplate] = useState(false)
+  const [templateFolderId, setTemplateFolderId] = useState<string>('')
+  const [templateImages, setTemplateImages] = useState<DriveImage[]>([])
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('')
 
   const checkAuth = useCallback(async () => {
     try {
@@ -136,6 +142,35 @@ export default function CustomPromptPage() {
     })
   }
 
+  async function loadTemplateImages() {
+    if (!templateFolderId) {
+      alert('กรุณาเลือกโฟลเดอร์ Template ก่อน')
+      return
+    }
+
+    try {
+      const res = await fetch('/api/drive/list-folder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderId: templateFolderId }),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        const validImages = (data.images || []).filter((img: DriveImage) => 
+          img && img.id && img.url && img.thumbnailUrl
+        )
+        setTemplateImages(validImages)
+        console.log(`✅ Loaded ${validImages.length} templates`)
+      } else {
+        alert('Failed to load templates')
+      }
+    } catch (error) {
+      console.error('Error loading templates:', error)
+      alert('Error loading templates')
+    }
+  }
+
   async function handleCreate() {
     if (selectedImages.size === 0) {
       alert('กรุณาเลือกรูปอย่างน้อย 1 รูป')
@@ -144,6 +179,11 @@ export default function CustomPromptPage() {
 
     if (!customPrompt.trim()) {
       alert('กรุณากรอก Prompt')
+      return
+    }
+
+    if (enableTemplate && !selectedTemplate) {
+      alert('กรุณาเลือก Template')
       return
     }
 
@@ -167,6 +207,7 @@ export default function CustomPromptPage() {
           customPrompt: customPrompt.trim(),
           templateType: 'custom',
           status: 'pending',
+          templateUrl: enableTemplate ? selectedTemplate : undefined,
         }),
       })
 
@@ -202,7 +243,45 @@ export default function CustomPromptPage() {
         throw new Error(errorMsg)
       }
 
-      setProcessingStatus('✅ เริ่มประมวลผลสำเร็จ! กำลังเปลี่ยนหน้า...')
+      // If template is enabled, generate template composite
+      if (enableTemplate && selectedTemplate) {
+        setProcessingStatus('✅ รูปสำเร็จ! กำลังสร้าง Template...')
+        
+        // Wait a bit for images to be fully enhanced
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        
+        // Get enhanced image URLs from job
+        const jobStatusRes = await fetch(`/api/jobs/${jobId}`)
+        const jobStatusData = await jobStatusRes.json()
+        const enhancedImageUrls = (jobStatusData.enhancedImageUrls || []).map((img: any) => img.url)
+        
+        if (enhancedImageUrls.length === 0) {
+          throw new Error('No enhanced images found')
+        }
+
+        // Generate template
+        const templateRes = await fetch('/api/generate/create-template', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            enhancedImageUrls,
+            templateUrl: selectedTemplate,
+            outputFolderId: selectedFolderId, // Save to same folder as source images
+          }),
+        })
+
+        if (!templateRes.ok) {
+          const errorData = await templateRes.json().catch(() => ({ error: 'Unknown error' }))
+          throw new Error(errorData.error || 'Template generation failed')
+        }
+
+        const templateData = await templateRes.json()
+        console.log('✅ Template generated:', templateData.templateUrl)
+        
+        setProcessingStatus('🎉 Template สำเร็จ! กำลังเปลี่ยนหน้า...')
+      } else {
+        setProcessingStatus('✅ เริ่มประมวลผลสำเร็จ! กำลังเปลี่ยนหน้า...')
+      }
       
       // Set flag and jobId for dashboard to auto-resume
       localStorage.setItem('fromCustomPrompt', 'true')
@@ -415,12 +494,133 @@ export default function CustomPromptPage() {
                 <p className="text-xs text-gray-500 mt-2">
                   💡 เคล็ดลับ: อธิบายให้ละเอียด ใช้ภาษาไทยหรืออังกฤษก็ได้ (ยาว {customPrompt.length} ตัวอักษร)
                 </p>
+              </div>
+            )}
 
-                {/* Create Button */}
-                <div className="mt-6 pt-6 border-t border-purple-200">
+            {/* 4. Template Selection (Optional) */}
+            {selectedImages.size > 0 && customPrompt.trim() && (
+              <div className="mt-6 bg-gradient-to-br from-blue-50 to-cyan-50 p-6 rounded-xl border-2 border-blue-200">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <label className="text-sm font-medium text-gray-700">
+                      4️⃣ สร้าง Template ด้วย? (ไม่บังคับ)
+                    </label>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={enableTemplate}
+                        onChange={(e) => setEnableTemplate(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+                  {enableTemplate && (
+                    <span className="text-xs text-blue-600 font-semibold">
+                      🎨 โหมด Template เปิดอยู่
+                    </span>
+                  )}
+                </div>
+                
+                {enableTemplate && (
+                  <div className="mt-4 space-y-4">
+                    {/* Template Folder Selection */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        เลือกโฟลเดอร์ Template
+                      </label>
+                      {driveFolders.map((drive) => (
+                        <div key={drive.driveId} className="mb-4">
+                          <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                            <span>🎨</span>
+                            <span>{drive.driveName}</span>
+                          </h3>
+                          <FolderTree
+                            folders={drive.folders}
+                            onSelectFolder={(folderId) => {
+                              setTemplateFolderId(folderId)
+                              setTemplateImages([])
+                              setSelectedTemplate('')
+                            }}
+                            selectedFolderId={templateFolderId}
+                          />
+                        </div>
+                      ))}
+                      
+                      {templateFolderId && (
+                        <button
+                          type="button"
+                          onClick={loadTemplateImages}
+                          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 w-full font-medium mt-2"
+                        >
+                          📂 โหลด Template จากโฟลเดอร์
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Template Gallery */}
+                    {templateImages.length > 0 && (
+                      <div className="mt-4">
+                        <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                          เลือก Template (คลิกที่รูป)
+                        </h4>
+                        <div className="grid grid-cols-3 gap-3">
+                          {templateImages.map((img) => {
+                            const isSelected = selectedTemplate === img.url
+                            return (
+                              <div
+                                key={img.id}
+                                onClick={() => setSelectedTemplate(img.url)}
+                                className={`group relative rounded-lg overflow-hidden transition-all duration-300 cursor-pointer ${
+                                  isSelected
+                                    ? 'ring-4 ring-blue-500 shadow-xl scale-[1.05]'
+                                    : 'ring-2 ring-gray-300 hover:ring-gray-400 hover:shadow-lg'
+                                }`}
+                              >
+                                <div className="aspect-[4/3] relative bg-gray-200">
+                                  <Image
+                                    src={img.thumbnailUrl}
+                                    alt={img.name}
+                                    fill
+                                    className="object-cover"
+                                    unoptimized
+                                  />
+                                </div>
+                                {isSelected && (
+                                  <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center">
+                                    <div className="bg-blue-500 text-white rounded-full w-12 h-12 flex items-center justify-center shadow-lg">
+                                      <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedTemplate && (
+                      <div className="mt-4 p-4 bg-blue-100 rounded-lg border border-blue-300">
+                        <p className="text-sm text-blue-900 font-medium">
+                          ✅ Template ถูกเลือกแล้ว - รูปที่ปรับปรุงจะถูกนำไปใส่ใน Template โดยอัตโนมัติ
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 5. Create Button */}
+            {selectedImages.size > 0 && customPrompt.trim() && (
+              <div className="mt-6 bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-xl border-2 border-purple-200">
+                <div className="pt-6 border-t border-purple-200">
                   <button
                     onClick={handleCreate}
-                    disabled={creating || selectedImages.size === 0 || !customPrompt.trim()}
+                    disabled={creating || selectedImages.size === 0 || !customPrompt.trim() || (enableTemplate && !selectedTemplate)}
                     className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-4 rounded-lg hover:from-purple-700 hover:to-blue-700 font-bold text-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
                   >
                     {creating ? (
@@ -433,7 +633,10 @@ export default function CustomPromptPage() {
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
-                        ✨ สร้างรูปด้วย Custom Prompt ({selectedImages.size} รูป)
+                        {enableTemplate 
+                          ? `🎨 สร้างรูป + Template ({selectedImages.size} รูป)`
+                          : `✨ สร้างรูปด้วย Custom Prompt ({selectedImages.size} รูป)`
+                        }
                       </>
                     )}
                   </button>
