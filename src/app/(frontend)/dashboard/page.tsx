@@ -369,10 +369,30 @@ export default function DashboardPage() {
             setProcessingStatus('🎨 กำลังสร้าง Template...')
             
             try {
-              // Get enhanced image URLs
-              const enhancedImageUrls = statusData.images
-                .filter((img: any) => img.status === 'completed' && img.url)
+              // ✅ Fetch job status to get enhanced image URLs (different API than process/status)
+              console.log('📡 Fetching job status for image URLs...')
+              const jobStatusRes = await fetch(`/api/jobs/${jobId}/status`)
+              
+              if (!jobStatusRes.ok) {
+                throw new Error(`Failed to fetch job status: ${jobStatusRes.status}`)
+              }
+              
+              const jobStatusData = await jobStatusRes.json()
+              console.log('📋 Job status response:', jobStatusData)
+              
+              // Get enhanced image URLs from job status API
+              const enhancedImageUrls = (jobStatusData.images || [])
+                .filter((img: any) => {
+                  console.log(`   Image filter: status=${img.status}, hasUrl=${!!img.url}`)
+                  return img.status === 'completed' && img.url
+                })
                 .map((img: any) => img.url)
+              
+              console.log(`   ✅ Found ${enhancedImageUrls.length} completed images`)
+              
+              if (enhancedImageUrls.length === 0) {
+                throw new Error('No completed images found with URLs')
+              }
               
               // Generate template
               const templateRes = await fetch('/api/generate/create-template', {
