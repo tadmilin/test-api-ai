@@ -262,14 +262,14 @@ export default function CustomPromptPage() {
           const jobStatusData = await jobStatusRes.json()
           
           // Get URLs from completed images
-          enhancedImageUrls = (jobStatusData.job?.enhancedImageUrls || [])
+          enhancedImageUrls = (jobStatusData.images || [])
             .filter((img: any) => img.status === 'completed' && img.url)
             .map((img: any) => img.url)
           
           console.log(`🔄 Polling attempt ${attempts + 1}/${maxAttempts}: ${enhancedImageUrls.length} images ready`)
           
           // Check if all images are ready (match original count)
-          const totalImages = jobStatusData.job?.enhancedImageUrls?.length || 0
+          const totalImages = jobStatusData.progress?.total || jobStatusData.images?.length || 0
           const completedImages = enhancedImageUrls.length
           
           if (completedImages > 0 && completedImages === totalImages) {
