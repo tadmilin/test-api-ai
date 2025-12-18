@@ -335,14 +335,8 @@ export default function DashboardPage() {
           total: statusData.total,
         })
         
-        // Check job status first - if completed/failed, stop polling
-        if (statusData.jobStatus === 'completed' || statusData.jobStatus === 'failed') {
-          console.log(`🛑 Job ${jobId} status: ${statusData.jobStatus} - stopping poll`)
-          setProcessingStatus('')
-          setProcessingJobId(null)
-          fetchDashboardData()  // Refresh to show latest status
-          break
-        }
+        // ✅ Skip early job status check - let allComplete handle template generation first
+        // (moved to after allComplete check)
         
         // Check for failed images
         const anyFailed = statusData.images?.some((img: { status?: string }) => img.status === 'failed')
