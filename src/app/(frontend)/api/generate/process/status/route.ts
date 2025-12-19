@@ -102,10 +102,10 @@ export async function GET(request: NextRequest) {
               
               if (data.status === 'failed' || data.status === 'canceled' || data.status === 'error') {
                 console.error(`   ❌ Image ${index + 1} ${data.status}:`, data.error || 'Unknown error')
-                // Mark as failed
+                // Mark as failed (not pending!)
                 return {
                   ...img,
-                  status: 'pending' as const,
+                  status: 'failed' as const,
                   error: data.error || 'Enhancement failed',
                 }
               }

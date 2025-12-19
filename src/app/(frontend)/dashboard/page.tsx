@@ -344,9 +344,11 @@ export default function DashboardPage() {
           const failedImg = statusData.images?.find((img: { status?: string; error?: string }) => img.status === 'failed')
           const errorMsg = failedImg?.error || 'Unknown error'
           console.log(`❌ Image failed: ${errorMsg}`)
-          setProcessingStatus(`❌ ประมวลผลล้มเหลว: ${errorMsg}`)
-          setProcessingJobId(null)
-          fetchDashboardData()  // Refresh to show failed status
+          setProcessingStatus(`❌ ประมวลผลล้มเหลว: ${errorMsg} - กดรีเฟรชหรือเจนใหม่`)
+          
+          // DON'T auto-clear - let user refresh or retry
+          // setProcessingJobId(null) - keep banner visible
+          fetchDashboardData()  // Refresh to show failed status in job list
           break
         }
         
@@ -443,6 +445,9 @@ export default function DashboardPage() {
                   console.log('✅ Template generated successfully')
                   setProcessingStatus('✅ Template สำเร็จ!')
                   
+                  // Wait 3s to show success message before clearing
+                  await new Promise(resolve => setTimeout(resolve, 3000))
+                  
                   // localStorage already cleared after prediction started
                   
                   break
@@ -458,26 +463,39 @@ export default function DashboardPage() {
               
             } catch (error) {
               console.error('❌ Template error:', error)
-              setProcessingStatus(`❌ Template error: ${error}`)
+              setProcessingStatus(`❌ Template error: ${error} - กดรีเฟรชหรือเจนใหม่`)
+              
+              // DON'T auto-clear - let user refresh or retry
+              // Keep banner visible with error message
               
               // localStorage already cleared at prediction start (or never started)
               // Only clear if prediction never started (error before POST)
               localStorage.removeItem('pendingTemplateUrl')
               localStorage.removeItem('pendingTemplateJobId')
+              
+              // Refresh to show failed status in job list
+              fetchDashboardData()
+              break
             }
             
-            // ✅ CRITICAL: Break polling loop after template generation starts
-            // DON'T clear processingStatus here - it's managed by template polling
+            // ✅ CRITICAL: Break polling loop after template generation
+            // Only clear if success (error case already broke with banner visible)
+            setProcessingStatus('')
+            setProcessingJobId(null)
+            fetchDashboardData()
+            break
+          } else {
+            // ✅ Stop polling after allComplete (if no template was needed)
+            setProcessingStatus('✅ ประมวลผลสำเร็จ!')
+            
+            // Wait 3s to show success message before clearing
+            await new Promise(resolve => setTimeout(resolve, 3000))
+            
+            setProcessingStatus('')
             setProcessingJobId(null)
             fetchDashboardData()
             break
           }
-          
-          // ✅ Stop polling after allComplete (if no template was needed)
-          setProcessingStatus('')
-          setProcessingJobId(null)
-          fetchDashboardData()
-          break
         }
       } catch (error) {
         console.error('Poll error:', error)
@@ -487,7 +505,10 @@ export default function DashboardPage() {
     // Timeout warning
     if (polls >= maxPolls) {
       setProcessingStatus('⚠️ Timeout - กรุณารีเฟรชหน้าเพื่อดูสถานะล่าสุด')
-      setProcessingJobId(null)
+      
+      // DON'T auto-clear - let user refresh manually
+      // Keep banner visible so user knows there's an issue
+      fetchDashboardData()  // Refresh to show current status in job list
     }
   }
 
