@@ -13,6 +13,9 @@ const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN,
 })
 
+// ✅ Cache to prevent duplicate uploads (predictionId -> blobUrl)
+const uploadCache = new Map<string, string>()
+
 /**
  * Convert any URL to a stable direct image URL
  * - Google Drive URLs → Download and upload to Blob
@@ -153,15 +156,25 @@ export async function GET(request: NextRequest) {
     
     console.log(`📊 Template prediction ${predictionId}: ${prediction.status}`)
 
-    // If succeeded, upload to Blob
+    // If succeeded, upload to Blob (only once!)
     if (prediction.status === 'succeeded' && prediction.output) {
+      // ✅ Check cache first to prevent duplicate uploads
+      const cachedUrl = uploadCache.get(predictionId)
+      if (cachedUrl) {
+        console.log(`✅ Using cached Blob URL: ${cachedUrl}`)
+        return NextResponse.json({
+          status: 'succeeded',
+          imageUrl: cachedUrl,
+        })
+      }
+      
       const imageUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
       
       if (!imageUrl) {
         throw new Error('No output from prediction')
       }
 
-      console.log(`📥 Downloading template result...`)
+      console.log(`📥 Downloading template result (first time)...`)
       const response = await fetch(imageUrl as string)
       
       if (!response.ok) {
@@ -182,6 +195,9 @@ export async function GET(request: NextRequest) {
       )
 
       console.log(`✅ Template complete: ${blob.url}`)
+      
+      // ✅ Cache the result
+      uploadCache.set(predictionId, blob.url)
 
       return NextResponse.json({
         status: 'succeeded',

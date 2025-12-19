@@ -368,9 +368,9 @@ export default function DashboardPage() {
             console.log('🎨 Starting template generation...')
             setProcessingStatus('🎨 กำลังสร้าง Template...')
             
-            // ✅ Clear localStorage FIRST (synchronous) before any async operations
-            localStorage.removeItem('pendingTemplateUrl')
-            localStorage.removeItem('pendingTemplateJobId')
+            // ❌ DON'T clear localStorage here - keep it until template succeeds
+            // localStorage.removeItem('pendingTemplateUrl')
+            // localStorage.removeItem('pendingTemplateJobId')
             
             try {
               // ✅ Fetch job status to get enhanced image URLs (different API than process/status)
@@ -440,8 +440,17 @@ export default function DashboardPage() {
                   
                   console.log('✅ Template generated successfully')
                   setProcessingStatus('✅ Template สำเร็จ!')
+                  
+                  // ✅ NOW clear localStorage (only when succeeded)
+                  localStorage.removeItem('pendingTemplateUrl')
+                  localStorage.removeItem('pendingTemplateJobId')
+                  
                   break
                 } else if (pollData.status === 'failed' || pollData.status === 'canceled') {
+                  // ✅ Also clear on failure
+                  localStorage.removeItem('pendingTemplateUrl')
+                  localStorage.removeItem('pendingTemplateJobId')
+                  
                   throw new Error(pollData.error || 'Template generation failed')
                 }
                 
@@ -452,6 +461,10 @@ export default function DashboardPage() {
             } catch (error) {
               console.error('❌ Template error:', error)
               setProcessingStatus(`❌ Template error: ${error}`)
+              
+              // ✅ Clear on error too
+              localStorage.removeItem('pendingTemplateUrl')
+              localStorage.removeItem('pendingTemplateJobId')
             }
           }
           
