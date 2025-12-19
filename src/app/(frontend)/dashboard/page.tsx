@@ -448,9 +448,14 @@ export default function DashboardPage() {
                   // Wait 3s to show success message before clearing
                   await new Promise(resolve => setTimeout(resolve, 3000))
                   
+                  // Clear banner and refresh dashboard
+                  setProcessingStatus('')
+                  setProcessingJobId(null)
+                  fetchDashboardData()
+                  
                   // localStorage already cleared after prediction started
                   
-                  break
+                  return  // Exit function completely (don't fall through to cleanup code)
                 } else if (pollData.status === 'failed' || pollData.status === 'canceled') {
                   // localStorage already cleared
                   
@@ -478,11 +483,9 @@ export default function DashboardPage() {
               break
             }
             
-            // ✅ CRITICAL: Break polling loop after template generation
-            // Only clear if success (error case already broke with banner visible)
-            setProcessingStatus('')
-            setProcessingJobId(null)
-            fetchDashboardData()
+            // ✅ Success cases already returned above
+            // If we reach here, it's an error case that broke from catch block
+            // Error banner should remain visible (already set in catch)
             break
           } else {
             // ✅ Stop polling after allComplete (if no template was needed)
@@ -494,7 +497,8 @@ export default function DashboardPage() {
             setProcessingStatus('')
             setProcessingJobId(null)
             fetchDashboardData()
-            break
+            
+            return  // Exit function completely
           }
         }
       } catch (error) {
