@@ -368,10 +368,9 @@ export default function DashboardPage() {
             console.log('🎨 Starting template generation...')
             setProcessingStatus('🎨 กำลังสร้าง Template...')
             
-            try {
-              // ✅ Clear localStorage first to prevent duplicate calls
-              localStorage.removeItem('pendingTemplateUrl')
-              localStorage.removeItem('pendingTemplateJobId')
+            // ✅ Clear localStorage FIRST (synchronous) before any async operations
+            localStorage.removeItem('pendingTemplateUrl')
+            localStorage.removeItem('pendingTemplateJobId')
             
             try {
               // ✅ Fetch job status to get enhanced image URLs (different API than process/status)
