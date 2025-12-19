@@ -365,12 +365,12 @@ export default function DashboardPage() {
           })
           
           if (pendingTemplateUrl && pendingTemplateJobId === jobId) {
+            // ✅ FIRST: Clear localStorage to prevent race condition
+            localStorage.removeItem('pendingTemplateUrl')
+            localStorage.removeItem('pendingTemplateJobId')
+            
             console.log('🎨 Starting template generation...')
             setProcessingStatus('🎨 กำลังสร้าง Template...')
-            
-            // ❌ DON'T clear localStorage here - keep it until template succeeds
-            // localStorage.removeItem('pendingTemplateUrl')
-            // localStorage.removeItem('pendingTemplateJobId')
             
             try {
               // ✅ Fetch job status to get enhanced image URLs (different API than process/status)
@@ -417,6 +417,8 @@ export default function DashboardPage() {
               const { predictionId } = await templateRes.json()
               console.log(`✅ Template prediction started: ${predictionId}`)
 
+              // localStorage already cleared at the top (before starting)
+
               // Poll for completion
               setProcessingStatus('🎨 กำลังสร้าง Template (รอ 30-60 วิ)...')
               
@@ -441,15 +443,11 @@ export default function DashboardPage() {
                   console.log('✅ Template generated successfully')
                   setProcessingStatus('✅ Template สำเร็จ!')
                   
-                  // ✅ NOW clear localStorage (only when succeeded)
-                  localStorage.removeItem('pendingTemplateUrl')
-                  localStorage.removeItem('pendingTemplateJobId')
+                  // localStorage already cleared after prediction started
                   
                   break
                 } else if (pollData.status === 'failed' || pollData.status === 'canceled') {
-                  // ✅ Also clear on failure
-                  localStorage.removeItem('pendingTemplateUrl')
-                  localStorage.removeItem('pendingTemplateJobId')
+                  // localStorage already cleared
                   
                   throw new Error(pollData.error || 'Template generation failed')
                 }
@@ -462,13 +460,13 @@ export default function DashboardPage() {
               console.error('❌ Template error:', error)
               setProcessingStatus(`❌ Template error: ${error}`)
               
-              // ✅ Clear on error too
+              // localStorage already cleared at prediction start (or never started)
+              // Only clear if prediction never started (error before POST)
               localStorage.removeItem('pendingTemplateUrl')
               localStorage.removeItem('pendingTemplateJobId')
             }
             
-            // ✅ CRITICAL: Break polling loop after template generation starts
-            // Otherwise, polling will continue and trigger duplicate template generation
+            // ✅ CRITICAL: Break polling loop after template generation
             setProcessingStatus('')
             setProcessingJobId(null)
             fetchDashboardData()
