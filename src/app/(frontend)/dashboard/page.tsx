@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -155,6 +155,9 @@ export default function DashboardPage() {
   const [completedCount, setCompletedCount] = useState<number>(0)
   const [showSuccess, setShowSuccess] = useState<boolean>(false)
   const [processingError, setProcessingError] = useState<string>('')
+  
+  // ✅ Polling guard: prevent multiple concurrent polling loops
+  const isPollingRef = useRef(false)
 
   const [_loading, setLoading] = useState(true)
 
@@ -276,9 +279,19 @@ export default function DashboardPage() {
   }
   
   async function pollJobStatus(jobId: string) {
+    // ✅ Guard: prevent multiple polling loops running concurrently
+    if (isPollingRef.current) {
+      console.log('⚠️ Polling already active, skipping duplicate call')
+      return
+    }
+    
+    isPollingRef.current = true
+    console.log(`🔄 Starting polling for job ${jobId}`)
+    
     const maxPolls = 120  // 10 นาที (120 * 5 วินาที = 600 วินาที)
     let polls = 0
     
+    try {
     while (polls < maxPolls) {
       await new Promise(resolve => setTimeout(resolve, 2000)) // ลดเหลือ 2 วินาที
       polls++
@@ -513,6 +526,12 @@ export default function DashboardPage() {
       // DON'T auto-clear - let user refresh manually
       // Keep banner visible so user knows there's an issue
       fetchDashboardData()  // Refresh to show current status in job list
+    }
+    
+    } finally {
+      // ✅ Always clear polling flag when done
+      isPollingRef.current = false
+      console.log(`✅ Polling completed for job ${jobId}`)
     }
   }
 
