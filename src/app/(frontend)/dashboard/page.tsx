@@ -356,17 +356,26 @@ export default function DashboardPage() {
           // ✅ Check if template generation is pending (from custom-prompt)
           const pendingTemplateUrl = localStorage.getItem('pendingTemplateUrl')
           const pendingTemplateJobId = localStorage.getItem('pendingTemplateJobId')
+          const templateInProgress = localStorage.getItem(`template-in-progress-${jobId}`)
           
           console.log('🔍 Template check:', {
             hasPendingUrl: !!pendingTemplateUrl,
             pendingTemplateJobId,
             currentJobId: jobId,
             match: pendingTemplateJobId === jobId,
+            inProgress: !!templateInProgress,
           })
           
-          if (pendingTemplateUrl && pendingTemplateJobId === jobId) {
+          if (pendingTemplateUrl && pendingTemplateJobId === jobId && !templateInProgress) {
             console.log('🎨 Starting template generation...')
             setProcessingStatus('🎨 กำลังสร้าง Template...')
+            
+            // ✅ Set flag immediately to prevent race condition (multiple polling requests)
+            localStorage.setItem(`template-in-progress-${jobId}`, 'true')
+            
+            // ✅ Clear pending info
+            localStorage.removeItem('pendingTemplateUrl')
+            localStorage.removeItem('pendingTemplateJobId')
             
             try {
               // ✅ Fetch job status to get enhanced image URLs (different API than process/status)
@@ -425,13 +434,14 @@ export default function DashboardPage() {
               }
             } catch (error) {
               console.error('❌ Template error:', error)
+              setProcessingStatus(`❌ Template error: ${error}`)
             } finally {
-              // Clear pending template info
-              localStorage.removeItem('pendingTemplateUrl')
-              localStorage.removeItem('pendingTemplateJobId')
+              // ✅ Clear progress flag when done (success or error)
+              localStorage.removeItem(`template-in-progress-${jobId}`)
             }
           }
           
+          // ✅ Stop polling after allComplete
           setProcessingStatus('')
           setProcessingJobId(null)
           fetchDashboardData()
