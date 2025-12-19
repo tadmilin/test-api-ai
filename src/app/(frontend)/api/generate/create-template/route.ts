@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { put } from '@vercel/blob'
 import Replicate from 'replicate'
+import { downloadDriveFile, extractDriveFileId } from '@/utilities/downloadDriveFile'
 
 // ✅ Force Node.js runtime
 export const runtime = 'nodejs'
@@ -11,6 +12,41 @@ export const maxDuration = 120
 const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN,
 })
+
+/**
+ * Convert any URL to a stable direct image URL
+ * - Google Drive URLs → Download and upload to Blob
+ * - Vercel Blob URLs → Use as-is
+ * - Other URLs → Use as-is (assume direct)
+ */
+async function ensureDirectImageUrl(url: string, label: string): Promise<string> {
+  const driveFileId = extractDriveFileId(url)
+  
+  if (driveFileId) {
+    console.log(`   📂 ${label} is Google Drive → Converting to Blob...`)
+    
+    // Download from Drive
+    const buffer = await downloadDriveFile(driveFileId)
+    console.log(`      Downloaded ${Math.round(buffer.length / 1024)}KB`)
+    
+    // Upload to Vercel Blob (temporary, public access)
+    const blob = await put(
+      `temp-${label.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}.png`,
+      buffer,
+      {
+        access: 'public',
+        contentType: 'image/png',
+      }
+    )
+    
+    console.log(`      ✅ Converted to Blob: ${blob.url.substring(0, 60)}...`)
+    return blob.url
+  }
+  
+  // Already a direct URL (Vercel Blob, Replicate, etc.)
+  console.log(`   ✅ ${label} is already direct URL`)
+  return url
+}
 
 /**
  * POST /api/generate/create-template
@@ -47,16 +83,29 @@ export async function POST(request: NextRequest) {
     console.log(`📋 Template URL: ${templateUrl}`)
     console.log(`📸 Enhanced images: ${enhancedImageUrls.length}`)
 
-    // Step 1: Prepare image_input (template first, then enhanced images)
-    const imageInputs = [templateUrl, ...enhancedImageUrls]
-    console.log(`📦 Image inputs order:`)
-    console.log(`   [0] Template: ${templateUrl.substring(0, 60)}...`)
-    enhancedImageUrls.forEach((url: string, i: number) => {
+    // Step 1: Convert all URLs to direct image URLs (Google Drive → Blob)
+    console.log(`\n🔄 Step 1: Ensuring all URLs are direct images...`)
+    
+    const directTemplateUrl = await ensureDirectImageUrl(templateUrl, 'Template')
+    
+    const directEnhancedUrls = await Promise.all(
+      enhancedImageUrls.map((url: string, i: number) => 
+        ensureDirectImageUrl(url, `Enhanced Image ${i + 1}`)
+      )
+    )
+    
+    console.log(`✅ All URLs converted to direct image URLs`)
+
+    // Step 2: Prepare image_input (template first, then enhanced images)
+    const imageInputs = [directTemplateUrl, ...directEnhancedUrls]
+    console.log(`\n📦 Step 2: Image inputs order:`)
+    console.log(`   [0] Template: ${directTemplateUrl.substring(0, 60)}...`)
+    directEnhancedUrls.forEach((url: string, i: number) => {
       console.log(`   [${i + 1}] Enhanced image ${i + 1}: ${url.substring(0, 60)}...`)
     })
 
-    // Step 2: Call Nano Banana Pro
-    console.log(`🚀 Calling Nano Banana Pro...`)
+    // Step 3: Call Nano Banana Pro
+    console.log(`\n🚀 Step 3: Calling Nano Banana Pro...`)
     const input = {
       prompt: "ใช้ภาพต้นฉบับนี้เป็น Template อ้างอิง โดยต้องรักษาตำแหน่งเลเยอร์ กราฟิคและกรอบดีไซน์ทั้งหมดไว้เหมือนเดิมห้ามแก้ไข คำสั่ง: ให้เปลี่ยนเฉพาะส่วนที่เป็น 'ภาพถ่ายสถานที่' ใน Template นี้ทั้งหมด (รวมถึงภาพพื้นหลังและรูปเล็ก) ให้เป็นไฟล์ภาพใหม่ที่แนบมานี้ โดยให้ภาพแรกเป็นภาพหลัก แทนที่ลงไปตามตำแหน่งที่เหมาะสม โดยให้ภาพใหม่อยู่ในเลเยอร์ด้านหลังข้อความและกรอบอย่างสมบูรณ์",
       image_input: imageInputs,
@@ -75,8 +124,8 @@ export async function POST(request: NextRequest) {
     const output = await replicate.run("google/nano-banana-pro", { input })
     console.log(`✅ Nano Banana Pro generation complete`)
 
-    // Step 3: Download result
-    console.log(`📥 Downloading generated image...`)
+    // Step 4: Download result
+    console.log(`\n📥 Step 4: Downloading generated image...`)
     const imageUrl = typeof output === 'string' ? output : (output as any).url?.() || (output as any)[0]
     
     if (!imageUrl) {
@@ -93,8 +142,8 @@ export async function POST(request: NextRequest) {
     const buffer = await response.arrayBuffer()
     console.log(`   ✅ Downloaded ${Math.round(buffer.byteLength / 1024)}KB`)
 
-    // Step 4: Upload to Vercel Blob
-    console.log(`☁️ Uploading to Vercel Blob...`)
+    // Step 5: Upload to Vercel Blob (permanent storage)
+    console.log(`\n☁️ Step 5: Uploading to Vercel Blob (permanent)...`)
     const blob = await put(
       `template-${new Date().toISOString()}.png`,
       buffer,
