@@ -397,8 +397,9 @@ export default function DashboardPage() {
               if (enhancedImageUrls.length === 0) {
                 throw new Error('No completed images found with URLs')
               }
-              
-              // Generate template
+
+              // Start template generation (async)
+              console.log('🚀 Starting async template generation...')
               const templateRes = await fetch('/api/generate/create-template', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -407,26 +408,47 @@ export default function DashboardPage() {
                   templateUrl: pendingTemplateUrl,
                 }),
               })
-              
-              if (templateRes.ok) {
-                const templateData = await templateRes.json()
-                
-                // Save template URL to job
-                await fetch(`/api/jobs/${jobId}`, {
-                  method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    templateUrl: templateData.resultImageUrl || templateData.templateUrl,
-                  }),
-                })
-                
-                console.log('✅ Template generated successfully')
-                setProcessingStatus('✅ Template สำเร็จ!')
-              } else {
+
+              if (!templateRes.ok) {
                 const errorData = await templateRes.json().catch(() => ({ error: 'Unknown error' }))
-                console.error('❌ Template generation failed:', errorData.error)
-                setProcessingStatus(`❌ Template ล้มเหลว: ${errorData.error}`)
+                throw new Error(errorData.error || 'Failed to start template generation')
               }
+
+              const { predictionId } = await templateRes.json()
+              console.log(`✅ Template prediction started: ${predictionId}`)
+
+              // Poll for completion
+              setProcessingStatus('🎨 กำลังสร้าง Template (รอ 30-60 วิ)...')
+              
+              for (let pollCount = 0; pollCount < 60; pollCount++) {
+                await new Promise(resolve => setTimeout(resolve, 2000)) // 2s interval
+                
+                const pollRes = await fetch(`/api/generate/create-template?predictionId=${predictionId}`)
+                const pollData = await pollRes.json()
+                
+                console.log(`📊 Template poll ${pollCount + 1}: ${pollData.status}`)
+                
+                if (pollData.status === 'succeeded') {
+                  // Save template URL to job
+                  await fetch(`/api/jobs/${jobId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      templateUrl: pollData.imageUrl,
+                    }),
+                  })
+                  
+                  console.log('✅ Template generated successfully')
+                  setProcessingStatus('✅ Template สำเร็จ!')
+                  break
+                } else if (pollData.status === 'failed' || pollData.status === 'canceled') {
+                  throw new Error(pollData.error || 'Template generation failed')
+                }
+                
+                // Update status with progress
+                setProcessingStatus(`🎨 กำลังสร้าง Template (${pollCount * 2}s)...`)
+              }
+              
             } catch (error) {
               console.error('❌ Template error:', error)
               setProcessingStatus(`❌ Template error: ${error}`)

@@ -50,14 +50,10 @@ async function ensureDirectImageUrl(url: string, label: string): Promise<string>
 
 /**
  * POST /api/generate/create-template
+ * Start template generation (returns predictionId immediately)
  * 
- * Generate a composite template using Nano Banana Pro:
- * 1. Prepare template + enhanced images as inputs
- * 2. Call Nano Banana Pro with custom prompt
- * 3. Wait for generation (30-60 seconds)
- * 4. Upload result to Vercel Blob
- * 
- * WAITING FOR: Custom prompt from user
+ * GET /api/generate/create-template?predictionId=xxx
+ * Poll for template generation status
  */
 export async function POST(request: NextRequest) {
   try {
@@ -104,8 +100,8 @@ export async function POST(request: NextRequest) {
       console.log(`   [${i + 1}] Enhanced image ${i + 1}: ${url.substring(0, 60)}...`)
     })
 
-    // Step 3: Call Nano Banana Pro
-    console.log(`\n🚀 Step 3: Calling Nano Banana Pro...`)
+    // Step 3: Start Nano Banana Pro (async, return predictionId)
+    console.log(`\n🚀 Step 3: Starting Nano Banana Pro (async)...`)
     const input = {
       prompt: "ใช้ภาพต้นฉบับนี้เป็น Template อ้างอิง โดยต้องรักษาตำแหน่งเลเยอร์ กราฟิคและกรอบดีไซน์ทั้งหมดไว้เหมือนเดิมห้ามแก้ไข คำสั่ง: ให้เปลี่ยนเฉพาะส่วนที่เป็น 'ภาพถ่ายสถานที่' ใน Template นี้ทั้งหมด (รวมถึงภาพพื้นหลังและรูปเล็ก) ให้เป็นไฟล์ภาพใหม่ที่แนบมานี้ โดยให้ภาพแรกเป็นภาพหลัก แทนที่ลงไปตามตำแหน่งที่เหมาะสม โดยให้ภาพใหม่อยู่ในเลเยอร์ด้านหลังข้อความและกรอบอย่างสมบูรณ์",
       image_input: imageInputs,
@@ -115,61 +111,95 @@ export async function POST(request: NextRequest) {
       safety_filter_level: "block_only_high",
     }
 
-    console.log(`⚙️ Input parameters:`)
-    console.log(`   - Resolution: ${input.resolution}`)
-    console.log(`   - Aspect ratio: ${input.aspect_ratio}`)
-    console.log(`   - Format: ${input.output_format}`)
-    console.log(`   - Images: ${imageInputs.length}`)
+    const prediction = await replicate.predictions.create({
+      model: "google/nano-banana-pro",
+      input,
+    })
 
-    const output = await replicate.run("google/nano-banana-pro", { input })
-    console.log(`✅ Nano Banana Pro generation complete`)
-
-    // Step 4: Download result
-    console.log(`\n📥 Step 4: Downloading generated image...`)
-    const imageUrl = typeof output === 'string' ? output : (output as any).url?.() || (output as any)[0]
-    
-    if (!imageUrl) {
-      throw new Error('No output URL from Nano Banana Pro')
-    }
-
-    console.log(`   URL: ${imageUrl}`)
-    const response = await fetch(imageUrl)
-    
-    if (!response.ok) {
-      throw new Error(`Failed to download image: ${response.status}`)
-    }
-
-    const buffer = await response.arrayBuffer()
-    console.log(`   ✅ Downloaded ${Math.round(buffer.byteLength / 1024)}KB`)
-
-    // Step 5: Upload to Vercel Blob (permanent storage)
-    console.log(`\n☁️ Step 5: Uploading to Vercel Blob (permanent)...`)
-    const blob = await put(
-      `template-${new Date().toISOString()}.png`,
-      buffer,
-      {
-        access: 'public',
-        contentType: 'image/png',
-      }
-    )
-
-    console.log(`✅ Template generation complete: ${blob.url}`)
+    console.log(`✅ Template generation started: ${prediction.id}`)
+    console.log(`   Status: ${prediction.status}`)
 
     return NextResponse.json({
-      success: true,
-      resultImageUrl: blob.url,
-      templateUrl: blob.url, // Alias for backward compatibility
-      metadata: {
-        imagesUsed: imageInputs.length,
-        generatedWith: 'nano-banana-pro',
-      },
+      predictionId: prediction.id,
+      status: prediction.status,
     })
 
   } catch (error) {
-    console.error('❌ Template generation failed:', error)
+    console.error('❌ Template generation start failed:', error)
     return NextResponse.json(
       { 
         error: error instanceof Error ? error.message : 'Template generation failed',
+      },
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * GET /api/generate/create-template?predictionId=xxx
+ * Poll for template generation status
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const predictionId = searchParams.get('predictionId')
+
+    if (!predictionId) {
+      return NextResponse.json({ error: 'predictionId required' }, { status: 400 })
+    }
+
+    // Get prediction status
+    const prediction = await replicate.predictions.get(predictionId)
+    
+    console.log(`📊 Template prediction ${predictionId}: ${prediction.status}`)
+
+    // If succeeded, upload to Blob
+    if (prediction.status === 'succeeded' && prediction.output) {
+      const imageUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
+      
+      if (!imageUrl) {
+        throw new Error('No output from prediction')
+      }
+
+      console.log(`📥 Downloading template result...`)
+      const response = await fetch(imageUrl as string)
+      
+      if (!response.ok) {
+        throw new Error(`Failed to download: ${response.status}`)
+      }
+
+      const buffer = await response.arrayBuffer()
+      console.log(`   Downloaded ${Math.round(buffer.byteLength / 1024)}KB`)
+
+      // Upload to Vercel Blob (permanent)
+      const blob = await put(
+        `template-${new Date().toISOString()}.png`,
+        buffer,
+        {
+          access: 'public',
+          contentType: 'image/png',
+        }
+      )
+
+      console.log(`✅ Template complete: ${blob.url}`)
+
+      return NextResponse.json({
+        status: 'succeeded',
+        imageUrl: blob.url,
+      })
+    }
+
+    // Return current status
+    return NextResponse.json({
+      status: prediction.status,
+      error: prediction.error || null,
+    })
+
+  } catch (error) {
+    console.error('❌ Template polling failed:', error)
+    return NextResponse.json(
+      { 
+        error: error instanceof Error ? error.message : 'Polling failed',
       },
       { status: 500 }
     )
