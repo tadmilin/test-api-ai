@@ -466,9 +466,16 @@ export default function DashboardPage() {
               localStorage.removeItem('pendingTemplateUrl')
               localStorage.removeItem('pendingTemplateJobId')
             }
+            
+            // ✅ CRITICAL: Break polling loop after template generation starts
+            // Otherwise, polling will continue and trigger duplicate template generation
+            setProcessingStatus('')
+            setProcessingJobId(null)
+            fetchDashboardData()
+            break
           }
           
-          // ✅ Stop polling after allComplete
+          // ✅ Stop polling after allComplete (if no template was needed)
           setProcessingStatus('')
           setProcessingJobId(null)
           fetchDashboardData()
