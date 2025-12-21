@@ -203,6 +203,7 @@ export default function CustomPromptPage() {
         body: JSON.stringify({
           productName: 'Custom Prompt Job',
           productDescription: customPrompt.trim(),
+          // contentTopic: ไม่ระบุ - เพราะ upscale จะทำที่ template แทน
           referenceImageUrls: selectedImageUrls,
           customPrompt: customPrompt.trim(),
           templateType: 'custom',

@@ -155,31 +155,17 @@ export async function POST(req: Request) {
             
             console.log('[Webhook] ✅ Blob uploaded successfully:', blobResult.url)
             
-            // ✅ ถ้าเป็น upscale prediction → clear upscalePredictionId และ set completed
-            // ⭐ ถ้าเป็น main prediction (text-to-image) → เก็บ predictionId ไว้ + set pending เพื่อให้ polling เริ่ม upscale
-            if (isUpscalePrediction) {
-              // Upscale เสร็จแล้ว → ทุกอย่างเสร็จสมบูรณ์
-              return {
-                ...img,
-                url: blobResult.url,
-                tempOutputUrl: replicateUrl,
-                status: 'completed' as const,
-                error: undefined,
-                upscalePredictionId: null, // Clear upscale prediction
-                predictionId: null, // Clear main prediction
-              }
-            } else {
-              // Main prediction เสร็จ → ยัง pending รอ upscale (polling จะจัดการ)
-              return {
-                ...img,
-                url: blobResult.url,
-                originalUrl: replicateUrl,
-                tempOutputUrl: replicateUrl,
-                status: 'pending' as const, // ⭐ ยัง pending เพื่อให้ polling เริ่ม upscale
-                error: undefined,
-                predictionId: img.predictionId, // ⭐ เก็บ predictionId ไว้
-                upscalePredictionId: null, // ยังไม่มี upscale
-              }
+            // ✅ Set completed และ clear prediction IDs ตามประเภท
+            return {
+              ...img,
+              url: blobResult.url,
+              originalUrl: replicateUrl,
+              tempOutputUrl: replicateUrl,
+              status: 'completed' as const,
+              error: undefined,
+              // Clear ตาม prediction type
+              upscalePredictionId: isUpscalePrediction ? null : img.upscalePredictionId,
+              predictionId: isMainPrediction ? null : img.predictionId,
             }
           } catch (uploadError) {
             // ⚠️ Upload ล้ม → ให้ polling ทำต่อ (fallback path)
