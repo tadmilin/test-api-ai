@@ -564,9 +564,11 @@ export default function DashboardPage() {
             break
           } else {
             // ✅ Stop polling after allComplete (if no template was needed)
+            console.log('✅ Text-to-Image completed - showing images')
             setProcessingStatus('✅ ประมวลผลสำเร็จ!')
+            setReviewMode(true)  // ✅ แสดงรูป
             
-            // Wait 3s to show success message before clearing
+            // Wait 3s to show success message before clearing banner
             await new Promise(resolve => setTimeout(resolve, 3000))
             
             setProcessingStatus('')
