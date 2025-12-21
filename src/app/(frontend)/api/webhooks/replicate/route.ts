@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getPayload } from 'payload'
 import configPromise from '@payload-config'
-import { put } from '@vercel/blob'
+import { put, del } from '@vercel/blob'
 
 // ✅ Force Node.js runtime
 export const runtime = 'nodejs'
@@ -154,6 +154,17 @@ export async function POST(req: Request) {
             })
             
             console.log('[Webhook] ✅ Blob uploaded successfully:', blobResult.url)
+            
+            // ✅ ลบไฟล์ temp/preupscale หลังอัพสเกลสำเร็จ
+            if (isUpscalePrediction && img.url && String(img.url).includes('blob.vercel-storage.com')) {
+              try {
+                // ลบไฟล์ preupscale เก่า
+                await del(img.url)
+                console.log('[Webhook] 🗑️  Deleted old preupscale image:', img.url)
+              } catch (delError) {
+                console.warn('[Webhook] ⚠️ Failed to delete old image:', delError)
+              }
+            }
             
             // ✅ Set completed และ clear prediction IDs ตามประเภท
             return {

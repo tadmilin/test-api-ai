@@ -571,16 +571,15 @@ export default function DashboardPage() {
             if (statusData.images && statusData.images.length > 0) {
               setEnhancedImages(statusData.images)
               setCurrentJobId(jobId)
+              setReviewMode(true)  // ✅ แสดงรูป
             }
-            
-            setReviewMode(true)  // ✅ แสดงรูป
             
             // Wait 3s to show success message before clearing banner
             await new Promise(resolve => setTimeout(resolve, 3000))
             
             setProcessingStatus('')
             setProcessingJobId(null)
-            fetchDashboardData()
+            // DON'T call fetchDashboardData() - it will reset reviewMode
             
             return  // Exit function completely
           }
