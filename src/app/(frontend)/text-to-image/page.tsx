@@ -6,19 +6,10 @@ import { useRouter } from 'next/navigation'
 export default function TextToImagePage() {
   const router = useRouter()
   const [prompt, setPrompt] = useState('')
-  const [aspectRatio, setAspectRatio] = useState<'1:1' | '16:9' | '9:16' | '4:3' | '3:4'>('1:1')
   const [outputFormat, setOutputFormat] = useState<'jpg' | 'png' | 'webp'>('png')
   const [numImages, setNumImages] = useState(1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-
-  const aspectRatioOptions = [
-    { value: '1:1', label: '1:1 (Square)', icon: '⬛' },
-    { value: '16:9', label: '16:9 (Landscape)', icon: '🖼️' },
-    { value: '9:16', label: '9:16 (Portrait)', icon: '📱' },
-    { value: '4:3', label: '4:3 (Standard)', icon: '🖥️' },
-    { value: '3:4', label: '3:4 (Vertical)', icon: '📄' },
-  ]
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -42,7 +33,7 @@ export default function TextToImagePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt,
-          aspectRatio,
+          aspectRatio: '1:1', // Fixed for 2048x2048 output
           outputFormat,
           numImages,
         }),
@@ -80,7 +71,7 @@ export default function TextToImagePage() {
             ✨ Text to Image
           </h1>
           <p className="text-gray-600 text-lg">
-            สร้างภาพจาก Prompt ด้วย Google Imagen 4 Ultra
+            สร้างภาพ 2048×2048 px จาก Prompt ด้วย Google Imagen 4 Ultra
           </p>
         </div>
 
@@ -101,31 +92,6 @@ export default function TextToImagePage() {
               />
               <div className="mt-2 text-sm text-gray-500">
                 ใช้ภาษาอังกฤษได้ผลดีที่สุด • ควรมีรายละเอียด • อย่างน้อย 10 ตัวอักษร
-              </div>
-            </div>
-
-            {/* Aspect Ratio */}
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-3">
-                📐 อัตราส่วนภาพ (Aspect Ratio)
-              </label>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                {aspectRatioOptions.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => setAspectRatio(option.value as any)}
-                    className={`p-4 rounded-lg border-2 transition-all ${
-                      aspectRatio === option.value
-                        ? 'border-purple-600 bg-purple-50 shadow-lg'
-                        : 'border-gray-300 hover:border-purple-400'
-                    }`}
-                  >
-                    <div className="text-3xl mb-2">{option.icon}</div>
-                    <div className="text-sm font-semibold">{option.value}</div>
-                    <div className="text-xs text-gray-600">{option.label.split('(')[1]?.replace(')', '')}</div>
-                  </button>
-                ))}
               </div>
             </div>
 
