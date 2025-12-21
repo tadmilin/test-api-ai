@@ -110,17 +110,22 @@ export async function GET(request: NextRequest) {
         }
         
         // Check if image needs processing:
-        // 1. Has predictionId AND
-        // 2. Either no URL at all OR has Replicate URL but no Blob URL
+        // 1. Has predictionId AND no Blob URL yet (รอ initial generation)
+        // 2. OR has Blob URL + status=pending + no upscalePredictionId (รอเริ่ม upscale)
         const hasBlobUrl = img.url && img.url.includes('blob.vercel-storage.com')
-        const hasReplicateUrl = img.originalUrl && img.originalUrl.includes('replicate.delivery')
         
-        // Process if: has predictionId AND (no url OR no blob url yet)
-        const isProcessing = img.predictionId && !hasBlobUrl
+        // ⭐ Case 1: Main prediction processing (no URL yet or not blob)
+        const needsMainProcessing = img.predictionId && !hasBlobUrl
         
-        if (isProcessing) {
+        // ⭐ Case 2: Main completed but needs to start upscale (has Blob URL, pending, no upscale yet)
+        const needsUpscaleStart = hasBlobUrl && 
+                                  img.status === 'pending' && 
+                                  !img.upscalePredictionId && 
+                                  isTextToImageJob
+        
+        if (needsMainProcessing) {
           console.log(`📡 Polling prediction ${index + 1}: ${img.predictionId}`)
-          console.log(`   Current state: url=${img.url ? 'exists' : 'empty'}, hasBlobUrl=${hasBlobUrl}, hasReplicateUrl=${hasReplicateUrl}`)
+          console.log(`   Current state: url=${img.url ? 'exists' : 'empty'}, hasBlobUrl=${hasBlobUrl}`)
           
           // Poll the enhance status endpoint
           try {
@@ -147,40 +152,9 @@ export async function GET(request: NextRequest) {
                 
                 console.log(`   ✅ Image ${index + 1} completed: ${blobUrl}`)
                 
-                // ⭐ Check if text-to-image needs upscaling (เริ่มเฉพาะครั้งแรก - เช็คแค่ไม่มี upscalePredictionId)
-                if (isTextToImageJob && !img.upscalePredictionId) {
-                  console.log(`   🔍 Starting upscale for text-to-image ${index + 1}...`)
-                  try {
-                    const upscaleRes = await fetch(`${baseUrl}/api/generate/upscale`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        imageUrl: blobUrl,
-                        scale: 2,
-                      }),
-                    })
-                    
-                    if (upscaleRes.ok) {
-                      const upscaleData = await upscaleRes.json()
-                      console.log(`   ✅ Upscale prediction created: ${upscaleData.predictionId}`)
-                      
-                      // Return with upscalePredictionId, REMOVE predictionId
-                      return {
-                        ...img,
-                        url: blobUrl,
-                        originalUrl: data.originalUrl || img.originalUrl,
-                        predictionId: null, // ✅ Clear original prediction
-                        status: 'pending' as const,
-                        upscalePredictionId: upscaleData.predictionId,
-                      }
-                    }
-                  } catch (error) {
-                    console.error('   ❌ Failed to start upscale:', error)
-                  }
-                }
-                
+                // ⭐ ไม่เริ่ม upscale ที่นี่แล้ว - ให้ webhook set pending แล้ว polling จะเริ่ม upscale ภายหลัง
                 // ถ้าไม่ใช่ text-to-image → completed
-                // ถ้าเป็น text-to-image แต่ upscale ไม่สำเร็จ → completed (fallback)
+                // ถ้าเป็น text-to-image → webhook จะ set pending และ polling จะเริ่ม upscale
                 return {
                   ...img,
                   url: blobUrl,
@@ -212,6 +186,49 @@ export async function GET(request: NextRequest) {
             }
           } catch (pollError) {
             console.error(`   💥 Poll error:`, pollError)
+          }
+        }
+        
+        // ⭐ Check if image needs to START upscale (webhook completed main, now polling starts upscale)
+        if (needsUpscaleStart) {
+          console.log(`🔍 Image ${index + 1} ready for upscale - starting now...`)
+          try {
+            const upscaleRes = await fetch(`${baseUrl}/api/generate/upscale`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                imageUrl: img.url,
+                scale: 2,
+              }),
+            })
+            
+            if (upscaleRes.ok) {
+              const upscaleData = await upscaleRes.json()
+              console.log(`   ✅ Upscale prediction created: ${upscaleData.predictionId}`)
+              
+              return {
+                ...img,
+                predictionId: null, // Clear main prediction
+                status: 'pending' as const,
+                upscalePredictionId: upscaleData.predictionId,
+              }
+            } else {
+              console.error(`   ❌ Failed to start upscale: ${upscaleRes.status}`)
+              // Fallback: mark as completed without upscale
+              return {
+                ...img,
+                status: 'completed' as const,
+                predictionId: null,
+              }
+            }
+          } catch (error) {
+            console.error('   ❌ Failed to start upscale:', error)
+            // Fallback: mark as completed without upscale
+            return {
+              ...img,
+              status: 'completed' as const,
+              predictionId: null,
+            }
           }
         }
         
