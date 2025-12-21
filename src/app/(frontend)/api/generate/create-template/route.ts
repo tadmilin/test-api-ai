@@ -184,9 +184,9 @@ export async function GET(request: NextRequest) {
       const buffer = await response.arrayBuffer()
       console.log(`   Downloaded ${Math.round(buffer.byteLength / 1024)}KB`)
 
-      // Upload to Vercel Blob (permanent)
-      const blob = await put(
-        `template-${new Date().toISOString()}.png`,
+      // Upload template to Vercel Blob (temporary, for upscaling)
+      const tempBlob = await put(
+        `template-temp-${Date.now()}.png`,
         buffer,
         {
           access: 'public',
@@ -194,14 +194,75 @@ export async function GET(request: NextRequest) {
         }
       )
 
-      console.log(`✅ Template complete: ${blob.url}`)
-      
-      // ✅ Cache the result
-      uploadCache.set(predictionId, blob.url)
+      console.log(`📤 Temp template uploaded: ${tempBlob.url}`)
+      console.log(`🔍 Starting upscale to 2048x2048...`)
 
+      // Start upscaling to 2048x2048
+      const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
+      const upscaleRes = await fetch(`${baseUrl}/api/generate/upscale`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageUrl: tempBlob.url,
+          scale: 2, // 1024 → 2048
+        }),
+      })
+
+      if (!upscaleRes.ok) {
+        console.error('❌ Failed to start upscale, using original template')
+        // Fallback to original template
+        uploadCache.set(predictionId, tempBlob.url)
+        return NextResponse.json({
+          status: 'succeeded',
+          imageUrl: tempBlob.url,
+        })
+      }
+
+      const upscaleData = await upscaleRes.json()
+      const upscalePredictionId = upscaleData.predictionId
+      console.log(`✅ Upscale started: ${upscalePredictionId}`)
+
+      // Poll upscale (max 30 attempts = 60 seconds)
+      for (let i = 0; i < 30; i++) {
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        
+        const upscalePollRes = await fetch(
+          `${baseUrl}/api/generate/upscale?predictionId=${upscalePredictionId}`
+        )
+        
+        if (upscalePollRes.ok) {
+          const upscalePollData = await upscalePollRes.json()
+          console.log(`📊 Upscale poll ${i + 1}: ${upscalePollData.status}`)
+          
+          if (upscalePollData.status === 'succeeded' && upscalePollData.imageUrl) {
+            console.log(`✅ Template upscaled to 2048x2048: ${upscalePollData.imageUrl}`)
+            
+            // Cache upscaled URL
+            uploadCache.set(predictionId, upscalePollData.imageUrl)
+            
+            return NextResponse.json({
+              status: 'succeeded',
+              imageUrl: upscalePollData.imageUrl,
+            })
+          }
+          
+          if (upscalePollData.status === 'failed') {
+            console.error('❌ Upscale failed, using original template')
+            uploadCache.set(predictionId, tempBlob.url)
+            return NextResponse.json({
+              status: 'succeeded',
+              imageUrl: tempBlob.url,
+            })
+          }
+        }
+      }
+
+      // Timeout - use original
+      console.warn('⚠️ Upscale timeout, using original template')
+      uploadCache.set(predictionId, tempBlob.url)
       return NextResponse.json({
         status: 'succeeded',
-        imageUrl: blob.url,
+        imageUrl: tempBlob.url,
       })
     }
 

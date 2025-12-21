@@ -5,6 +5,23 @@ import config from '@payload-config'
 // ✅ Force Node.js runtime (Payload CMS)
 export const runtime = 'nodejs'
 
+// Extend type to include upscalePredictionId
+type EnhancedImageUrl = {
+  url?: string | null
+  status?: 'pending' | 'completed' | 'failed' | 'approved' | 'regenerating' | null
+  predictionId?: string | null
+  originalUrl?: string | null
+  error?: string | null
+  photoType?: string | null
+  contentTopic?: string | null
+  postTitleHeadline?: string | null
+  contentDescription?: string | null
+  tempOutputUrl?: string | null
+  webhookFailed?: boolean | null
+  id?: string | null
+  upscalePredictionId?: string | null // ⭐ Add this for upscaling
+}
+
 // GET: Check status of all image enhancements for a job and poll Replicate if needed
 export async function GET(request: NextRequest) {
   try {
@@ -43,17 +60,46 @@ export async function GET(request: NextRequest) {
     
     // Check each image that's still processing
     const updatedImages = await Promise.all(
-      enhancedImages.map(async (img: {
-        url?: string | null
-        status?: 'pending' | 'completed' | 'failed' | 'approved' | 'regenerating' | null
-        predictionId?: string | null
-        originalUrl?: string | null
-        error?: string | null
-        photoType?: string | null
-        contentTopic?: string | null
-        postTitleHeadline?: string | null
-        contentDescription?: string | null
-      }, index: number) => {
+      enhancedImages.map(async (img: EnhancedImageUrl, index: number) => {
+        // Check if image has upscale prediction (text-to-image)
+        if (img.upscalePredictionId && img.status === 'pending') {
+          console.log(`🔍 Polling upscale ${index + 1}: ${img.upscalePredictionId}`)
+          
+          try {
+            const upscaleRes = await fetch(
+              `${baseUrl}/api/generate/upscale?predictionId=${img.upscalePredictionId}`
+            )
+            
+            if (upscaleRes.ok) {
+              const upscaleData = await upscaleRes.json()
+              console.log(`   Upscale status: ${upscaleData.status}`)
+              
+              if (upscaleData.status === 'succeeded' && upscaleData.imageUrl) {
+                console.log(`   ✅ Upscaled to 2048x2048: ${upscaleData.imageUrl}`)
+                return {
+                  ...img,
+                  url: upscaleData.imageUrl, // Replace with upscaled URL
+                  status: 'completed' as const,
+                }
+              }
+              
+              if (upscaleData.status === 'failed') {
+                console.error(`   ❌ Upscale failed: ${upscaleData.error}`)
+                // Fallback to non-upscaled version
+                return {
+                  ...img,
+                  status: 'completed' as const,
+                }
+              }
+            }
+          } catch (error) {
+            console.error('   ❌ Upscale poll error:', error)
+          }
+          
+          // Still processing
+          return img
+        }
+        
         // Check if image needs processing:
         // 1. Has predictionId AND
         // 2. Either no URL at all OR has Replicate URL but no Blob URL
@@ -91,12 +137,46 @@ export async function GET(request: NextRequest) {
                 }
                 
                 console.log(`   ✅ Image ${index + 1} completed: ${blobUrl}`)
-                // Update image with Blob URL while preserving all metadata
+                
+                // Check if this is a text-to-image job (needs upscaling)
+                const isTextToImage = img.photoType === 'text-to-image'
+                
+                if (isTextToImage && !img.upscalePredictionId) {
+                  // Start upscaling to 2048x2048
+                  console.log(`   🔍 Starting upscale for text-to-image...`)
+                  try {
+                    const upscaleRes = await fetch(`${baseUrl}/api/generate/upscale`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        imageUrl: blobUrl,
+                        scale: 2, // 1024 → 2048
+                      }),
+                    })
+                    
+                    if (upscaleRes.ok) {
+                      const upscaleData = await upscaleRes.json()
+                      console.log(`   ✅ Upscale started: ${upscaleData.predictionId}`)
+                      return {
+                        ...img,
+                        url: blobUrl, // Keep original for now
+                        originalUrl: data.originalUrl || img.originalUrl,
+                        status: 'pending' as const, // Still pending (upscaling)
+                        upscalePredictionId: upscaleData.predictionId,
+                      }
+                    }
+                  } catch (error) {
+                    console.error('   ❌ Failed to start upscale:', error)
+                    // Continue without upscaling if it fails
+                  }
+                }
+                
+                // If not text-to-image OR upscale already started, mark as completed
                 return {
-                  ...img, // Keep ALL existing fields (photoType, contentTopic, etc.)
-                  url: blobUrl, // Blob URL (ถาวร)
-                  originalUrl: data.originalUrl || img.originalUrl, // Keep Replicate URL as backup
-                  status: 'completed' as const, // ✅ Set to completed so template generation can find it
+                  ...img,
+                  url: blobUrl,
+                  originalUrl: data.originalUrl || img.originalUrl,
+                  status: 'completed' as const,
                 }
               }
               

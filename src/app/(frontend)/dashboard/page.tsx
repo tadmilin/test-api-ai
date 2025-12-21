@@ -49,6 +49,7 @@ interface Job {
     url?: string
     status?: string
     predictionId?: string
+    upscalePredictionId?: string
     originalUrl?: string
     photoType?: string
     contentTopic?: string
@@ -133,6 +134,7 @@ export default function DashboardPage() {
     status?: string
     originalUrl?: string
     predictionId?: string
+    upscalePredictionId?: string
     photoType?: string
     contentTopic?: string
     postTitleHeadline?: string
@@ -252,10 +254,12 @@ export default function DashboardPage() {
       
       // Check if coming from custom-prompt page
       const fromCustomPrompt = localStorage.getItem('fromCustomPrompt')
+      const fromTextToImage = localStorage.getItem('fromTextToImage')
       const savedJobId = localStorage.getItem('processingJobId')
       
-      if (fromCustomPrompt === 'true' && savedJobId) {
+      if ((fromCustomPrompt === 'true' || fromTextToImage === 'true') && savedJobId) {
         localStorage.removeItem('fromCustomPrompt')
+        localStorage.removeItem('fromTextToImage')
         localStorage.removeItem('processingJobId')
         
         // Show processing status IMMEDIATELY
@@ -1287,6 +1291,12 @@ export default function DashboardPage() {
                 className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 font-semibold shadow-lg hover:shadow-xl transition-all inline-block"
               >
                 ⚡ Custom Prompt
+              </Link>
+              <Link
+                href="/text-to-image"
+                className="bg-gradient-to-r from-pink-600 to-purple-600 text-white px-6 py-3 rounded-lg hover:from-pink-700 hover:to-purple-700 font-semibold shadow-lg hover:shadow-xl transition-all inline-block"
+              >
+                ✨ Text to Image
               </Link>
               <button
                 onClick={() => setShowCreateForm(!showCreateForm)}
