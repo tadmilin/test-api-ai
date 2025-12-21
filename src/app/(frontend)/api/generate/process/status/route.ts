@@ -113,6 +113,34 @@ export async function GET(request: NextRequest) {
         const hasBlobUrl = img.url && img.url.includes('blob.vercel-storage.com')
         const hasReplicateUrl = img.originalUrl && img.originalUrl.includes('replicate.delivery')
         
+        // ⭐ Special case: text-to-image needs upscaling even with Blob URL
+        if (isTextToImageJob && hasBlobUrl && !img.upscalePredictionId) {
+          console.log(`📡 Text-to-image ready for upscale ${index + 1}`)
+          console.log(`   🔍 Starting upscale for text-to-image (job-level check)...`)
+          try {
+            const upscaleRes = await fetch(`${baseUrl}/api/generate/upscale`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                imageUrl: img.url,
+                scale: 2, // 1024 → 2048
+              }),
+            })
+            
+            if (upscaleRes.ok) {
+              const upscaleData = await upscaleRes.json()
+              console.log(`   ✅ Upscale started: ${upscaleData.predictionId}`)
+              return {
+                ...img,
+                status: 'pending' as const, // Still pending (upscaling)
+                upscalePredictionId: upscaleData.predictionId,
+              }
+            }
+          } catch (error) {
+            console.error('   ❌ Failed to start upscale:', error)
+          }
+        }
+        
         // Process if: has predictionId AND (no url OR no blob url yet)
         const isProcessing = img.predictionId && !hasBlobUrl
         
@@ -144,37 +172,6 @@ export async function GET(request: NextRequest) {
                 }
                 
                 console.log(`   ✅ Image ${index + 1} completed: ${blobUrl}`)
-                
-                // ⭐ Use job-level check instead of img.photoType
-                if (isTextToImageJob && !img.upscalePredictionId) {
-                  // Start upscaling to 2048x2048
-                  console.log(`   🔍 Starting upscale for text-to-image (job-level check)...`)
-                  try {
-                    const upscaleRes = await fetch(`${baseUrl}/api/generate/upscale`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        imageUrl: blobUrl,
-                        scale: 2, // 1024 → 2048
-                      }),
-                    })
-                    
-                    if (upscaleRes.ok) {
-                      const upscaleData = await upscaleRes.json()
-                      console.log(`   ✅ Upscale started: ${upscaleData.predictionId}`)
-                      return {
-                        ...img,
-                        url: blobUrl, // Keep original for now
-                        originalUrl: data.originalUrl || img.originalUrl,
-                        status: 'pending' as const, // Still pending (upscaling)
-                        upscalePredictionId: upscaleData.predictionId,
-                      }
-                    }
-                  } catch (error) {
-                    console.error('   ❌ Failed to start upscale:', error)
-                    // Continue without upscaling if it fails
-                  }
-                }
                 
                 // If not text-to-image OR upscale already started, mark as completed
                 return {
