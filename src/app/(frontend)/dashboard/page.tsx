@@ -566,6 +566,13 @@ export default function DashboardPage() {
             // ✅ Stop polling after allComplete (if no template was needed)
             console.log('✅ Text-to-Image completed - showing images')
             setProcessingStatus('✅ ประมวลผลสำเร็จ!')
+            
+            // Set images to display
+            if (statusData.images && statusData.images.length > 0) {
+              setEnhancedImages(statusData.images)
+              setCurrentJobId(jobId)
+            }
+            
             setReviewMode(true)  // ✅ แสดงรูป
             
             // Wait 3s to show success message before clearing banner
