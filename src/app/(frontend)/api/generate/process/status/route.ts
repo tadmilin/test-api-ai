@@ -164,40 +164,27 @@ export async function GET(request: NextRequest) {
                       const upscaleData = await upscaleRes.json()
                       console.log(`   ✅ Upscale prediction created: ${upscaleData.predictionId}`)
                       
-                      // SAVE ลง DB ทันที ป้องกันเรียกซ้ำ
-                      const updatedImage = {
+                      // Return with upscalePredictionId (will be saved in anyChanged block)
+                      return {
                         ...img,
                         url: blobUrl,
                         originalUrl: data.originalUrl || img.originalUrl,
                         status: 'pending' as const,
                         upscalePredictionId: upscaleData.predictionId,
                       }
-                      
-                      await payload.update({
-                        collection: 'jobs',
-                        id: jobId,
-                        data: {
-                          enhancedImageUrls: enhancedImages.map((existingImg, idx) => 
-                            idx === index ? updatedImage : existingImg
-                          ),
-                        },
-                      })
-                      console.log(`   💾 Saved upscalePredictionId to DB`)
-                      
-                      return updatedImage
                     }
                   } catch (error) {
                     console.error('   ❌ Failed to start upscale:', error)
                   }
                 }
                 
-                // ถ้าไม่ใช่ text-to-image หรือ upscale เริ่มไม่สำเร็จ → completed
-                // ถ้าเป็น text-to-image แต่มี upscalePredictionId แล้ว → pending (รอ upscale เสร็จ)
+                // ถ้าไม่ใช่ text-to-image → completed
+                // ถ้าเป็น text-to-image แต่ upscale ไม่สำเร็จ → completed (fallback)
                 return {
                   ...img,
                   url: blobUrl,
                   originalUrl: data.originalUrl || img.originalUrl,
-                  status: (isTextToImageJob && img.upscalePredictionId) ? 'pending' as const : 'completed' as const,
+                  status: 'completed' as const,
                 }
               }
               
