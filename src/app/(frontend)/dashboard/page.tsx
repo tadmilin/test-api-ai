@@ -400,6 +400,13 @@ export default function DashboardPage() {
             match: pendingTemplateJobId === jobId,
           })
           
+          // ⚠️ ถ้า job นี้ไม่ตรงกับ pendingTemplateJobId → clear localStorage ทันที
+          if (pendingTemplateJobId && pendingTemplateJobId !== jobId) {
+            console.log('⚠️ Clearing stale localStorage (different job)')
+            localStorage.removeItem('pendingTemplateUrl')
+            localStorage.removeItem('pendingTemplateJobId')
+          }
+          
           if (pendingTemplateUrl && pendingTemplateJobId === jobId) {
             // ✅ FIRST: Clear localStorage to prevent race condition
             localStorage.removeItem('pendingTemplateUrl')

@@ -46,11 +46,10 @@ export async function GET(request: NextRequest) {
     const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
     
     // ⭐ Check if this is a text-to-image job (needs upscaling)
-    // ❌ ไม่ upscale ถ้ามี customPrompt แต่มี templateUrl (custom prompt จะ upscale ที่ template)
+    // ✅ เฉพาะ Text-to-Image เท่านั้นที่จะ upscale ทันที (ประหยัดเงิน)
+    // ❌ Custom Prompt จะ upscale เฉพาะ template (ทำที่ create-template API)
     const hasTemplate = !!job.templateUrl
-    const isTextToImageJob = (job.contentTopic?.includes('Text-to-Image') || 
-                             (job.customPrompt !== null && job.customPrompt !== undefined)) &&
-                             !hasTemplate // ✅ ไม่ upscale ถ้ามี template (upscale ที่ create-template แทน)
+    const isTextToImageJob = job.contentTopic?.includes('Text-to-Image') && !hasTemplate
     
     console.log(`\n🔍 ===== STATUS CHECK: Job ${jobId} =====`)
     console.log(`📊 Job status: ${job.status}`)
@@ -90,10 +89,11 @@ export async function GET(request: NextRequest) {
                 console.log(`   ✅ Upscaled to 2048x2048: ${upscaleData.imageUrl}`)
                 return {
                   ...img,
-                  url: upscaleData.imageUrl, // Replace with upscaled URL
+                  url: upscaleData.imageUrl,
+                  originalUrl: img.originalUrl || img.url, // Keep original
                   status: 'completed' as const,
-                  upscalePredictionId: null, // ✅ Clear to mark as done
-                  predictionId: null, // ✅ Clear main prediction too
+                  upscalePredictionId: null,
+                  predictionId: null,
                 }
               }
               
