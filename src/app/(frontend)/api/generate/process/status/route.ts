@@ -204,12 +204,13 @@ export async function GET(request: NextRequest) {
                   }
                 }
                 
-                // If not text-to-image OR upscale already started, mark as completed
+                // If not text-to-image, mark as completed
+                // If text-to-image but upscale failed to start, also mark as completed
                 return {
                   ...img,
                   url: blobUrl,
                   originalUrl: data.originalUrl || img.originalUrl,
-                  status: 'completed' as const,
+                  status: isTextToImageJob ? 'pending' as const : 'completed' as const,
                 }
               }
               
