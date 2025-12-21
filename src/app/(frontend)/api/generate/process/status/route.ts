@@ -115,34 +115,6 @@ export async function GET(request: NextRequest) {
         const hasBlobUrl = img.url && img.url.includes('blob.vercel-storage.com')
         const hasReplicateUrl = img.originalUrl && img.originalUrl.includes('replicate.delivery')
         
-        // ⭐ Special case: text-to-image with Blob URL but no upscale yet
-        if (isTextToImageJob && hasBlobUrl && !img.upscalePredictionId && img.status !== 'completed') {
-          console.log(`📡 Text-to-image with URL, starting upscale ${index + 1}`)
-          console.log(`   🔍 Starting upscale for text-to-image...`)
-          try {
-            const upscaleRes = await fetch(`${baseUrl}/api/generate/upscale`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                imageUrl: img.url,
-                scale: 2,
-              }),
-            })
-            
-            if (upscaleRes.ok) {
-              const upscaleData = await upscaleRes.json()
-              console.log(`   ✅ Upscale started: ${upscaleData.predictionId}`)
-              return {
-                ...img,
-                status: 'pending' as const,
-                upscalePredictionId: upscaleData.predictionId,
-              }
-            }
-          } catch (error) {
-            console.error('   ❌ Failed to start upscale:', error)
-          }
-        }
-        
         // Process if: has predictionId AND (no url OR no blob url yet)
         const isProcessing = img.predictionId && !hasBlobUrl
         
@@ -175,9 +147,9 @@ export async function GET(request: NextRequest) {
                 
                 console.log(`   ✅ Image ${index + 1} completed: ${blobUrl}`)
                 
-                // ⭐ Check if text-to-image needs upscaling
-                if (isTextToImageJob && !img.upscalePredictionId) {
-                  console.log(`   🔍 Starting upscale for text-to-image...`)
+                // ⭐ Check if text-to-image needs upscaling (เริ่มเฉพาะครั้งแรก)
+                if (isTextToImageJob && !img.upscalePredictionId && img.status !== 'pending') {
+                  console.log(`   🔍 Starting upscale for text-to-image ${index + 1}...`)
                   try {
                     const upscaleRes = await fetch(`${baseUrl}/api/generate/upscale`, {
                       method: 'POST',
@@ -190,27 +162,42 @@ export async function GET(request: NextRequest) {
                     
                     if (upscaleRes.ok) {
                       const upscaleData = await upscaleRes.json()
-                      console.log(`   ✅ Upscale started: ${upscaleData.predictionId}`)
-                      return {
+                      console.log(`   ✅ Upscale prediction created: ${upscaleData.predictionId}`)
+                      
+                      // SAVE ลง DB ทันที ป้องกันเรียกซ้ำ
+                      const updatedImage = {
                         ...img,
                         url: blobUrl,
                         originalUrl: data.originalUrl || img.originalUrl,
                         status: 'pending' as const,
                         upscalePredictionId: upscaleData.predictionId,
                       }
+                      
+                      await payload.update({
+                        collection: 'jobs',
+                        id: jobId,
+                        data: {
+                          enhancedImageUrls: enhancedImages.map((existingImg, idx) => 
+                            idx === index ? updatedImage : existingImg
+                          ),
+                        },
+                      })
+                      console.log(`   💾 Saved upscalePredictionId to DB`)
+                      
+                      return updatedImage
                     }
                   } catch (error) {
                     console.error('   ❌ Failed to start upscale:', error)
                   }
                 }
                 
-                // If not text-to-image, mark as completed
-                // If text-to-image but upscale failed to start, also mark as completed
+                // ถ้าไม่ใช่ text-to-image หรือ upscale เริ่มไม่สำเร็จ → completed
+                // ถ้าเป็น text-to-image แต่มี upscalePredictionId แล้ว → pending (รอ upscale เสร็จ)
                 return {
                   ...img,
                   url: blobUrl,
                   originalUrl: data.originalUrl || img.originalUrl,
-                  status: isTextToImageJob ? 'pending' as const : 'completed' as const,
+                  status: (isTextToImageJob && img.upscalePredictionId) ? 'pending' as const : 'completed' as const,
                 }
               }
               
