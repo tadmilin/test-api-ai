@@ -274,14 +274,10 @@ export async function GET(request: NextRequest) {
     }
     
     // Count statuses (include upscaling in processing count)
-    const processing = updatedImages.filter((img: EnhancedImageUrl) => {
-      const isProcessing = (img.predictionId && (!img.url || img.url === '')) ||
-                          (img.upscalePredictionId && img.status === 'pending')
-      if (isProcessing) {
-        console.log(`   🔄 Processing image: predictionId=${!!img.predictionId}, upscalePredictionId=${!!img.upscalePredictionId}, status=${img.status}`)
-      }
-      return isProcessing
-    }).length
+    const processing = updatedImages.filter((img: EnhancedImageUrl) => 
+      (img.predictionId && (!img.url || img.url === '')) ||
+      (img.upscalePredictionId && img.status === 'pending')
+    ).length
     
     const completed = updatedImages.filter((img: EnhancedImageUrl) => 
       img.url && img.url.length > 0 && img.status === 'completed' && !img.upscalePredictionId

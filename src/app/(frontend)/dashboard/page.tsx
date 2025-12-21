@@ -1109,11 +1109,14 @@ export default function DashboardPage() {
   async function handleCompleteJob() {
     if (!currentJobId) return
 
-    // Check all images have either completed or failed (not processing)
-    const completedImages = enhancedImages.filter(img => img.url && img.url.trim() !== '')
-    const processingImages = enhancedImages.filter(img => 
-      img.status === 'processing' && (!img.url || img.url.trim() === '')
-    )
+    const isImageReady = (img: (typeof enhancedImages)[number]) =>
+      img.status === 'completed' && !!img.url && img.url.trim() !== '' && !img.upscalePredictionId
+
+    const isImageFailed = (img: (typeof enhancedImages)[number]) => img.status === 'failed'
+
+    // Check all images have either completed (including upscale) or failed
+    const completedImages = enhancedImages.filter(isImageReady)
+    const processingImages = enhancedImages.filter(img => !isImageReady(img) && !isImageFailed(img))
     const totalImages = enhancedImages.length
     
     if (processingImages.length > 0) {
@@ -1857,7 +1860,7 @@ export default function DashboardPage() {
               <div className="text-right">
                 <div className="text-sm text-gray-600">
                   สำเร็จแล้ว: <span className="font-bold text-green-600">
-                    {enhancedImages.filter(img => img.url && img.url.trim() !== '').length} / {enhancedImages.length}
+                    {enhancedImages.filter(img => img.status === 'completed' && img.url && img.url.trim() !== '' && !img.upscalePredictionId).length} / {enhancedImages.length}
                   </span>
                 </div>
               </div>
@@ -1866,6 +1869,8 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {enhancedImages.map((img, index) => {
                 const hasMetadata = img.photoType || img.contentTopic || img.postTitleHeadline
+                const isReady = img.status === 'completed' && !!img.url && img.url.trim() !== '' && !img.upscalePredictionId
+                const isUpscaling = !!img.upscalePredictionId && img.status === 'pending'
                 return (
                   <div key={index} className="bg-white rounded-xl border-2 border-gray-200 shadow-sm hover:shadow-md transition-all overflow-hidden">
                     {/* Header with Status */}
@@ -1873,13 +1878,14 @@ export default function DashboardPage() {
                       <div className="flex items-center justify-between">
                         <h3 className="font-semibold text-gray-900">รูปที่ {index + 1}</h3>
                         <div className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold ${
-                          img.url && img.url.trim() !== '' ? 'bg-green-100 text-green-700' :
-                          img.status === 'processing' ? 'bg-blue-100 text-blue-700' :
+                          isReady ? 'bg-green-100 text-green-700' :
+                          isUpscaling || img.status === 'processing' || img.status === 'pending' ? 'bg-blue-100 text-blue-700' :
                           img.status === 'failed' ? 'bg-red-100 text-red-700' :
                           'bg-gray-100 text-gray-700'
                         }`}>
-                          {img.url && img.url.trim() !== '' ? '✅ เสร็จแล้ว' :
-                           img.status === 'processing' ? '⏳ ประมวลผล' :
+                          {isReady ? '✅ เสร็จแล้ว' :
+                           isUpscaling ? '⏳ Upscale' :
+                           img.status === 'processing' || img.status === 'pending' ? '⏳ ประมวลผล' :
                            img.status === 'failed' ? '❌ ล้มเหลว' :
                            '⏳ รอคิว'}
                         </div>
@@ -1934,9 +1940,9 @@ export default function DashboardPage() {
 
                     {/* Enhanced Image */}
                     <div className="relative aspect-[4/3] bg-gray-100">
-                      {img.url ? (
+                      {isReady ? (
                         <Image
-                          src={img.url}
+                          src={img.url!}
                           alt={`Enhanced ${index + 1}`}
                           fill
                           className="object-cover"
@@ -1944,7 +1950,12 @@ export default function DashboardPage() {
                         />
                       ) : (
                         <div className="flex items-center justify-center h-full text-gray-400 flex-col gap-3">
-                          {img.status === 'processing' ? (
+                          {isUpscaling ? (
+                            <>
+                              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                              <span className="text-xs font-medium">กำลัง upscale...</span>
+                            </>
+                          ) : img.status === 'processing' || img.status === 'pending' ? (
                             <>
                               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
                               <span className="text-xs font-medium">กำลังประมวลผล...</span>
@@ -1966,7 +1977,7 @@ export default function DashboardPage() {
 
                     {/* Action Buttons */}
                     <div className="p-3">
-                      {img.url && img.url.trim() !== '' ? (
+                      {isReady ? (
                         <button
                           onClick={() => downloadImage(img.url!, `${img.photoType || 'enhanced'}-${index + 1}-${Date.now()}.jpg`)}
                           className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-2.5 rounded-lg hover:from-blue-700 hover:to-purple-700 font-medium text-sm shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2"
@@ -1974,6 +1985,14 @@ export default function DashboardPage() {
                           <span>💾</span>
                           <span>ดาวน์โหลด</span>
                         </button>
+                      ) : isUpscaling ? (
+                        <div className="w-full bg-blue-50 border border-blue-200 text-blue-700 py-2.5 rounded-lg font-medium text-sm text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <div className="animate-spin">⏳</div>
+                            <span>กำลัง upscale...</span>
+                          </div>
+                          <div className="text-xs text-blue-600 mt-1">โปรดรอสักครู่</div>
+                        </div>
                       ) : img.status === 'failed' ? (
                         <div className="w-full bg-red-50 border border-red-200 rounded-lg p-3">
                           <div className="text-sm text-red-800 space-y-1">
