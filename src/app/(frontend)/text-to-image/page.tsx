@@ -88,7 +88,7 @@ export default function TextToImagePage() {
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="ตัวอย่าง: A serene beach at sunset with palm trees and gentle waves, photorealistic style"
                 rows={6}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none"
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none text-gray-900 placeholder:text-gray-500"
               />
               <div className="mt-2 text-sm text-gray-500">
                 ใช้ภาษาอังกฤษได้ผลดีที่สุด • ควรมีรายละเอียด • อย่างน้อย 10 ตัวอักษร
@@ -109,7 +109,7 @@ export default function TextToImagePage() {
                     className={`flex-1 py-3 px-4 rounded-lg border-2 font-semibold transition-all ${
                       outputFormat === format
                         ? 'border-purple-600 bg-purple-50 text-purple-700'
-                        : 'border-gray-300 hover:border-purple-400'
+                        : 'border-gray-300 hover:border-purple-400 text-gray-900'
                     }`}
                   >
                     {format.toUpperCase()}
@@ -132,7 +132,7 @@ export default function TextToImagePage() {
                     className={`flex-1 py-3 px-4 rounded-lg border-2 font-semibold transition-all ${
                       numImages === num
                         ? 'border-purple-600 bg-purple-50 text-purple-700'
-                        : 'border-gray-300 hover:border-purple-400'
+                        : 'border-gray-300 hover:border-purple-400 text-gray-900'
                     }`}
                   >
                     {num} รูป
