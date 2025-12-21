@@ -51,6 +51,8 @@ export async function GET(request: NextRequest) {
     
     console.log(`\n🔍 ===== STATUS CHECK: Job ${jobId} =====`)
     console.log(`📊 Job status: ${job.status}`)
+    console.log(`🔥 DEBUG - contentTopic: "${job.contentTopic}"`)
+    console.log(`🔥 DEBUG - customPrompt: ${job.customPrompt ? 'EXISTS' : 'NULL/UNDEFINED'}`)
     console.log(`🔥 Is Text-to-Image Job: ${isTextToImageJob}`)
     console.log(`🖼️ Total images: ${enhancedImages.length}`)
     console.log(`📋 Image states:`, enhancedImages.map((img, i) => ({
