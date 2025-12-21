@@ -504,21 +504,21 @@ export default function DashboardPage() {
                 console.log(`📊 Template poll ${pollCount + 1}: ${pollData.status}`)
                 
                 if (pollData.status === 'succeeded') {
-                  console.log('✅ Template generated successfully')
-                  setProcessingStatus('✅ Template สำเร็จ!')
-                  
-                  // ✅ Set template URL immediately (don't wait for API)
-                  setGeneratedTemplateUrl(pollData.imageUrl)
-                  console.log('✅ Template URL set:', pollData.imageUrl)
-                  
-                  // Save template URL to job in background (don't block UI)
-                  fetch(`/api/jobs/${jobId}/update-template`, {
-                    method: 'POST',
+                  // Save template URL to job
+                  await fetch(`/api/jobs/${jobId}`, {
+                    method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                       templateUrl: pollData.imageUrl,
                     }),
-                  }).catch(err => console.error('Failed to save template URL:', err))
+                  })
+
+                  console.log('✅ Template generated successfully')
+                  setProcessingStatus('✅ Template สำเร็จ!')
+                  
+                  // Set template URL
+                  setGeneratedTemplateUrl(pollData.imageUrl)
+                  console.log('✅ Template URL set:', pollData.imageUrl)
                   
                   // Wait 3s to show success message before clearing
                   await new Promise(resolve => setTimeout(resolve, 3000))
