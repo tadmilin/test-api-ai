@@ -320,6 +320,7 @@ export default function DashboardPage() {
               contentTopic?: string
               postTitleHeadline?: string
               contentDescription?: string
+              upscalePredictionId?: string
             }, index: number) => {
               const prevImg = prevImages[index] || {}
               const merged = {
@@ -332,6 +333,7 @@ export default function DashboardPage() {
                 contentTopic: newImg.contentTopic || prevImg.contentTopic,
                 postTitleHeadline: newImg.postTitleHeadline || prevImg.postTitleHeadline,
                 contentDescription: newImg.contentDescription || prevImg.contentDescription,
+                upscalePredictionId: newImg.upscalePredictionId || prevImg.upscalePredictionId,
               }
               // Debug log to check photoType preservation
               if (merged.photoType !== prevImg.photoType) {
