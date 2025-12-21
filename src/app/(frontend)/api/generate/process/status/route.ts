@@ -92,7 +92,8 @@ export async function GET(request: NextRequest) {
                   ...img,
                   url: upscaleData.imageUrl, // Replace with upscaled URL
                   status: 'completed' as const,
-                  upscalePredictionId: null, // Clear prediction ID
+                  upscalePredictionId: null, // ✅ Clear to mark as done
+                  predictionId: null, // ✅ Clear main prediction too
                 }
               }
               
@@ -102,7 +103,8 @@ export async function GET(request: NextRequest) {
                 return {
                   ...img,
                   status: 'completed' as const,
-                  upscalePredictionId: null, // Clear prediction ID
+                  upscalePredictionId: null, // ✅ Clear to mark as done
+                  predictionId: null, // ✅ Clear main prediction too
                 }
               }
             }
