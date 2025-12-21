@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { put } from '@vercel/blob'
 import Replicate from 'replicate'
+import sharp from 'sharp'
 
 // ✅ Force Node.js runtime
 export const runtime = 'nodejs'
@@ -31,11 +32,30 @@ export async function POST(request: NextRequest) {
     console.log(`🔍 Starting upscale for: ${imageUrl.substring(0, 80)}...`)
     console.log(`   Scale factor: ${scale}x`)
 
-    // Start Real-ESRGAN upscaling
+    // ⭐ Normalize to 1024x1024 first (ensures 2048x2048 output)
+    console.log(`   📐 Normalizing to 1024x1024...`)
+    const res = await fetch(imageUrl)
+    const inputBuf = Buffer.from(await res.arrayBuffer())
+
+    // Resize to 1024x1024 (cover = crop to fill frame)
+    const normalizedBuf = await sharp(inputBuf)
+      .resize(1024, 1024, { fit: 'cover' })
+      .png()
+      .toBuffer()
+
+    // Upload normalized image to Blob
+    const normalizedBlob = await put(`preupscale-${Date.now()}.png`, normalizedBuf, {
+      access: 'public',
+      contentType: 'image/png',
+    })
+
+    console.log(`   ✅ Normalized: ${normalizedBlob.url}`)
+
+    // Start Real-ESRGAN upscaling with normalized image
     const prediction = await replicate.predictions.create({
       model: 'nightmareai/real-esrgan',
       input: {
-        image: imageUrl,
+        image: normalizedBlob.url,
         scale: scale, // 2x upscale (1024 → 2048)
         face_enhance: false,
       },
