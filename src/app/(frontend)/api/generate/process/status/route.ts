@@ -253,25 +253,19 @@ export async function GET(request: NextRequest) {
       })), null, 2))
     }
     
-    // Count statuses
-    const processing = updatedImages.filter((img: {
-      predictionId?: string | null
-      url?: string | null
-    }) => 
-      img.predictionId && (!img.url || img.url === '')
+    // Count statuses (include upscaling in processing count)
+    const processing = updatedImages.filter((img: EnhancedImageUrl) => 
+      // Still has predictionId without URL OR has upscalePredictionId with pending status
+      (img.predictionId && (!img.url || img.url === '')) ||
+      (img.upscalePredictionId && img.status === 'pending')
     ).length
     
-    const completed = updatedImages.filter((img: {
-      url?: string | null
-    }) => 
-      img.url && img.url.length > 0
+    const completed = updatedImages.filter((img: EnhancedImageUrl) => 
+      img.url && img.url.length > 0 && img.status === 'completed'
     ).length
 
-    const failed = updatedImages.filter((img: {
-      url?: string | null
-      predictionId?: string | null
-    }) => 
-      (!img.url || img.url.length === 0) && !img.predictionId
+    const failed = updatedImages.filter((img: EnhancedImageUrl) => 
+      (!img.url || img.url.length === 0) && !img.predictionId && !img.upscalePredictionId
     ).length
 
     // We are done if nothing is processing (either completed or failed)
