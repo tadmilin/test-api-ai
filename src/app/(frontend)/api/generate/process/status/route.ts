@@ -45,8 +45,13 @@ export async function GET(request: NextRequest) {
     const enhancedImages = job.enhancedImageUrls || []
     const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
     
+    // ⭐ Check if this is a text-to-image job (needs upscaling)
+    const isTextToImageJob = job.contentTopic?.includes('Text-to-Image') || 
+                             job.customPrompt !== null && job.customPrompt !== undefined
+    
     console.log(`\n🔍 ===== STATUS CHECK: Job ${jobId} =====`)
     console.log(`📊 Job status: ${job.status}`)
+    console.log(`🔥 Is Text-to-Image Job: ${isTextToImageJob}`)
     console.log(`🖼️ Total images: ${enhancedImages.length}`)
     console.log(`📋 Image states:`, enhancedImages.map((img, i) => ({
       index: i + 1,
@@ -138,12 +143,10 @@ export async function GET(request: NextRequest) {
                 
                 console.log(`   ✅ Image ${index + 1} completed: ${blobUrl}`)
                 
-                // Check if this is a text-to-image job (needs upscaling)
-                const isTextToImage = img.photoType === 'text-to-image'
-                
-                if (isTextToImage && !img.upscalePredictionId) {
+                // ⭐ Use job-level check instead of img.photoType
+                if (isTextToImageJob && !img.upscalePredictionId) {
                   // Start upscaling to 2048x2048
-                  console.log(`   🔍 Starting upscale for text-to-image...`)
+                  console.log(`   🔍 Starting upscale for text-to-image (job-level check)...`)
                   try {
                     const upscaleRes = await fetch(`${baseUrl}/api/generate/upscale`, {
                       method: 'POST',
