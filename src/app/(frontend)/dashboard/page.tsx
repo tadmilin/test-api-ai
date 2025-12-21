@@ -238,8 +238,10 @@ export default function DashboardPage() {
               setGeneratedTemplateUrl(job.templateUrl)
             }
             
-            // Start polling - pollJobStatus is defined later in the file
-            setTimeout(() => pollJobStatus(job.id), 0)
+            // ✅ Poll only if incomplete
+            if (hasIncomplete) {
+              setTimeout(() => pollJobStatus(job.id), 0)
+            }
             break // Only resume one job at a time
           }
         } else {
@@ -2642,10 +2644,40 @@ export default function DashboardPage() {
                           job.status === 'rejected') &&
                           (job.generatedImages || job.enhancedImageUrls) && (
                             <button
-                              onClick={() => {
+                              onClick={async () => {
                                 // Clear any previous error states when opening modal
                                 setImageLoadErrors({})
-                                setViewingJob(job)
+                                
+                                // Fetch latest job data to ensure we have templateUrl
+                                try {
+                                  const response = await fetch(`/api/jobs/${job.id}`)
+                                  if (response.ok) {
+                                    const latestJob = await response.json()
+                                    setViewingJob(latestJob)
+                                    // Set template URL from latest data
+                                    if (latestJob.templateUrl) {
+                                      setGeneratedTemplateUrl(latestJob.templateUrl)
+                                    } else {
+                                      setGeneratedTemplateUrl(null)
+                                    }
+                                  } else {
+                                    // Fallback to existing job data
+                                    setViewingJob(job)
+                                    if (job.templateUrl) {
+                                      setGeneratedTemplateUrl(job.templateUrl)
+                                    } else {
+                                      setGeneratedTemplateUrl(null)
+                                    }
+                                  }
+                                } catch (error) {
+                                  // Fallback to existing job data
+                                  setViewingJob(job)
+                                  if (job.templateUrl) {
+                                    setGeneratedTemplateUrl(job.templateUrl)
+                                  } else {
+                                    setGeneratedTemplateUrl(null)
+                                  }
+                                }
                               }}
                               className="text-purple-600 hover:text-purple-900 font-medium"
                             >
