@@ -222,6 +222,12 @@ export default function DashboardPage() {
             setReviewMode(true)
             setProcessingStatus(`🔄 กำลังประมวลผล ${job.enhancedImageUrls.length} รูป...`)
             
+            // ✅ Set template URL if exists
+            if (job.templateUrl) {
+              console.log(`✅ Found existing template: ${job.templateUrl}`)
+              setGeneratedTemplateUrl(job.templateUrl)
+            }
+            
             // Start polling - pollJobStatus is defined later in the file
             setTimeout(() => pollJobStatus(job.id), 0)
             break // Only resume one job at a time
@@ -385,6 +391,8 @@ export default function DashboardPage() {
           fetchDashboardData()  // Refresh to show failed status in job list
           break
         }
+        
+        console.log(`🎯 Checking allComplete: ${statusData.allComplete}`)
         
         if (statusData.allComplete) {
           console.log(`✅ All images complete for job ${jobId}`)
