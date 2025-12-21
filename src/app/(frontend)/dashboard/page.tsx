@@ -390,8 +390,8 @@ export default function DashboardPage() {
           console.log(`✅ All images complete for job ${jobId}`)
           
           // ✅ Check if template generation is pending (from custom-prompt)
-          const pendingTemplateUrl = localStorage.getItem('pendingTemplateUrl')
-          const pendingTemplateJobId = localStorage.getItem('pendingTemplateJobId')
+          let pendingTemplateUrl = localStorage.getItem('pendingTemplateUrl')
+          let pendingTemplateJobId = localStorage.getItem('pendingTemplateJobId')
           
           console.log('🔍 Template check:', {
             hasPendingUrl: !!pendingTemplateUrl,
@@ -405,6 +405,9 @@ export default function DashboardPage() {
             console.log('⚠️ Clearing stale localStorage (different job)')
             localStorage.removeItem('pendingTemplateUrl')
             localStorage.removeItem('pendingTemplateJobId')
+            // Re-fetch after clearing
+            pendingTemplateUrl = null
+            pendingTemplateJobId = null
           }
           
           if (pendingTemplateUrl && pendingTemplateJobId === jobId) {
