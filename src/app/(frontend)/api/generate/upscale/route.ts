@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
 
     // Start Real-ESRGAN upscaling with normalized image
     const prediction = await replicate.predictions.create({
-      version: '42fd2a032a39c5f2044f9f9b4e5e9e1c8c3cba75d3b1a0e7f6c5c4b3a2a1a0a0', // Real-ESRGAN 2x
+      model: 'nightmareai/real-esrgan',
       input: {
         image: normalizedBlob.url,
         scale: finalScale, // 2x upscale (1024 → 2048)
