@@ -164,11 +164,12 @@ export async function GET(request: NextRequest) {
                       const upscaleData = await upscaleRes.json()
                       console.log(`   ✅ Upscale prediction created: ${upscaleData.predictionId}`)
                       
-                      // Return with upscalePredictionId (will be saved in anyChanged block)
+                      // Return with upscalePredictionId, REMOVE predictionId
                       return {
                         ...img,
                         url: blobUrl,
                         originalUrl: data.originalUrl || img.originalUrl,
+                        predictionId: null, // ✅ Clear original prediction
                         status: 'pending' as const,
                         upscalePredictionId: upscaleData.predictionId,
                       }
@@ -250,7 +251,8 @@ export async function GET(request: NextRequest) {
         index: i + 1,
         url: img.url?.substring(0, 50) + '...',
         status: img.status,
-        hasPredictionId: !!img.predictionId
+        hasPredictionId: !!img.predictionId,
+        upscalePredictionId: img.upscalePredictionId ? img.upscalePredictionId.substring(0, 15) + '...' : null
       })), null, 2))
       
       await payload.update({
@@ -272,14 +274,17 @@ export async function GET(request: NextRequest) {
     }
     
     // Count statuses (include upscaling in processing count)
-    const processing = updatedImages.filter((img: EnhancedImageUrl) => 
-      // Still has predictionId without URL OR has upscalePredictionId with pending status
-      (img.predictionId && (!img.url || img.url === '')) ||
-      (img.upscalePredictionId && img.status === 'pending')
-    ).length
+    const processing = updatedImages.filter((img: EnhancedImageUrl) => {
+      const isProcessing = (img.predictionId && (!img.url || img.url === '')) ||
+                          (img.upscalePredictionId && img.status === 'pending')
+      if (isProcessing) {
+        console.log(`   🔄 Processing image: predictionId=${!!img.predictionId}, upscalePredictionId=${!!img.upscalePredictionId}, status=${img.status}`)
+      }
+      return isProcessing
+    }).length
     
     const completed = updatedImages.filter((img: EnhancedImageUrl) => 
-      img.url && img.url.length > 0 && img.status === 'completed'
+      img.url && img.url.length > 0 && img.status === 'completed' && !img.upscalePredictionId
     ).length
 
     const failed = updatedImages.filter((img: EnhancedImageUrl) => 
