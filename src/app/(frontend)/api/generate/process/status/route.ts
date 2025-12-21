@@ -274,17 +274,31 @@ export async function GET(request: NextRequest) {
     }
     
     // Count statuses (include upscaling in processing count)
-    const processing = updatedImages.filter((img: EnhancedImageUrl) => 
-      (img.predictionId && (!img.url || img.url === '')) ||
-      (img.upscalePredictionId && img.status === 'pending')
-    ).length
+    // ✅ Processing: มี predictionId/upscalePredictionId และยังไม่มี URL หรือ status ไม่ใช่ completed
+    const processing = updatedImages.filter((img: EnhancedImageUrl) => {
+      // กำลัง upscaling (มี upscalePredictionId และยัง pending)
+      if (img.upscalePredictionId && img.status === 'pending') {
+        return true
+      }
+      // กำลังประมวลผลรูปแรก (มี predictionId แต่ยังไม่มี URL)
+      if (img.predictionId && (!img.url || img.url === '')) {
+        return true
+      }
+      return false
+    }).length
     
+    // ✅ Completed: มี URL, status เป็น completed, และไม่มี upscalePredictionId (หมายถึง upscale เสร็จแล้วหรือไม่ต้อง upscale)
     const completed = updatedImages.filter((img: EnhancedImageUrl) => 
-      img.url && img.url.length > 0 && img.status === 'completed' && !img.upscalePredictionId
+      img.url && 
+      img.url.length > 0 && 
+      img.status === 'completed' && 
+      !img.upscalePredictionId  // ไม่มี upscale pending อยู่
     ).length
 
+    // ✅ Failed: ไม่มี URL, ไม่มี prediction ทั้งสองแบบ, หรือ status เป็น failed
     const failed = updatedImages.filter((img: EnhancedImageUrl) => 
-      (!img.url || img.url.length === 0) && !img.predictionId && !img.upscalePredictionId
+      img.status === 'failed' ||
+      ((!img.url || img.url.length === 0) && !img.predictionId && !img.upscalePredictionId)
     ).length
 
     // We are done if nothing is processing (either completed or failed)

@@ -345,7 +345,21 @@ export default function DashboardPage() {
         }
         
         const progress = `${statusData.completed}/${statusData.total}`
-        setProcessingStatus(`⏳ ประมวลผลแล้ว ${progress} รูป`)
+        const processingCount = statusData.processing || 0
+        
+        // ✅ แสดงสถานะตามประเภทของงาน
+        if (processingCount > 0) {
+          // มีงานที่กำลังประมวลผลอยู่ (อาจเป็น upscale)
+          const upscalingCount = statusData.images?.filter((img: any) => img.upscalePredictionId && img.status === 'pending').length || 0
+          
+          if (upscalingCount > 0) {
+            setProcessingStatus(`🔄 กำลัง Upscale รูปเป็น 2048x2048... (${statusData.completed}/${statusData.total})`)
+          } else {
+            setProcessingStatus(`⏳ ประมวลผลแล้ว ${progress} รูป`)
+          }
+        } else {
+          setProcessingStatus(`⏳ ประมวลผลแล้ว ${progress} รูป`)
+        }
         
         // ✅ DEBUG: Log status before all checks
         console.log(`📊 Poll status:`, {
@@ -558,10 +572,10 @@ export default function DashboardPage() {
       const jobsData = await jobsRes.json()
       const jobs = jobsData.jobs || []
 
-      // Calculate stats
+      // Calculate stats (รวม enhancing เข้ากับ processing)
       const newStats: JobStats = {
         pending: jobs.filter((j: Job) => j.status === 'pending').length,
-        processing: jobs.filter((j: Job) => j.status === 'processing').length,
+        processing: jobs.filter((j: Job) => j.status === 'processing' || j.status === 'enhancing').length,
         completed: jobs.filter((j: Job) => j.status === 'completed').length,
         failed: jobs.filter((j: Job) => j.status === 'failed').length,
         approved: jobs.filter((j: Job) => j.status === 'approved').length,
@@ -2575,7 +2589,10 @@ export default function DashboardPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
-                        {job.status === 'processing' && job.enhancedImageUrls && job.enhancedImageUrls.length > 0 && (
+                        {/* ✅ แสดงปุ่มดูความคืบหน้าสำหรับ processing และ enhancing */}
+                        {(job.status === 'processing' || job.status === 'enhancing') && 
+                         job.enhancedImageUrls && 
+                         job.enhancedImageUrls.length > 0 && (
                           <button
                             onClick={() => {
                               setCurrentJobId(job.id)
