@@ -2653,6 +2653,9 @@ export default function DashboardPage() {
                                   const response = await fetch(`/api/jobs/${job.id}`)
                                   if (response.ok) {
                                     const latestJob = await response.json()
+                                    console.log('✅ Fetched job:', latestJob)
+                                    console.log('📋 Template URL:', latestJob.templateUrl)
+                                    console.log('📋 Enhanced URLs:', latestJob.enhancedImageUrls?.length)
                                     setViewingJob(latestJob)
                                     // Set template URL from latest data
                                     if (latestJob.templateUrl) {

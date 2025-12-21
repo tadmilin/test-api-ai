@@ -7,6 +7,40 @@ import { cookies } from 'next/headers'
 export const runtime = 'nodejs'
 
 /**
+ * GET /api/jobs/:id - Get job details including templateUrl
+ */
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params
+  try {
+    const payload = await getPayload({ config })
+    
+    const job = await payload.findByID({
+      collection: 'jobs',
+      id,
+    })
+
+    if (!job) {
+      return NextResponse.json(
+        { error: 'Job not found' },
+        { status: 404 }
+      )
+    }
+
+    return NextResponse.json(job)
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to get job'
+    console.error('Error getting job:', error)
+    return NextResponse.json(
+      { error: errorMessage },
+      { status: 500 }
+    )
+  }
+}
+
+/**
  * PATCH /api/jobs/:id - Update image review status (approve/reject per image)
  * ✅ Uses PATCH (not GET) to properly handle request body
  * ✅ Uses auth from session (not client-provided userId)
