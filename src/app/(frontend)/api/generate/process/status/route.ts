@@ -313,13 +313,8 @@ export async function GET(request: NextRequest) {
     console.log(`   ❌ Failed: ${failed}/${updatedImages.length}`)
     console.log(`   🎯 All complete: ${allComplete}`)
     
-    // Get current job to check status
-    const currentJob = await payload.findByID({
-      collection: 'jobs',
-      id: jobId,
-    })
-    
-    console.log(`📌 Current job status: ${currentJob.status}`)
+    // Use existing job object (already fetched at line 36)
+    console.log(`📌 Current job status: ${job.status}`)
     
     // Update job status if all complete
     if (allComplete && (job.status === 'enhancing' || job.status === 'processing')) {
@@ -348,7 +343,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       jobId,
-      jobStatus: allComplete ? 'completed' : currentJob.status, // Return actual job status
+      jobStatus: allComplete ? 'completed' : job.status, // Use existing job object
       status: allComplete ? 'completed' : 'enhancing',
       total: updatedImages.length,
       processing,
