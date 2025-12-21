@@ -113,6 +113,34 @@ export async function GET(request: NextRequest) {
         const hasBlobUrl = img.url && img.url.includes('blob.vercel-storage.com')
         const hasReplicateUrl = img.originalUrl && img.originalUrl.includes('replicate.delivery')
         
+        // ⭐ Special case: text-to-image with Blob URL but no upscale yet
+        if (isTextToImageJob && hasBlobUrl && !img.upscalePredictionId && img.status !== 'completed') {
+          console.log(`📡 Text-to-image with URL, starting upscale ${index + 1}`)
+          console.log(`   🔍 Starting upscale for text-to-image...`)
+          try {
+            const upscaleRes = await fetch(`${baseUrl}/api/generate/upscale`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                imageUrl: img.url,
+                scale: 2,
+              }),
+            })
+            
+            if (upscaleRes.ok) {
+              const upscaleData = await upscaleRes.json()
+              console.log(`   ✅ Upscale started: ${upscaleData.predictionId}`)
+              return {
+                ...img,
+                status: 'pending' as const,
+                upscalePredictionId: upscaleData.predictionId,
+              }
+            }
+          } catch (error) {
+            console.error('   ❌ Failed to start upscale:', error)
+          }
+        }
+        
         // Process if: has predictionId AND (no url OR no blob url yet)
         const isProcessing = img.predictionId && !hasBlobUrl
         
