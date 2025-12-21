@@ -215,13 +215,19 @@ export async function GET(request: NextRequest) {
       })
     )
     
-    // Update job if any images changed
+    // Update job if any images changed (check URL, status, and upscalePredictionId)
     const anyChanged = updatedImages.some((img, i) => {
-      const oldUrl = enhancedImages[i]?.url || ''
-      const newUrl = img.url || ''
-      const changed = oldUrl !== newUrl
+      const original = enhancedImages[i] as EnhancedImageUrl
+      const changed = 
+        img.url !== original?.url ||
+        img.status !== original?.status ||
+        img.upscalePredictionId !== original?.upscalePredictionId
       if (changed) {
-        console.log(`🔄 Image ${i + 1} changed: "${oldUrl}" -> "${newUrl}"`)
+        console.log(`🔄 Image ${i + 1} changed:`, {
+          url: original?.url !== img.url,
+          status: original?.status !== img.status,
+          upscalePredictionId: original?.upscalePredictionId !== img.upscalePredictionId,
+        })
       }
       return changed
     })
