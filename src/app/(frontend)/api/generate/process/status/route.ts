@@ -113,34 +113,6 @@ export async function GET(request: NextRequest) {
         const hasBlobUrl = img.url && img.url.includes('blob.vercel-storage.com')
         const hasReplicateUrl = img.originalUrl && img.originalUrl.includes('replicate.delivery')
         
-        // ⭐ Special case: text-to-image needs upscaling even with Blob URL
-        if (isTextToImageJob && hasBlobUrl && !img.upscalePredictionId) {
-          console.log(`📡 Text-to-image ready for upscale ${index + 1}`)
-          console.log(`   🔍 Starting upscale for text-to-image (job-level check)...`)
-          try {
-            const upscaleRes = await fetch(`${baseUrl}/api/generate/upscale`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                imageUrl: img.url,
-                scale: 2, // 1024 → 2048
-              }),
-            })
-            
-            if (upscaleRes.ok) {
-              const upscaleData = await upscaleRes.json()
-              console.log(`   ✅ Upscale started: ${upscaleData.predictionId}`)
-              return {
-                ...img,
-                status: 'pending' as const, // Still pending (upscaling)
-                upscalePredictionId: upscaleData.predictionId,
-              }
-            }
-          } catch (error) {
-            console.error('   ❌ Failed to start upscale:', error)
-          }
-        }
-        
         // Process if: has predictionId AND (no url OR no blob url yet)
         const isProcessing = img.predictionId && !hasBlobUrl
         
@@ -172,6 +144,35 @@ export async function GET(request: NextRequest) {
                 }
                 
                 console.log(`   ✅ Image ${index + 1} completed: ${blobUrl}`)
+                
+                // ⭐ Check if text-to-image needs upscaling
+                if (isTextToImageJob && !img.upscalePredictionId) {
+                  console.log(`   🔍 Starting upscale for text-to-image...`)
+                  try {
+                    const upscaleRes = await fetch(`${baseUrl}/api/generate/upscale`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        imageUrl: blobUrl,
+                        scale: 2,
+                      }),
+                    })
+                    
+                    if (upscaleRes.ok) {
+                      const upscaleData = await upscaleRes.json()
+                      console.log(`   ✅ Upscale started: ${upscaleData.predictionId}`)
+                      return {
+                        ...img,
+                        url: blobUrl,
+                        originalUrl: data.originalUrl || img.originalUrl,
+                        status: 'pending' as const,
+                        upscalePredictionId: upscaleData.predictionId,
+                      }
+                    }
+                  } catch (error) {
+                    console.error('   ❌ Failed to start upscale:', error)
+                  }
+                }
                 
                 // If not text-to-image OR upscale already started, mark as completed
                 return {
@@ -213,8 +214,17 @@ export async function GET(request: NextRequest) {
     )
     
     // Update job if any images changed (check URL, status, and upscalePredictionId)
+    console.log('🔍 Checking for changes...')
     const anyChanged = updatedImages.some((img, i) => {
       const original = enhancedImages[i] as EnhancedImageUrl
+      console.log(`   Image ${i + 1}:`, {
+        originalUrl: original?.url?.substring(0, 40),
+        newUrl: img.url?.substring(0, 40),
+        originalUpscale: original?.upscalePredictionId,
+        newUpscale: img.upscalePredictionId,
+        originalStatus: original?.status,
+        newStatus: img.status,
+      })
       const changed = 
         img.url !== original?.url ||
         img.status !== original?.status ||
