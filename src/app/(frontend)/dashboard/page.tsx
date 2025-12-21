@@ -139,6 +139,7 @@ export default function DashboardPage() {
     contentDescription?: string
     error?: string
   }>>([])
+  const [generatedTemplateUrl, setGeneratedTemplateUrl] = useState<string | null>(null)
   const [expandedImageIds, setExpandedImageIds] = useState<Set<number | string>>(new Set())
   const [reviewMode, setReviewMode] = useState(false)
   const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null)
@@ -457,6 +458,14 @@ export default function DashboardPage() {
                   
                   console.log('✅ Template generated successfully')
                   setProcessingStatus('✅ Template สำเร็จ!')
+                  
+                  // Fetch updated job to get templateUrl
+                  const updatedJobRes = await fetch(`/api/jobs/${jobId}`)
+                  if (updatedJobRes.ok) {
+                    const updatedJob = await updatedJobRes.json()
+                    setGeneratedTemplateUrl(updatedJob.templateUrl || pollData.imageUrl)
+                    console.log('✅ Template URL set:', updatedJob.templateUrl)
+                  }
                   
                   // Wait 3s to show success message before clearing
                   await new Promise(resolve => setTimeout(resolve, 3000))
@@ -1160,6 +1169,7 @@ export default function DashboardPage() {
     setReviewMode(false)
     setCurrentJobId(null)
     setEnhancedImages([])
+    setGeneratedTemplateUrl(null)
     setFinalImageUrl(null)
     setShowCreateForm(true)
     setCreating(false)
@@ -1779,9 +1789,55 @@ export default function DashboardPage() {
         ======================================== */}
         {reviewMode && enhancedImages.length > 0 && (
           <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
+            {/* Show Template Result if available */}
+            {generatedTemplateUrl && (
+              <div className="mb-8 pb-8 border-b-4 border-blue-200">
+                <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  🎨 <span>Template ที่สร้างเสร็จแล้ว</span>
+                </h2>
+                <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-6 border-2 border-blue-300">
+                  <div className="max-w-3xl mx-auto">
+                    <div className="bg-white rounded-lg shadow-xl overflow-hidden border-2 border-gray-200">
+                      <img
+                        src={generatedTemplateUrl}
+                        alt="Generated Template"
+                        className="w-full h-auto"
+                      />
+                    </div>
+                    <div className="flex gap-3 mt-4 justify-center">
+                      <a
+                        href={generatedTemplateUrl}
+                        download={`template-${currentJobId}.png`}
+                        className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        ดาวน์โหลด Template
+                      </a>
+                      <button
+                        onClick={() => {
+                          const link = document.createElement('a')
+                          link.href = generatedTemplateUrl
+                          link.download = `template-${currentJobId}.png`
+                          link.click()
+                        }}
+                        className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                        </svg>
+                        แชร์
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">📸 รูปที่ปรับปรุงแล้ว</h2>
+                <h2 className="text-2xl font-bold text-gray-900">{generatedTemplateUrl ? '🖼️ รูปที่ปรับปรุงแล้ว (ใช้สร้าง Template)' : '📸 รูปที่ปรับปรุงแล้ว'}</h2>
                 <p className="text-gray-600 mt-1">
                   ดาวน์โหลดรูปที่เสร็จแล้วได้ทันที - รูปที่ยังไม่เสร็จจะแสดงเมื่อประมวลผลเสร็จ
                 </p>
