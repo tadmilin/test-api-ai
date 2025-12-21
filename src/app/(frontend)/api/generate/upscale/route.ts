@@ -66,6 +66,7 @@ export async function POST(request: NextRequest) {
     console.log(`   ✅ Normalized: ${normalizedBlob.url}`)
 
     // Start Real-ESRGAN upscaling with normalized image
+    const webhookUrl = process.env.REPLICATE_WEBHOOK_URL
     const prediction = await replicate.predictions.create({
       model: 'nightmareai/real-esrgan',
       input: {
@@ -73,12 +74,14 @@ export async function POST(request: NextRequest) {
         scale: finalScale, // 2x upscale (1024 → 2048)
         face_enhance: false,
       },
-      webhook: process.env.REPLICATE_WEBHOOK_URL,
-      webhook_events_filter: ['completed'],
+      ...(webhookUrl ? {
+        webhook: webhookUrl,
+        webhook_events_filter: ['completed'],
+      } : {}),
     })
 
     console.log(`✅ Upscale prediction started: ${prediction.id}`)
-    console.log(`🔔 Webhook URL: ${process.env.REPLICATE_WEBHOOK_URL}`)
+    console.log(`🔔 Webhook URL: ${webhookUrl || 'NONE (will use polling)'}`)
 
     return NextResponse.json({
       predictionId: prediction.id,
