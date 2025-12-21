@@ -211,16 +211,26 @@ export default function DashboardPage() {
         // Check if job has enhancedImageUrls (started processing)
         if (job.enhancedImageUrls && job.enhancedImageUrls.length > 0) {
           const hasIncomplete = job.enhancedImageUrls.some(
-            (img: { url?: string; status?: string }) => !img.url || img.status === 'processing'
+            (img: { url?: string; status?: string; upscalePredictionId?: string }) => 
+              !img.url || 
+              img.status === 'processing' || 
+              img.status === 'pending' ||
+              !!img.upscalePredictionId  // ✅ ถ้ากำลัง upscale ให้ถือว่ายัง incomplete
           )
           
-          if (hasIncomplete) {
-            console.log(`🔄 Resuming job ${job.id} with ${job.enhancedImageUrls.length} images...`)
-            setProcessingJobId(job.id)
+          // ✅ แสดงรูปแม้เสร็จแล้ว (สำหรับ refresh)
+          const hasImages = job.enhancedImageUrls.some((img: { url?: string }) => !!img.url)
+          
+          if (hasIncomplete || hasImages) {
+            console.log(`🔄 ${hasIncomplete ? 'Resuming' : 'Loading completed'} job ${job.id} with ${job.enhancedImageUrls.length} images...`)
+            setProcessingJobId(hasIncomplete ? job.id : null)  // ✅ เสร็จแล้วไม่ต้อง set processing
             setCurrentJobId(job.id)
             setEnhancedImages(job.enhancedImageUrls)
             setReviewMode(true)
-            setProcessingStatus(`🔄 กำลังประมวลผล ${job.enhancedImageUrls.length} รูป...`)
+            
+            if (hasIncomplete) {
+              setProcessingStatus(`🔄 กำลังประมวลผล ${job.enhancedImageUrls.length} รูป...`)
+            }
             
             // ✅ Set template URL if exists
             if (job.templateUrl) {
@@ -309,9 +319,13 @@ export default function DashboardPage() {
       
       try {
         const statusRes = await fetch(`/api/generate/process/status?jobId=${jobId}`)
-        if (!statusRes.ok) continue
+        if (!statusRes.ok) {
+          console.error(`❌ Fetch failed: ${statusRes.status}`)
+          continue
+        }
         
         const statusData = await statusRes.json()
+        console.log(`✅ Fetch success:`, statusData)
         
         // Merge with existing metadata
         if (statusData.images && statusData.images.length > 0) {
@@ -488,25 +502,21 @@ export default function DashboardPage() {
                 console.log(`📊 Template poll ${pollCount + 1}: ${pollData.status}`)
                 
                 if (pollData.status === 'succeeded') {
-                  // Save template URL to job
-                  await fetch(`/api/jobs/${jobId}`, {
-                    method: 'PATCH',
+                  console.log('✅ Template generated successfully')
+                  setProcessingStatus('✅ Template สำเร็จ!')
+                  
+                  // ✅ Set template URL immediately (don't wait for API)
+                  setGeneratedTemplateUrl(pollData.imageUrl)
+                  console.log('✅ Template URL set:', pollData.imageUrl)
+                  
+                  // Save template URL to job in background (don't block UI)
+                  fetch(`/api/jobs/${jobId}/update-template`, {
+                    method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                       templateUrl: pollData.imageUrl,
                     }),
-                  })
-                  
-                  console.log('✅ Template generated successfully')
-                  setProcessingStatus('✅ Template สำเร็จ!')
-                  
-                  // Fetch updated job to get templateUrl
-                  const updatedJobRes = await fetch(`/api/jobs/${jobId}`)
-                  if (updatedJobRes.ok) {
-                    const updatedJob = await updatedJobRes.json()
-                    setGeneratedTemplateUrl(updatedJob.templateUrl || pollData.imageUrl)
-                    console.log('✅ Template URL set:', updatedJob.templateUrl)
-                  }
+                  }).catch(err => console.error('Failed to save template URL:', err))
                   
                   // Wait 3s to show success message before clearing
                   await new Promise(resolve => setTimeout(resolve, 3000))
