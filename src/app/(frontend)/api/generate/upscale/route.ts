@@ -73,9 +73,12 @@ export async function POST(request: NextRequest) {
         scale: finalScale, // 2x upscale (1024 → 2048)
         face_enhance: false,
       },
+      webhook: process.env.REPLICATE_WEBHOOK_URL,
+      webhook_events_filter: ['completed'],
     })
 
     console.log(`✅ Upscale prediction started: ${prediction.id}`)
+    console.log(`🔔 Webhook URL: ${process.env.REPLICATE_WEBHOOK_URL}`)
 
     return NextResponse.json({
       predictionId: prediction.id,

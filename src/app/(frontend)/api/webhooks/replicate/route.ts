@@ -35,29 +35,48 @@ export async function POST(req: Request) {
     console.log('[Webhook] Full body:', JSON.stringify(body, null, 2))
     console.log('[Webhook] ===========================================')
 
-    // ค้นหา Job ที่มี predictionId นี้
+    // ✅ ค้นหา Job ที่มี predictionId หรือ upscalePredictionId
     const jobs = await payload.find({
       collection: 'jobs',
       where: {
-        'enhancedImageUrls.predictionId': {
-          equals: predictionId,
-        },
+        or: [
+          {
+            'enhancedImageUrls.predictionId': {
+              equals: predictionId,
+            },
+          },
+          {
+            'enhancedImageUrls.upscalePredictionId': {
+              equals: predictionId,
+            },
+          },
+        ],
       },
     })
 
     if (jobs.docs.length === 0) {
-      console.log('[Webhook] No job found for predictionId:', predictionId)
+      console.log('[Webhook] ❌ No job found for predictionId:', predictionId)
       return NextResponse.json({ received: true, message: 'No job found' })
     }
 
     const job = jobs.docs[0]
-    console.log('[Webhook] Found job:', job.id)
+    console.log('[Webhook] ✅ Found job:', job.id)
 
-    // อัปเดตสถานะรูปภาพที่ตรงกับ predictionId
-    const updatedUrls = await Promise.all(job.enhancedImageUrls?.map(async (img) => {
-      if (img.predictionId === predictionId) {
-        // ✅ Guard: ถ้ารูปนี้มี Blob URL แล้ว → skip (ป้องกัน overwrite)
-        if (img.status === 'completed' && img.url && String(img.url).includes('blob.vercel-storage.com')) {
+    // ✅ อัปเดตสถานะรูปภาพที่ตรงกับ predictionId หรือ upscalePredictionId
+    const updatedUrls = await Promise.all(job.enhancedImageUrls?.map(async (img, index) => {
+      const isMainPrediction = img.predictionId === predictionId
+      const isUpscalePrediction = img.upscalePredictionId === predictionId
+      
+      if (isMainPrediction || isUpscalePrediction) {
+        console.log(`[Webhook] 🎯 Processing image ${index + 1}:`, {
+          isMainPrediction,
+          isUpscalePrediction,
+          currentStatus: img.status,
+          hasUrl: !!img.url,
+        })
+        
+        // ✅ Guard: ถ้ารูปนี้ completed และมี Blob URL แล้ว → skip (ยกเว้น upscale ที่กำลังแทนที่)
+        if (!isUpscalePrediction && img.status === 'completed' && img.url && String(img.url).includes('blob.vercel-storage.com')) {
           console.log('[Webhook] ⏭️  Image already has Blob URL - skipping')
           return img
         }
@@ -136,12 +155,15 @@ export async function POST(req: Request) {
             
             console.log('[Webhook] ✅ Blob uploaded successfully:', blobResult.url)
             
+            // ✅ ถ้าเป็น upscale prediction → clear upscalePredictionId
             return {
               ...img,
               url: blobResult.url, // ✅ Permanent Blob URL
               tempOutputUrl: replicateUrl, // เก็บ temp URL ไว้ debug
               status: 'completed' as const,
               error: undefined,
+              upscalePredictionId: isUpscalePrediction ? null : img.upscalePredictionId,
+              predictionId: isUpscalePrediction ? img.predictionId : null,
             }
           } catch (uploadError) {
             // ⚠️ Upload ล้ม → ให้ polling ทำต่อ (fallback path)
@@ -154,6 +176,9 @@ export async function POST(req: Request) {
               webhookFailed: true, // Flag ให้ polling รู้ว่าต้องทำต่อ
               status: 'pending' as const, // ยังไม่เสร็จ รอ polling
               error: undefined,
+              // ✅ เก็บ prediction IDs ไว้สำหรับ polling
+              upscalePredictionId: isUpscalePrediction ? predictionId : img.upscalePredictionId,
+              predictionId: isMainPrediction ? predictionId : img.predictionId,
             }
           }
         }
