@@ -394,7 +394,10 @@ export default function DashboardPage() {
         
         console.log(`🎯 Checking allComplete: ${statusData.allComplete}`)
         
-        if (statusData.allComplete) {
+        // ✅ Convert to boolean (in case API returns string)
+        const allComplete = statusData.allComplete === true || statusData.allComplete === 'true'
+        
+        if (allComplete) {
           console.log(`✅ All images complete for job ${jobId}`)
           
           // ✅ Check if template generation is pending (from custom-prompt)
