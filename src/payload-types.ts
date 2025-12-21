@@ -840,6 +840,10 @@ export interface Job {
          */
         predictionId?: string | null;
         /**
+         * Replicate prediction ID for upscaling to 2048x2048 (text-to-image only)
+         */
+        upscalePredictionId?: string | null;
+        /**
          * Type from Sheet row (bedroom, pool, etc.)
          */
         photoType?: string | null;
@@ -1514,6 +1518,7 @@ export interface JobsSelect<T extends boolean = true> {
         webhookFailed?: T;
         status?: T;
         predictionId?: T;
+        upscalePredictionId?: T;
         photoType?: T;
         contentTopic?: T;
         postTitleHeadline?: T;

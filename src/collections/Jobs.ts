@@ -280,6 +280,14 @@ export const Jobs: CollectionConfig = {
                   },
                 },
                 {
+                  name: 'upscalePredictionId',
+                  type: 'text',
+                  label: 'Upscale Prediction ID',
+                  admin: {
+                    description: 'Replicate prediction ID for upscaling to 2048x2048 (text-to-image only)',
+                  },
+                },
+                {
                   name: 'photoType',
                   type: 'text',
                   label: 'Photo Type',
