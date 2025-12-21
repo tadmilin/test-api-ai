@@ -29,19 +29,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'imageUrl is required' }, { status: 400 })
     }
 
+    // ✅ Cast scale to number to prevent string/NaN issues
+    const scaleNum = Number(scale)
+    const finalScale = Number.isFinite(scaleNum) ? scaleNum : 2
     console.log(`🔍 Starting upscale for: ${imageUrl.substring(0, 80)}...`)
-    console.log(`   Scale factor: ${scale}x`)
+    console.log(`   Scale factor: ${finalScale}x`)
 
     // ⭐ Normalize to 1024x1024 first (ensures 2048x2048 output)
-    console.log(`   📐 Normalizing to 1024x1024...`)
     const res = await fetch(imageUrl)
+    if (!res.ok) throw new Error(`Failed to fetch input image: ${res.status}`)
     const inputBuf = Buffer.from(await res.arrayBuffer())
+
+    // Log input metadata
+    const metaIn = await sharp(inputBuf).metadata()
+    console.log(`🧩 INPUT size: ${metaIn.width}x${metaIn.height}`)
 
     // Resize to 1024x1024 (cover = crop to fill frame)
     const normalizedBuf = await sharp(inputBuf)
       .resize(1024, 1024, { fit: 'cover' })
       .png()
       .toBuffer()
+
+    // Verify normalized size
+    const metaNorm = await sharp(normalizedBuf).metadata()
+    console.log(`📐 NORMALIZED size: ${metaNorm.width}x${metaNorm.height}`) // Must be 1024x1024
 
     // Upload normalized image to Blob
     const normalizedBlob = await put(`preupscale-${Date.now()}.png`, normalizedBuf, {
@@ -56,7 +67,7 @@ export async function POST(request: NextRequest) {
       model: 'nightmareai/real-esrgan',
       input: {
         image: normalizedBlob.url,
-        scale: scale, // 2x upscale (1024 → 2048)
+        scale: finalScale, // 2x upscale (1024 → 2048)
         face_enhance: false,
       },
     })
@@ -106,20 +117,35 @@ export async function GET(request: NextRequest) {
       }
 
       console.log(`📥 Downloading upscaled image...`)
-      const response = await fetch(imageUrl as string)
+      const res = await fetch(imageUrl as string)
       
-      if (!response.ok) {
-        throw new Error(`Failed to download: ${response.status}`)
+      if (!res.ok) {
+        throw new Error(`Failed to download: ${res.status}`)
       }
 
-      const buffer = await response.arrayBuffer()
-      const sizeKB = Math.round(buffer.byteLength / 1024)
-      console.log(`   Downloaded ${sizeKB}KB`)
+      const outBuf = Buffer.from(await res.arrayBuffer())
+
+      // Log model output size
+      const metaOut = await sharp(outBuf).metadata()
+      console.log(`🖼️ MODEL OUTPUT size: ${metaOut.width}x${metaOut.height}`)
+
+      // ✅ Force final output to be 2048x2048
+      let finalBuf = outBuf
+      if (metaOut.width !== 2048 || metaOut.height !== 2048) {
+        console.log(`⚠️ Size mismatch! Forcing to 2048x2048...`)
+        finalBuf = await sharp(outBuf)
+          .resize(2048, 2048, { fit: 'cover' })
+          .png()
+          .toBuffer()
+
+        const metaFixed = await sharp(finalBuf).metadata()
+        console.log(`✅ FIXED size: ${metaFixed.width}x${metaFixed.height}`)
+      }
 
       // Upload to Vercel Blob (permanent)
       const blob = await put(
-        `upscaled-${Date.now()}.png`,
-        buffer,
+        `upscaled-2048-${Date.now()}.png`,
+        finalBuf,
         {
           access: 'public',
           contentType: 'image/png',
@@ -131,7 +157,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         status: 'succeeded',
         imageUrl: blob.url,
-        originalSize: `${sizeKB}KB`,
+        size: '2048x2048',
       })
     }
 
