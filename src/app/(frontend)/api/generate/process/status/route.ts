@@ -147,8 +147,8 @@ export async function GET(request: NextRequest) {
                 
                 console.log(`   ✅ Image ${index + 1} completed: ${blobUrl}`)
                 
-                // ⭐ Check if text-to-image needs upscaling (เริ่มเฉพาะครั้งแรก)
-                if (isTextToImageJob && !img.upscalePredictionId && img.status !== 'pending') {
+                // ⭐ Check if text-to-image needs upscaling (เริ่มเฉพาะครั้งแรก - เช็คแค่ไม่มี upscalePredictionId)
+                if (isTextToImageJob && !img.upscalePredictionId) {
                   console.log(`   🔍 Starting upscale for text-to-image ${index + 1}...`)
                   try {
                     const upscaleRes = await fetch(`${baseUrl}/api/generate/upscale`, {
