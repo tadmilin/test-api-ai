@@ -451,14 +451,15 @@ export default function DashboardPage() {
           const jobRes = await fetch(`/api/jobs/${jobId}`)
           if (jobRes.ok) {
             const jobData = await jobRes.json()
-            templatePredictionId = jobData.job?.templatePredictionId || null
+            // Fix: API returns job object directly, NOT wrapped in { job: {...} }
+            templatePredictionId = jobData.templatePredictionId || null
             isTemplateGenerating = !!templatePredictionId
-            isTemplateUpscaling = !!jobData.job?.templateUpscalePredictionId
+            isTemplateUpscaling = !!jobData.templateUpscalePredictionId
             
             // Update template URL if available
-            if (jobData.job?.templateUrl && jobData.job.templateUrl !== generatedTemplateUrl) {
-              setGeneratedTemplateUrl(jobData.job.templateUrl)
-              console.log('✅ Template URL updated:', jobData.job.templateUrl)
+            if (jobData.templateUrl && jobData.templateUrl !== generatedTemplateUrl) {
+              setGeneratedTemplateUrl(jobData.templateUrl)
+              console.log('✅ Template URL updated:', jobData.templateUrl)
             }
           }
         } catch (error) {
