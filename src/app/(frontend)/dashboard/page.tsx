@@ -505,7 +505,17 @@ export default function DashboardPage() {
         if (isTemplateUpscaling) {
           console.log(`🔍 Template upscale in progress`)
           setProcessingStatus(`🎨 กำลัง Upscale Template เป็น 2048x2048...`)
-          continue // ✅ ให้ GET handler ทำงานต่อ ไม่ต้องเรียก API upscale ซ้ำ
+          
+          // ✅ เช็คอีกครั้งว่า upscale เสร็จหรือยัง (templateGen.url มีค่าแล้ว)
+          const templateGen = jobData.templateGeneration || {}
+          if (templateGen.url && templateGen.status === 'succeeded') {
+            console.log('✅ Template upscale completed!')
+            setGeneratedTemplateUrl(templateGen.url)
+            setProcessingStatus('✅ Template พร้อมแล้ว!')
+            break // ✅ หยุด polling เมื่อเสร็จ
+          }
+          
+          continue // ให้ GET handler ทำงานต่อ ไม่ต้องเรียก API upscale ซ้ำ
         }
         
         // ✅ แสดงสถานะตามประเภทของงาน
