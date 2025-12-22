@@ -1531,58 +1531,62 @@ export default function DashboardPage() {
               storageStatus.status === 'warning' ? 'bg-yellow-50 border-yellow-300' :
               'bg-red-50 border-red-300'
             }`}>
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className="text-2xl">
-                      {storageStatus.status === 'healthy' ? '✅' :
-                       storageStatus.status === 'warning' ? '⚠️' : '🚨'}
-                    </span>
-                    <div>
-                      <h3 className="font-bold text-lg">Storage Status</h3>
-                      <p className="text-sm text-gray-600">
-                        Last updated: {new Date(storageStatus.timestamp).toLocaleTimeString('th-TH')}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-4 mt-3">
-                    <div>
-                      <p className="text-sm text-gray-600">Jobs</p>
-                      <p className="text-xl font-bold">{storageStatus.usage}</p>
-                      <p className="text-xs text-gray-500">({storageStatus.usagePercent}%)</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Estimated Storage</p>
-                      <p className="text-xl font-bold">{storageStatus.estimatedStorageMB} MB</p>
-                      <p className="text-xs text-gray-500">~{storageStatus.storagePercent}% of 1GB</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Status</p>
-                      <p className={`text-xl font-bold ${
-                        storageStatus.status === 'healthy' ? 'text-green-600' :
-                        storageStatus.status === 'warning' ? 'text-yellow-600' :
-                        'text-red-600'
-                      }`}>
-                        {storageStatus.status === 'healthy' ? 'Healthy' :
-                         storageStatus.status === 'warning' ? 'Warning' : 'Critical'}
-                      </p>
-                    </div>
-                  </div>
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-2xl">
+                  {storageStatus.status === 'healthy' ? '✅' :
+                   storageStatus.status === 'warning' ? '⚠️' : '🚨'}
+                </span>
+                <div>
+                  <h3 className="font-bold text-lg text-gray-900">Storage Status</h3>
+                  <p className="text-sm text-gray-600">
+                    Last updated: {new Date(storageStatus.timestamp).toLocaleTimeString('th-TH')}
+                  </p>
                 </div>
-                <button
-                  onClick={handleManualCleanup}
-                  disabled={cleanupLoading}
-                  className={`ml-4 px-6 py-3 rounded-lg font-semibold transition-all ${
-                    cleanupLoading
-                      ? 'bg-gray-400 cursor-not-allowed'
-                      : storageStatus.status === 'critical'
-                      ? 'bg-red-600 hover:bg-red-700 text-white shadow-lg'
-                      : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg'
-                  }`}
-                >
-                  {cleanupLoading ? '🔄 Cleaning...' : '🗑️ Force Cleanup'}
-                </button>
               </div>
+              <div className="grid grid-cols-3 gap-4 mt-3">
+                <div>
+                  <p className="text-sm text-gray-600">Jobs</p>
+                  <p className="text-xl font-bold text-gray-900">{storageStatus.usage}</p>
+                  <p className="text-xs text-gray-500">({storageStatus.usagePercent}%)</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Estimated Storage</p>
+                  <p className="text-xl font-bold text-gray-900">{storageStatus.estimatedStorageMB} MB</p>
+                  <p className="text-xs text-gray-500">~{storageStatus.storagePercent}% of 1GB</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Status</p>
+                  <p className={`text-xl font-bold ${
+                    storageStatus.status === 'healthy' ? 'text-green-600' :
+                    storageStatus.status === 'warning' ? 'text-yellow-600' :
+                    'text-red-600'
+                  }`}>
+                    {storageStatus.status === 'healthy' ? 'Healthy' :
+                     storageStatus.status === 'warning' ? 'Warning' : 'Critical'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================
+              CLEANUP BUTTON (SEPARATE)
+          ======================================== */}
+          {storageStatus && (
+            <div className="mb-6">
+              <button
+                onClick={handleManualCleanup}
+                disabled={cleanupLoading}
+                className={`w-full px-6 py-4 rounded-lg font-semibold text-black transition-all border-2 ${
+                  cleanupLoading
+                    ? 'bg-gray-300 border-gray-400 cursor-not-allowed'
+                    : storageStatus.status === 'critical'
+                    ? 'bg-red-100 border-red-400 hover:bg-red-200 shadow-lg'
+                    : 'bg-gray-100 border-gray-300 hover:bg-gray-200 shadow-lg'
+                }`}
+              >
+                {cleanupLoading ? '🔄 Cleaning...' : '🗑️ Force Cleanup'}
+              </button>
             </div>
           )}
                 {showCreateForm ? 'ปิด' : '+ สร้างงานใหม่'}
