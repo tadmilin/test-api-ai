@@ -138,13 +138,13 @@ export async function POST(req: Request) {
             }
             
             // ✅ ใช้ arrayBuffer + detect contentType
-            let imageBuffer = await imageResponse.arrayBuffer()
+            const imageBuffer = await imageResponse.arrayBuffer()
             const contentType = imageResponse.headers.get('content-type') || 'image/jpeg'
             
             // ✅ Optimize: Compress to JPG quality 85 (ลด 70%)
             let optimizedBuffer: Buffer
             let finalContentType = 'image/jpeg'
-            let ext = 'jpg'
+            const ext = 'jpg'
             
             if (contentType.includes('png')) {
               // Convert PNG → JPG
@@ -255,7 +255,7 @@ export async function POST(req: Request) {
       collection: 'jobs',
       id: job.id,
       data: {
-        enhancedImageUrls: updatedUrls as any,
+        enhancedImageUrls: updatedUrls as typeof job.enhancedImageUrls,
         status: newJobStatus,
       },
     })

@@ -5,7 +5,7 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { FolderTree, type TreeFolder } from '@/components/FolderTree'
-import { getGoogleDriveThumbnail, normalizeImageUrl, isGoogleDriveUrl } from '@/utilities/googleDriveUrl'
+import { isGoogleDriveUrl } from '@/utilities/googleDriveUrl'
 
 interface CurrentUser {
   id: string
