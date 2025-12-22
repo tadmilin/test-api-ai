@@ -213,19 +213,67 @@ export const Jobs: CollectionConfig = {
               },
             },
             {
+              name: 'templateGeneration',
+              type: 'group',
+              label: 'Template Generation Status',
+              admin: {
+                description: 'Template generation tracking (similar to enhancedImageUrls)',
+              },
+              fields: [
+                {
+                  name: 'predictionId',
+                  type: 'text',
+                  label: 'Generation Prediction ID',
+                  admin: {
+                    description: 'Replicate prediction ID for template generation',
+                  },
+                },
+                {
+                  name: 'upscalePredictionId',
+                  type: 'text',
+                  label: 'Upscale Prediction ID',
+                  admin: {
+                    description: 'Replicate prediction ID for upscaling',
+                  },
+                },
+                {
+                  name: 'status',
+                  type: 'select',
+                  label: 'Status',
+                  options: [
+                    { label: 'Pending', value: 'pending' },
+                    { label: 'Processing', value: 'processing' },
+                    { label: 'Succeeded', value: 'succeeded' },
+                    { label: 'Failed', value: 'failed' },
+                  ],
+                  defaultValue: 'pending',
+                },
+                {
+                  name: 'url',
+                  type: 'text',
+                  label: 'Final Template URL',
+                  admin: {
+                    description: 'Final upscaled template URL',
+                  },
+                },
+              ],
+            },
+            {
               name: 'templatePredictionId',
               type: 'text',
-              label: 'Template Generation Prediction ID',
+              label: 'Template Generation Prediction ID (Legacy)',
               admin: {
-                description: 'Replicate prediction ID for template generation (Nano Banana Pro)',
+                description: 'DEPRECATED: Use templateGeneration.predictionId instead',
+                hidden: true,
               },
             },
             {
               name: 'templateUpscalePredictionId',
               type: 'text',
-              label: 'Template Upscale Prediction ID',
+              label: 'Template Upscale Prediction ID (Legacy)',
               admin: {
-                description: 'Replicate prediction ID for template upscaling',
+                description: 'DEPRECATED: Use templateGeneration.upscalePredictionId instead',
+                hidden: true,
               },
             },
             {

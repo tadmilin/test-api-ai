@@ -814,11 +814,29 @@ export interface Job {
    */
   templateUrl?: string | null;
   /**
-   * Replicate prediction ID for template generation (Nano Banana Pro)
+   * Template generation tracking (similar to enhancedImageUrls)
+   */
+  templateGeneration?: {
+    /**
+     * Replicate prediction ID for template generation
+     */
+    predictionId?: string | null;
+    /**
+     * Replicate prediction ID for upscaling
+     */
+    upscalePredictionId?: string | null;
+    status?: ('pending' | 'processing' | 'succeeded' | 'failed') | null;
+    /**
+     * Final upscaled template URL
+     */
+    url?: string | null;
+  };
+  /**
+   * DEPRECATED: Use templateGeneration.predictionId instead
    */
   templatePredictionId?: string | null;
   /**
-   * Replicate prediction ID for template upscaling
+   * DEPRECATED: Use templateGeneration.upscalePredictionId instead
    */
   templateUpscalePredictionId?: string | null;
   /**
@@ -1517,6 +1535,14 @@ export interface JobsSelect<T extends boolean = true> {
       };
   templateType?: T;
   templateUrl?: T;
+  templateGeneration?:
+    | T
+    | {
+        predictionId?: T;
+        upscalePredictionId?: T;
+        status?: T;
+        url?: T;
+      };
   templatePredictionId?: T;
   templateUpscalePredictionId?: T;
   enhancedImageUrls?:

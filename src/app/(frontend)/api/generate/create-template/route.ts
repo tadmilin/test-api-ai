@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
     console.log(`✅ Template generation started: ${prediction.id}`)
     console.log(`   Status: ${prediction.status}`)
 
-    // ✅ บันทึก templatePredictionId ลง MongoDB
+    // ✅ บันทึก templateGeneration object ลง MongoDB (เหมือน enhancedImageUrls)
     try {
       const { getPayload } = await import('payload')
       const configPromise = await import('@payload-config')
@@ -144,13 +144,18 @@ export async function POST(request: NextRequest) {
         collection: 'jobs',
         id: jobId,
         data: {
-          templatePredictionId: prediction.id,
+          templateGeneration: {
+            predictionId: prediction.id,
+            status: 'processing',
+            url: null,
+            upscalePredictionId: null,
+          },
         },
       })
-      console.log(`✅ Saved templatePredictionId to job ${jobId}`)
+      console.log(`✅ Saved templateGeneration to job ${jobId}`)
     } catch (dbError) {
-      console.warn('⚠️ Failed to save templatePredictionId:', dbError)
-      // Don't fail - GET handler can still use cache
+      console.warn('⚠️ Failed to save templateGeneration:', dbError)
+      // Don't fail - webhook can still handle
     }
 
     return NextResponse.json({
@@ -248,8 +253,12 @@ export async function GET(request: NextRequest) {
             collection: 'jobs',
             id: jobId,
             data: {
-              templatePredictionId: null,
-              templateUpscalePredictionId: upscalePredictionId,
+              templateGeneration: {
+                predictionId: null,
+                upscalePredictionId: upscalePredictionId,
+                status: 'processing',
+                url: null,
+              },
             },
           })
           console.log(`✅ Saved upscale prediction ID`)
@@ -282,8 +291,13 @@ export async function GET(request: NextRequest) {
                   collection: 'jobs',
                   id: jobId,
                   data: {
-                    templateUrl: upscalePollData.imageUrl,
-                    templateUpscalePredictionId: null,
+                    templateGeneration: {
+                      predictionId: null,
+                      upscalePredictionId: null,
+                      status: 'succeeded',
+                      url: upscalePollData.imageUrl,
+                    },
+                    templateUrl: upscalePollData.imageUrl, // legacy compatibility
                   },
                 })
                 console.log(`✅ Saved final template URL`)

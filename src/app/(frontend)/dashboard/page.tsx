@@ -215,10 +215,11 @@ export default function DashboardPage() {
       const allJobs = [
         ...(processingData.jobs || []),
         ...(enhancingData.jobs || []),
-        ...(completedData.jobs || []).filter((job: any) => 
+        ...(completedData.jobs || []).filter((job: any) => {
           // ✅ เฉพาะ completed jobs ที่กำลังเจน template อยู่
-          !!job.templatePredictionId || !!job.templateUpscalePredictionId
-        )
+          const templateGen = job.templateGeneration || {}
+          return !!templateGen.predictionId || !!templateGen.upscalePredictionId || !!job.templatePredictionId || !!job.templateUpscalePredictionId
+        })
       ]
       
       console.log(`📋 Found ${allJobs.length} jobs (processing + enhancing + template generation)`)
@@ -241,9 +242,12 @@ export default function DashboardPage() {
           const hasImages = job.enhancedImageUrls.some((img: { url?: string }) => !!img.url)
           
           // ✅ เช็คว่า template กำลังประมวลผลหรือยัง (สำหรับ custom-prompt)
+          const templateGen = job.templateGeneration || {}
           const hasTemplateProcessing = job.jobType === 'custom-prompt' && (
-            !!job.templatePredictionId || // กำลังเจน template อยู่
-            !!job.templateUpscalePredictionId // กำลัง upscale template อยู่
+            !!templateGen.predictionId || // กำลังเจน template อยู่
+            !!templateGen.upscalePredictionId || // กำลัง upscale template อยู่
+            !!job.templatePredictionId || // legacy
+            !!job.templateUpscalePredictionId // legacy
           )
           
           if (hasIncomplete || hasImages || hasTemplateProcessing) {
@@ -442,7 +446,7 @@ export default function DashboardPage() {
         const progress = `${statusData.completed}/${statusData.total}`
         const processingCount = statusData.processing || 0
         
-        // ✅ เช็ค template generation และ upscale (fetch job data)
+        // ✅ เช็ค template generation และ upscale (เหมือน enhancedImageUrls)
         let isTemplateGenerating = false
         let isTemplateUpscaling = false
         let templatePredictionId: string | null = null
@@ -451,15 +455,17 @@ export default function DashboardPage() {
           const jobRes = await fetch(`/api/jobs/${jobId}`)
           if (jobRes.ok) {
             const jobData = await jobRes.json()
-            // Fix: API returns job object directly, NOT wrapped in { job: {...} }
-            templatePredictionId = jobData.templatePredictionId || null
-            isTemplateGenerating = !!templatePredictionId
-            isTemplateUpscaling = !!jobData.templateUpscalePredictionId
+            // ✅ อ่านจาก templateGeneration object (ใหม่) หรือ legacy fields
+            const templateGen = jobData.templateGeneration || {}
+            templatePredictionId = templateGen.predictionId || jobData.templatePredictionId || null
+            isTemplateGenerating = !!templatePredictionId && templateGen.status !== 'succeeded'
+            isTemplateUpscaling = !!templateGen.upscalePredictionId || !!jobData.templateUpscalePredictionId
             
             // Update template URL if available
-            if (jobData.templateUrl && jobData.templateUrl !== generatedTemplateUrl) {
-              setGeneratedTemplateUrl(jobData.templateUrl)
-              console.log('✅ Template URL updated:', jobData.templateUrl)
+            const templateUrl = templateGen.url || jobData.templateUrl
+            if (templateUrl && templateUrl !== generatedTemplateUrl) {
+              setGeneratedTemplateUrl(templateUrl)
+              console.log('✅ Template URL updated:', templateUrl)
             }
           }
         } catch (error) {

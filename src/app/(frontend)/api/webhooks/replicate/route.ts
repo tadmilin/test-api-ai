@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     console.log('[Webhook] Full body:', JSON.stringify(body, null, 2))
     console.log('[Webhook] ===========================================')
 
-    // ✅ ค้นหา Job ที่มี predictionId หรือ upscalePredictionId หรือ templatePredictionId หรือ templateUpscalePredictionId
+    // ✅ ค้นหา Job ที่มี predictionId หรือ upscalePredictionId หรือ templateGeneration
     const jobs = await payload.find({
       collection: 'jobs',
       where: {
@@ -48,6 +48,16 @@ export async function POST(req: Request) {
           },
           {
             'enhancedImageUrls.upscalePredictionId': {
+              equals: predictionId,
+            },
+          },
+          {
+            'templateGeneration.predictionId': {
+              equals: predictionId,
+            },
+          },
+          {
+            'templateGeneration.upscalePredictionId': {
               equals: predictionId,
             },
           },
@@ -73,8 +83,9 @@ export async function POST(req: Request) {
     const job = jobs.docs[0]
     console.log('[Webhook] ✅ Found job:', job.id)
 
-    // ✅ เช็คว่าเป็น template generation หรือไม่
-    const isTemplateGeneration = job.templatePredictionId === predictionId
+    // ✅ เช็คว่าเป็น template generation หรือไม่ (support both new and legacy)
+    const templateGen = job.templateGeneration || {}
+    const isTemplateGeneration = templateGen.predictionId === predictionId || job.templatePredictionId === predictionId
     
     if (isTemplateGeneration) {
       console.log('[Webhook] 🎨 Processing template generation')
@@ -116,13 +127,17 @@ export async function POST(req: Request) {
           const upscaleData = await upscaleRes.json()
           console.log('[Webhook] ✅ Upscale started:', upscaleData.predictionId)
           
-          // Update job: clear templatePredictionId, set templateUpscalePredictionId
+          // Update job: clear templateGeneration.predictionId, set upscalePredictionId
           await payload.update({
             collection: 'jobs',
             id: job.id,
             data: {
-              templatePredictionId: null,
-              templateUpscalePredictionId: upscaleData.predictionId,
+              templateGeneration: {
+                predictionId: null,
+                upscalePredictionId: upscaleData.predictionId,
+                status: 'processing',
+                url: null,
+              },
             },
           })
           
@@ -132,12 +147,17 @@ export async function POST(req: Request) {
         } catch (error) {
           console.error('[Webhook] ❌ Template processing failed:', error)
           
-          // Clear templatePredictionId on error
+          // Clear templateGeneration.predictionId on error
           await payload.update({
             collection: 'jobs',
             id: job.id,
             data: {
-              templatePredictionId: null,
+              templateGeneration: {
+                predictionId: null,
+                upscalePredictionId: null,
+                status: 'failed',
+                url: null,
+              },
             },
           })
           
@@ -149,7 +169,12 @@ export async function POST(req: Request) {
           collection: 'jobs',
           id: job.id,
           data: {
-            templatePredictionId: null,
+            templateGeneration: {
+              predictionId: null,
+              upscalePredictionId: null,
+              status: 'failed',
+              url: null,
+            },
           },
         })
         return NextResponse.json({ received: true, error: 'Template generation failed' })
@@ -159,8 +184,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ received: true })
     }
 
-    // ✅ เช็คว่าเป็น template upscale หรือไม่
-    const isTemplateUpscale = job.templateUpscalePredictionId === predictionId
+    // ✅ เช็คว่าเป็น template upscale หรือไม่ (support both new and legacy)
+    const isTemplateUpscale = templateGen.upscalePredictionId === predictionId || job.templateUpscalePredictionId === predictionId
     
     if (isTemplateUpscale) {
       console.log('[Webhook] 🎨 Processing template upscale')
@@ -191,8 +216,13 @@ export async function POST(req: Request) {
             collection: 'jobs',
             id: job.id,
             data: {
-              templateUrl: blobResult.url,
-              templateUpscalePredictionId: null,
+              templateGeneration: {
+                predictionId: null,
+                upscalePredictionId: null,
+                status: 'succeeded',
+                url: blobResult.url,
+              },
+              templateUrl: blobResult.url, // legacy compatibility
             },
           })
           
