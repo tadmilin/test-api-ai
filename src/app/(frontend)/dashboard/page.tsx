@@ -234,15 +234,23 @@ export default function DashboardPage() {
           // ✅ แสดงรูปแม้เสร็จแล้ว (สำหรับ refresh)
           const hasImages = job.enhancedImageUrls.some((img: { url?: string }) => !!img.url)
           
-          if (hasIncomplete || hasImages) {
-            console.log(`🔄 ${hasIncomplete ? 'Resuming' : 'Loading completed'} job ${job.id} with ${job.enhancedImageUrls.length} images...`)
-            setProcessingJobId(hasIncomplete ? job.id : null)  // ✅ เสร็จแล้วไม่ต้อง set processing
+          // ✅ เช็คว่า template กำลังประมวลผลหรือยัง (สำหรับ custom-prompt)
+          const hasTemplateProcessing = job.jobType === 'custom-prompt' && !job.templateUrl
+          
+          if (hasIncomplete || hasImages || hasTemplateProcessing) {
+            const needsPolling = hasIncomplete || hasTemplateProcessing
+            console.log(`🔄 ${needsPolling ? 'Resuming' : 'Loading completed'} job ${job.id} with ${job.enhancedImageUrls.length} images...`)
+            console.log(`   hasIncomplete: ${hasIncomplete}, hasTemplateProcessing: ${hasTemplateProcessing}`)
+            
+            setProcessingJobId(needsPolling ? job.id : null)  // ✅ เสร็จแล้วไม่ต้อง set processing
             setCurrentJobId(job.id)
             setEnhancedImages(job.enhancedImageUrls)
             setReviewMode(true)
             
             if (hasIncomplete) {
               setProcessingStatus(`🔄 กำลังประมวลผล ${job.enhancedImageUrls.length} รูป...`)
+            } else if (hasTemplateProcessing) {
+              setProcessingStatus(`🎨 กำลังสร้าง Template...`)
             }
             
             // ✅ Set template URL if exists
@@ -251,8 +259,8 @@ export default function DashboardPage() {
               setGeneratedTemplateUrl(job.templateUrl)
             }
             
-            // ✅ Poll only if incomplete
-            if (hasIncomplete) {
+            // ✅ Poll if incomplete OR template processing
+            if (needsPolling) {
               setTimeout(() => pollJobStatus(job.id), 0)
             }
             break // Only resume one job at a time
