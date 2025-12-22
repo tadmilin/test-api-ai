@@ -378,6 +378,11 @@ export async function POST(request: NextRequest) {
       // ✅ No need to update enhancedImageUrls again - already updated per-image above
       console.log(`✅ All ${referenceUrls.length} images queued`)
 
+      // ✅ Enforce job limit (FIFO cleanup) - async, don't wait
+      fetch(`${process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'}/api/cleanup/enforce-limit`, {
+        method: 'POST',
+      }).catch(err => console.warn('⚠️ Cleanup failed:', err))
+
       return NextResponse.json({
         status: 'enhancing',
         predictions: predictionIds,

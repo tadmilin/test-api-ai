@@ -159,6 +159,19 @@ export default function DashboardPage() {
   const [showSuccess, setShowSuccess] = useState<boolean>(false)
   const [processingError, setProcessingError] = useState<string>('')
   
+  // ✅ Storage Status
+  const [storageStatus, setStorageStatus] = useState<{
+    totalJobs: number
+    limit: number
+    usage: string
+    usagePercent: number
+    estimatedStorageMB: number
+    storagePercent: number
+    status: 'healthy' | 'warning' | 'critical'
+    timestamp: string
+  } | null>(null)
+  const [cleanupLoading, setCleanupLoading] = useState(false)
+  
   // ✅ Polling guard: prevent multiple concurrent polling loops
   const isPollingRef = useRef(false)
 
@@ -291,6 +304,49 @@ export default function DashboardPage() {
       }
     }
   }, [currentUser, resumeProcessingJobs])
+
+  // ✅ Fetch storage status
+  const fetchStorageStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/cleanup/enforce-limit')
+      if (res.ok) {
+        const data = await res.json()
+        setStorageStatus(data)
+      }
+    } catch (error) {
+      console.error('Failed to fetch storage status:', error)
+    }
+  }, [])
+
+  // ✅ Poll storage status every 30 seconds
+  useEffect(() => {
+    if (currentUser) {
+      fetchStorageStatus()
+      const interval = setInterval(fetchStorageStatus, 30000)
+      return () => clearInterval(interval)
+    }
+  }, [currentUser, fetchStorageStatus])
+
+  // ✅ Manual cleanup trigger
+  async function handleManualCleanup() {
+    setCleanupLoading(true)
+    try {
+      const res = await fetch('/api/cleanup/enforce-limit', { method: 'POST' })
+      const data = await res.json()
+      
+      if (data.success) {
+        alert(`✅ Cleanup success!\nDeleted: ${data.deleted} jobs\nCurrent: ${data.newTotal}/${data.limit} jobs`)
+        fetchStorageStatus()
+        fetchDashboardData()
+      } else {
+        alert(`❌ Cleanup failed: ${data.error}`)
+      }
+    } catch (error) {
+      alert(`❌ Cleanup error: ${error instanceof Error ? error.message : 'Unknown'}`)
+    } finally {
+      setCleanupLoading(false)
+    }
+  }
 
   async function handleLogout() {
     try {
@@ -1362,6 +1418,70 @@ export default function DashboardPage() {
                 onClick={() => setShowCreateForm(!showCreateForm)}
                 className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-semibold shadow-lg hover:shadow-xl transition-all"
               >
+
+          {/* ========================================
+              STORAGE STATUS MONITOR
+          ======================================== */}
+          {storageStatus && (
+            <div className={`mb-6 rounded-xl border-2 p-4 ${
+              storageStatus.status === 'healthy' ? 'bg-green-50 border-green-300' :
+              storageStatus.status === 'warning' ? 'bg-yellow-50 border-yellow-300' :
+              'bg-red-50 border-red-300'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-2xl">
+                      {storageStatus.status === 'healthy' ? '✅' :
+                       storageStatus.status === 'warning' ? '⚠️' : '🚨'}
+                    </span>
+                    <div>
+                      <h3 className="font-bold text-lg">Storage Status</h3>
+                      <p className="text-sm text-gray-600">
+                        Last updated: {new Date(storageStatus.timestamp).toLocaleTimeString('th-TH')}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4 mt-3">
+                    <div>
+                      <p className="text-sm text-gray-600">Jobs</p>
+                      <p className="text-xl font-bold">{storageStatus.usage}</p>
+                      <p className="text-xs text-gray-500">({storageStatus.usagePercent}%)</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Estimated Storage</p>
+                      <p className="text-xl font-bold">{storageStatus.estimatedStorageMB} MB</p>
+                      <p className="text-xs text-gray-500">~{storageStatus.storagePercent}% of 1GB</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Status</p>
+                      <p className={`text-xl font-bold ${
+                        storageStatus.status === 'healthy' ? 'text-green-600' :
+                        storageStatus.status === 'warning' ? 'text-yellow-600' :
+                        'text-red-600'
+                      }`}>
+                        {storageStatus.status === 'healthy' ? 'Healthy' :
+                         storageStatus.status === 'warning' ? 'Warning' : 'Critical'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={handleManualCleanup}
+                  disabled={cleanupLoading}
+                  className={`ml-4 px-6 py-3 rounded-lg font-semibold transition-all ${
+                    cleanupLoading
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : storageStatus.status === 'critical'
+                      ? 'bg-red-600 hover:bg-red-700 text-white shadow-lg'
+                      : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg'
+                  }`}
+                >
+                  {cleanupLoading ? '🔄 Cleaning...' : '🗑️ Force Cleanup'}
+                </button>
+              </div>
+            </div>
+          )}
                 {showCreateForm ? 'ปิด' : '+ สร้างงานใหม่'}
               </button>
             </div>
