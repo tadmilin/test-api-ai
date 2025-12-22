@@ -814,6 +814,10 @@ export interface Job {
    */
   templateUrl?: string | null;
   /**
+   * Replicate prediction ID for template upscaling
+   */
+  templateUpscalePredictionId?: string | null;
+  /**
    * Enhanced images with metadata from Sheet
    */
   enhancedImageUrls?:
@@ -1509,6 +1513,7 @@ export interface JobsSelect<T extends boolean = true> {
       };
   templateType?: T;
   templateUrl?: T;
+  templateUpscalePredictionId?: T;
   enhancedImageUrls?:
     | T
     | {

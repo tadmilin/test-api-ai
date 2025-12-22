@@ -177,7 +177,7 @@ export async function POST() {
             id: orphanJob.id,
             data: {
               templateUpscalePredictionId: null,
-            } as any,
+            },
           })
           console.log(`   ✅ Cleared orphan prediction from job ${orphanJob.id}`)
         }

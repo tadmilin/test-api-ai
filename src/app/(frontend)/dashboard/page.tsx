@@ -586,7 +586,7 @@ export default function DashboardPage() {
               for (let pollCount = 0; pollCount < 60; pollCount++) {
                 await new Promise(resolve => setTimeout(resolve, 2000)) // 2s interval
                 
-                const pollRes = await fetch(`/api/generate/create-template?predictionId=${predictionId}`)
+                const pollRes = await fetch(`/api/generate/create-template?predictionId=${predictionId}&jobId=${jobId}`) // ✅ ส่ง jobId ด้วย
                 const pollData = await pollRes.json()
                 
                 console.log(`📊 Template poll ${pollCount + 1}: ${pollData.status}`)

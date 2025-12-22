@@ -69,7 +69,7 @@ export async function POST(req: Request) {
     console.log('[Webhook] ✅ Found job:', job.id)
 
     // ✅ เช็คว่าเป็น template upscale หรือไม่
-    const isTemplateUpscale = (job as any).templateUpscalePredictionId === predictionId
+    const isTemplateUpscale = job.templateUpscalePredictionId === predictionId
     
     if (isTemplateUpscale) {
       console.log('[Webhook] 🎨 Processing template upscale')
@@ -101,8 +101,8 @@ export async function POST(req: Request) {
             id: job.id,
             data: {
               templateUrl: blobResult.url,
-              templateUpscalePredictionId: null, // Clear after completion
-            } as any, // ✅ Type assertion
+              templateUpscalePredictionId: null,
+            },
           })
           
           console.log('[Webhook] ✅ Template upscale completed')
@@ -119,7 +119,7 @@ export async function POST(req: Request) {
           id: job.id,
           data: {
             templateUpscalePredictionId: null,
-          } as any, // ✅ Type assertion
+          },
         })
         return NextResponse.json({ received: true, error: 'Template upscale failed' })
       }

@@ -159,6 +159,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const predictionId = searchParams.get('predictionId')
+    const jobId = searchParams.get('jobId') // ✅ รับ jobId จาก query
 
     if (!predictionId) {
       return NextResponse.json({ error: 'predictionId required' }, { status: 400 })
@@ -236,8 +237,8 @@ export async function GET(request: NextRequest) {
       console.log(`✅ Upscale started: ${upscalePredictionId}`)
 
       // ✅ บันทึก templateUpscalePredictionId ลง MongoDB
-      const cachedJobId = jobIdCache.get(predictionId)
-      if (cachedJobId) {
+      const targetJobId = jobId || jobIdCache.get(predictionId) // ✅ ใช้ parameter ก่อน, fallback cache
+      if (targetJobId) {
         try {
           const { getPayload } = await import('payload')
           const configPromise = await import('@payload-config')
@@ -245,12 +246,12 @@ export async function GET(request: NextRequest) {
           
           await payload.update({
             collection: 'jobs',
-            id: cachedJobId,
+            id: targetJobId,
             data: {
               templateUpscalePredictionId: upscalePredictionId,
-            } as any, // ✅ Type assertion เพื่อให้ TypeScript ยอมรับ field ใหม่
+            },
           })
-          console.log(`✅ Saved templateUpscalePredictionId to job ${cachedJobId}`)
+          console.log(`✅ Saved templateUpscalePredictionId to job ${targetJobId}`)
         } catch (dbError) {
           console.warn('⚠️ Failed to save templateUpscalePredictionId:', dbError)
           // Don't fail - webhook can still work
