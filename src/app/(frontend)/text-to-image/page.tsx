@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 export default function TextToImagePage() {
   const router = useRouter()
   const [prompt, setPrompt] = useState('')
-  const [outputFormat, setOutputFormat] = useState<'jpg' | 'png' | 'webp'>('png')
+  const outputFormat = 'jpg' // ✅ Fixed to JPG for optimization
   const [numImages, setNumImages] = useState(1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -92,29 +92,6 @@ export default function TextToImagePage() {
               />
               <div className="mt-2 text-sm text-gray-500">
                 ใช้ภาษาอังกฤษได้ผลดีที่สุด • ควรมีรายละเอียด • อย่างน้อย 10 ตัวอักษร
-              </div>
-            </div>
-
-            {/* Output Format */}
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-3">
-                🖼️ รูปแบบไฟล์
-              </label>
-              <div className="flex gap-3">
-                {['png', 'jpg', 'webp'].map((format) => (
-                  <button
-                    key={format}
-                    type="button"
-                    onClick={() => setOutputFormat(format as any)}
-                    className={`flex-1 py-3 px-4 rounded-lg border-2 font-semibold transition-all ${
-                      outputFormat === format
-                        ? 'border-purple-600 bg-purple-50 text-purple-700'
-                        : 'border-gray-300 hover:border-purple-400 text-gray-900'
-                    }`}
-                  >
-                    {format.toUpperCase()}
-                  </button>
-                ))}
               </div>
             </div>
 

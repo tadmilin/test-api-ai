@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { put } from '@vercel/blob'
+import { put, del } from '@vercel/blob'
 import Replicate from 'replicate'
 import { downloadDriveFile, extractDriveFileId } from '@/utilities/downloadDriveFile'
 
@@ -239,6 +239,14 @@ export async function GET(request: NextRequest) {
             
             // Cache upscaled URL
             uploadCache.set(predictionId, upscalePollData.imageUrl)
+            
+            // ✅ ลบ temp files (tempBlob ที่สร้างใน GET handler)
+            try {
+              await del(tempBlob.url)
+              console.log(`🗑️  Deleted temp template: ${tempBlob.url}`)
+            } catch (delError) {
+              console.warn(`⚠️ Failed to delete temp file:`, delError)
+            }
             
             return NextResponse.json({
               status: 'succeeded',

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getPayload } from 'payload'
 import configPromise from '@payload-config'
 import { put, del } from '@vercel/blob'
+import sharp from 'sharp'
 
 // ✅ Force Node.js runtime
 export const runtime = 'nodejs'
@@ -137,20 +138,41 @@ export async function POST(req: Request) {
             }
             
             // ✅ ใช้ arrayBuffer + detect contentType
-            const imageBuffer = await imageResponse.arrayBuffer()
+            let imageBuffer = await imageResponse.arrayBuffer()
             const contentType = imageResponse.headers.get('content-type') || 'image/jpeg'
             
-            // ✅ Extension from content type
+            // ✅ Optimize: Compress to JPG quality 85 (ลด 70%)
+            let optimizedBuffer: Buffer
+            let finalContentType = 'image/jpeg'
             let ext = 'jpg'
-            if (contentType.includes('png')) ext = 'png'
-            else if (contentType.includes('webp')) ext = 'webp'
+            
+            if (contentType.includes('png')) {
+              // Convert PNG → JPG
+              optimizedBuffer = await sharp(Buffer.from(imageBuffer))
+                .jpeg({ quality: 85, mozjpeg: true })
+                .toBuffer()
+            } else if (contentType.includes('jpeg') || contentType.includes('jpg')) {
+              // Compress JPG
+              optimizedBuffer = await sharp(Buffer.from(imageBuffer))
+                .jpeg({ quality: 85, mozjpeg: true })
+                .toBuffer()
+            } else if (contentType.includes('webp')) {
+              // Convert WebP → JPG
+              optimizedBuffer = await sharp(Buffer.from(imageBuffer))
+                .jpeg({ quality: 85, mozjpeg: true })
+                .toBuffer()
+            } else {
+              // Unknown format → keep original
+              optimizedBuffer = Buffer.from(imageBuffer)
+              finalContentType = contentType
+            }
             
             const imageName = `jobs/${job.id}/enhanced-${img.predictionId}.${ext}`
             
-            const blobResult = await put(imageName, imageBuffer, {
+            const blobResult = await put(imageName, optimizedBuffer, {
               access: 'public',
-              contentType: contentType, // ✅ ระบุ content type
-              addRandomSuffix: true, // ✅ กันชื่อชน
+              contentType: finalContentType,
+              addRandomSuffix: true,
             })
             
             console.log('[Webhook] ✅ Blob uploaded successfully:', blobResult.url)

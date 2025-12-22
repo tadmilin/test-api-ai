@@ -138,26 +138,31 @@ export async function GET(request: NextRequest) {
       const metaOut = await sharp(outBuf).metadata()
       console.log(`🖼️ MODEL OUTPUT size: ${metaOut.width}x${metaOut.height}`)
 
-      // ✅ Force final output to be 2048x2048
+      // ✅ Force final output to be 2048x2048 + Convert to JPG (ลด 60%)
       let finalBuf = outBuf
       if (metaOut.width !== 2048 || metaOut.height !== 2048) {
         console.log(`⚠️ Size mismatch! Forcing to 2048x2048...`)
         finalBuf = await sharp(outBuf)
           .resize(2048, 2048, { fit: 'cover' })
-          .png()
+          .jpeg({ quality: 90, mozjpeg: true })
           .toBuffer()
 
         const metaFixed = await sharp(finalBuf).metadata()
         console.log(`✅ FIXED size: ${metaFixed.width}x${metaFixed.height}`)
+      } else {
+        // Convert to JPG even if size is correct
+        finalBuf = await sharp(outBuf)
+          .jpeg({ quality: 90, mozjpeg: true })
+          .toBuffer()
       }
 
       // Upload to Vercel Blob (permanent)
       const blob = await put(
-        `upscaled-2048-${Date.now()}.png`,
+        `upscaled-2048-${Date.now()}.jpg`,
         finalBuf,
         {
           access: 'public',
-          contentType: 'image/png',
+          contentType: 'image/jpeg',
         }
       )
 
