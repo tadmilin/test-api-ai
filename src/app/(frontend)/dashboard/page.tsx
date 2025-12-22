@@ -1523,72 +1523,73 @@ export default function DashboardPage() {
               >
 
           {/* ========================================
-              STORAGE STATUS MONITOR
+              STORAGE STATUS & CLEANUP (SEPARATED)
           ======================================== */}
-          {storageStatus && (
-            <div className={`mb-6 rounded-xl border-2 p-4 ${
-              storageStatus.status === 'healthy' ? 'bg-green-50 border-green-300' :
-              storageStatus.status === 'warning' ? 'bg-yellow-50 border-yellow-300' :
-              'bg-red-50 border-red-300'
-            }`}>
-              <div className="flex items-center gap-3 mb-2">
-                <span className="text-2xl">
-                  {storageStatus.status === 'healthy' ? '✅' :
-                   storageStatus.status === 'warning' ? '⚠️' : '🚨'}
-                </span>
-                <div>
-                  <h3 className="font-bold text-lg text-gray-900">Storage Status</h3>
-                  <p className="text-sm text-gray-600">
-                    Last updated: {new Date(storageStatus.timestamp).toLocaleTimeString('th-TH')}
-                  </p>
+          <div className="mb-6 flex gap-4">
+            {/* Storage Status Card */}
+            {storageStatus && (
+              <div className={`flex-1 rounded-xl border-2 p-4 ${
+                storageStatus.status === 'healthy' ? 'bg-green-50 border-green-300' :
+                storageStatus.status === 'warning' ? 'bg-yellow-50 border-yellow-300' :
+                'bg-red-50 border-red-300'
+              }`}>
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-2xl">
+                    {storageStatus.status === 'healthy' ? '✅' :
+                     storageStatus.status === 'warning' ? '⚠️' : '🚨'}
+                  </span>
+                  <div>
+                    <h3 className="font-bold text-lg text-gray-900">Storage Status</h3>
+                    <p className="text-sm text-gray-600">
+                      Last updated: {new Date(storageStatus.timestamp).toLocaleTimeString('th-TH')}
+                    </p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4 mt-3">
+                  <div>
+                    <p className="text-sm text-gray-600">Jobs</p>
+                    <p className="text-xl font-bold text-gray-900">{storageStatus.usage}</p>
+                    <p className="text-xs text-gray-500">({storageStatus.usagePercent}%)</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Estimated Storage</p>
+                    <p className="text-xl font-bold text-gray-900">{storageStatus.estimatedStorageMB} MB</p>
+                    <p className="text-xs text-gray-500">~{storageStatus.storagePercent}% of 1GB</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Status</p>
+                    <p className={`text-xl font-bold ${
+                      storageStatus.status === 'healthy' ? 'text-green-600' :
+                      storageStatus.status === 'warning' ? 'text-yellow-600' :
+                      'text-red-600'
+                    }`}>
+                      {storageStatus.status === 'healthy' ? 'Healthy' :
+                       storageStatus.status === 'warning' ? 'Warning' : 'Critical'}
+                    </p>
+                  </div>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-4 mt-3">
-                <div>
-                  <p className="text-sm text-gray-600">Jobs</p>
-                  <p className="text-xl font-bold text-gray-900">{storageStatus.usage}</p>
-                  <p className="text-xs text-gray-500">({storageStatus.usagePercent}%)</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Estimated Storage</p>
-                  <p className="text-xl font-bold text-gray-900">{storageStatus.estimatedStorageMB} MB</p>
-                  <p className="text-xs text-gray-500">~{storageStatus.storagePercent}% of 1GB</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Status</p>
-                  <p className={`text-xl font-bold ${
-                    storageStatus.status === 'healthy' ? 'text-green-600' :
-                    storageStatus.status === 'warning' ? 'text-yellow-600' :
-                    'text-red-600'
-                  }`}>
-                    {storageStatus.status === 'healthy' ? 'Healthy' :
-                     storageStatus.status === 'warning' ? 'Warning' : 'Critical'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
+            )}
 
-          {/* ========================================
-              CLEANUP BUTTON (SEPARATE)
-          ======================================== */}
-          {storageStatus && (
-            <div className="mb-6">
-              <button
-                onClick={handleManualCleanup}
-                disabled={cleanupLoading}
-                className={`w-full px-6 py-4 rounded-lg font-semibold text-black transition-all border-2 ${
-                  cleanupLoading
-                    ? 'bg-gray-300 border-gray-400 cursor-not-allowed'
-                    : storageStatus.status === 'critical'
-                    ? 'bg-red-100 border-red-400 hover:bg-red-200 shadow-lg'
-                    : 'bg-gray-100 border-gray-300 hover:bg-gray-200 shadow-lg'
-                }`}
-              >
-                {cleanupLoading ? '🔄 Cleaning...' : '🗑️ Force Cleanup'}
-              </button>
-            </div>
-          )}
+            {/* Force Cleanup Button Card */}
+            {storageStatus && (
+              <div className="flex items-center">
+                <button
+                  onClick={handleManualCleanup}
+                  disabled={cleanupLoading}
+                  className={`px-8 py-6 rounded-xl font-bold text-black transition-all border-2 shadow-lg ${
+                    cleanupLoading
+                      ? 'bg-gray-300 border-gray-400 cursor-not-allowed'
+                      : storageStatus.status === 'critical'
+                      ? 'bg-red-100 border-red-400 hover:bg-red-200'
+                      : 'bg-gray-100 border-gray-300 hover:bg-gray-200'
+                  }`}
+                >
+                  {cleanupLoading ? '🔄 Cleaning...' : '🗑️ Force Cleanup'}
+                </button>
+              </div>
+            )}
+          </div>
                 {showCreateForm ? 'ปิด' : '+ สร้างงานใหม่'}
               </button>
             </div>
