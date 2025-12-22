@@ -635,7 +635,9 @@ export default function DashboardPage() {
             
             setProcessingStatus('')
             setProcessingJobId(null)
-            // DON'T call fetchDashboardData() - it will reset reviewMode
+            
+            // ✅ Refresh dashboard to update job list (but reviewMode stays true)
+            fetchDashboardData()
             
             return  // Exit function completely
           }
