@@ -511,6 +511,12 @@ export default function DashboardPage() {
         // ✅ Convert to boolean (in case API returns string)
         const allComplete = statusData.allComplete === true || statusData.allComplete === 'true'
         
+        // ✅ ถ้ากำลังเจน template/upscale อยู่ → ยัง poll ต่อ (ไม่ต้องเช็ค allComplete)
+        if (isTemplateGenerating || isTemplateUpscaling) {
+          console.log('🎨 Template processing in progress, continuing to poll...')
+          continue // Skip allComplete check
+        }
+        
         if (allComplete) {
           console.log(`✅ All images complete for job ${jobId}`)
           

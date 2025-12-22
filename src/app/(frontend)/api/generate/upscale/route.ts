@@ -69,6 +69,8 @@ export async function POST(request: NextRequest) {
     const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
     const webhookUrl = `${baseUrl}/api/webhooks/replicate`
     
+    console.log(`📡 Webhook URL: ${webhookUrl}`)
+    
     const prediction = await replicate.predictions.create({
       model: 'nightmareai/real-esrgan',
       input: {

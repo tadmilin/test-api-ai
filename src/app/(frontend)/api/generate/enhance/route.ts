@@ -217,6 +217,11 @@ export async function POST(request: NextRequest) {
     // ✅ Create prediction once - no retry (fail fast for better UX)
     console.log('🎯 Creating prediction...')
     
+    const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
+    const webhookUrl = `${baseUrl}/api/webhooks/replicate`
+    
+    console.log(`📡 Webhook URL: ${webhookUrl}`)
+    
     const nanoBananaPrediction = await replicate.predictions.create({
       model: 'google/nano-banana-pro',
       input: {
@@ -227,7 +232,7 @@ export async function POST(request: NextRequest) {
         output_format: 'jpg',
         safety_filter_level: 'block_only_high',
       },
-      webhook: `${process.env.NEXT_PUBLIC_SERVER_URL}/api/webhooks/replicate`,
+      webhook: webhookUrl,
       webhook_events_filter: ['start', 'completed'],
     })
     
