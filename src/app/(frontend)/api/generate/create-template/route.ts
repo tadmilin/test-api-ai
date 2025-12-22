@@ -170,13 +170,14 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * GET /api/generate/create-template?predictionId=xxx
- * Poll for template generation status (webhook handles upload/upscale)
+ * GET /api/generate/create-template?predictionId=xxx&jobId=yyy
+ * Poll for template generation status + handle upscale
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const predictionId = searchParams.get('predictionId')
+    const jobId = searchParams.get('jobId')
 
     if (!predictionId) {
       return NextResponse.json({ error: 'predictionId required' }, { status: 400 })
@@ -187,7 +188,142 @@ export async function GET(request: NextRequest) {
     
     console.log(`📊 Template prediction ${predictionId}: ${prediction.status}`)
 
-    // Return current status (webhook handles everything else)
+    // If succeeded, download + upscale
+    if (prediction.status === 'succeeded' && prediction.output) {
+      const imageUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
+      
+      if (!imageUrl) {
+        throw new Error('No output from prediction')
+      }
+
+      console.log(`📥 Downloading template...`)
+      const response = await fetch(imageUrl as string)
+      
+      if (!response.ok) {
+        throw new Error(`Failed to download: ${response.status}`)
+      }
+
+      const buffer = await response.arrayBuffer()
+      console.log(`   Downloaded ${Math.round(buffer.byteLength / 1024)}KB`)
+
+      // Upload temp blob
+      const tempBlob = await put(`template-temp-${Date.now()}.png`, buffer, {
+        access: 'public',
+        contentType: 'image/png',
+      })
+
+      console.log(`📤 Starting upscale...`)
+
+      // Start upscale
+      const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
+      const upscaleRes = await fetch(`${baseUrl}/api/generate/upscale`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageUrl: tempBlob.url,
+          scale: 2,
+        }),
+      })
+
+      if (!upscaleRes.ok) {
+        console.error('❌ Upscale failed, using original')
+        return NextResponse.json({
+          status: 'succeeded',
+          imageUrl: tempBlob.url,
+        })
+      }
+
+      const upscaleData = await upscaleRes.json()
+      const upscalePredictionId = upscaleData.predictionId
+      console.log(`✅ Upscale started: ${upscalePredictionId}`)
+
+      // Save upscale prediction ID
+      if (jobId) {
+        try {
+          const { getPayload } = await import('payload')
+          const configPromise = await import('@payload-config')
+          const payload = await getPayload({ config: configPromise.default })
+          
+          await payload.update({
+            collection: 'jobs',
+            id: jobId,
+            data: {
+              templatePredictionId: null,
+              templateUpscalePredictionId: upscalePredictionId,
+            },
+          })
+          console.log(`✅ Saved upscale prediction ID`)
+        } catch (dbError) {
+          console.warn('⚠️ Failed to save:', dbError)
+        }
+      }
+
+      // Poll upscale
+      for (let i = 0; i < 30; i++) {
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        
+        const upscalePollRes = await fetch(`${baseUrl}/api/generate/upscale?predictionId=${upscalePredictionId}`)
+        
+        if (upscalePollRes.ok) {
+          const upscalePollData = await upscalePollRes.json()
+          console.log(`📊 Upscale poll ${i + 1}: ${upscalePollData.status}`)
+          
+          if (upscalePollData.status === 'succeeded' && upscalePollData.imageUrl) {
+            console.log(`✅ Template complete: ${upscalePollData.imageUrl}`)
+            
+            // Save final URL
+            if (jobId) {
+              try {
+                const { getPayload } = await import('payload')
+                const configPromise = await import('@payload-config')
+                const payload = await getPayload({ config: configPromise.default })
+                
+                await payload.update({
+                  collection: 'jobs',
+                  id: jobId,
+                  data: {
+                    templateUrl: upscalePollData.imageUrl,
+                    templateUpscalePredictionId: null,
+                  },
+                })
+                console.log(`✅ Saved final template URL`)
+              } catch (dbError) {
+                console.warn('⚠️ Failed to save:', dbError)
+              }
+            }
+            
+            // Delete temp
+            try {
+              await del(tempBlob.url)
+            } catch (delError) {
+              console.warn(`⚠️ Failed to delete temp:`, delError)
+            }
+            
+            return NextResponse.json({
+              status: 'succeeded',
+              imageUrl: upscalePollData.imageUrl,
+            })
+          }
+          
+          if (upscalePollData.status === 'failed') {
+            console.error('❌ Upscale failed')
+            return NextResponse.json({
+              status: 'succeeded',
+              imageUrl: tempBlob.url,
+            })
+          }
+        }
+      }
+
+      // Timeout
+      console.warn('⚠️ Upscale timeout')
+      return NextResponse.json({
+        status: 'succeeded',
+        imageUrl: tempBlob.url,
+      })
+    }
+
+    // Return current status
     return NextResponse.json({
       status: prediction.status,
       error: prediction.error || null,

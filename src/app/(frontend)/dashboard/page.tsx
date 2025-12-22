@@ -445,28 +445,55 @@ export default function DashboardPage() {
         // ✅ เช็ค template generation และ upscale (fetch job data)
         let isTemplateGenerating = false
         let isTemplateUpscaling = false
+        let templatePredictionId: string | null = null
         
         try {
           const jobRes = await fetch(`/api/jobs/${jobId}`)
           if (jobRes.ok) {
             const jobData = await jobRes.json()
-            isTemplateGenerating = !!jobData.job?.templatePredictionId
+            templatePredictionId = jobData.job?.templatePredictionId || null
+            isTemplateGenerating = !!templatePredictionId
             isTemplateUpscaling = !!jobData.job?.templateUpscalePredictionId
             
-            // Update template URL if available (webhook completed)
+            // Update template URL if available
             if (jobData.job?.templateUrl && jobData.job.templateUrl !== generatedTemplateUrl) {
               setGeneratedTemplateUrl(jobData.job.templateUrl)
-              console.log('✅ Template URL updated from webhook:', jobData.job.templateUrl)
+              console.log('✅ Template URL updated:', jobData.job.templateUrl)
             }
           }
         } catch (error) {
           console.warn('⚠️ Failed to fetch job for template check:', error)
         }
 
-        // ✅ แสดงสถานะตามประเภทของงาน
-        if (isTemplateGenerating) {
+        // ✅ ถ้ากำลังเจน template → poll create-template API
+        if (isTemplateGenerating && templatePredictionId) {
+          console.log(`🎨 Template generation in progress`)
           setProcessingStatus(`🎨 กำลังสร้าง Template (รอ 30-60 วิ)...`)
-        } else if (isTemplateUpscaling) {
+          
+          try {
+            const templateRes = await fetch(`/api/generate/create-template?predictionId=${templatePredictionId}&jobId=${jobId}`)
+            if (templateRes.ok) {
+              const templateData = await templateRes.json()
+              console.log(`📊 Template status: ${templateData.status}`)
+              
+              if (templateData.status === 'succeeded' && templateData.imageUrl) {
+                console.log('✅ Template completed!')
+                setGeneratedTemplateUrl(templateData.imageUrl)
+              } else if (templateData.status === 'failed') {
+                console.error('❌ Template failed')
+                setProcessingStatus('❌ Template generation failed')
+                break
+              }
+            }
+          } catch (error) {
+            console.warn('⚠️ Failed to poll template:', error)
+          }
+          
+          continue // Skip normal status check
+        }
+        
+        // ✅ แสดงสถานะตามประเภทของงาน
+        if (isTemplateUpscaling) {
           setProcessingStatus(`🎨 กำลัง Upscale Template เป็น 2048x2048...`)
         } else if (processingCount > 0) {
           // มีงานที่กำลังประมวลผลอยู่ (อาจเป็น upscale)
