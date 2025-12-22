@@ -213,6 +213,14 @@ export const Jobs: CollectionConfig = {
               },
             },
             {
+              name: 'templatePredictionId',
+              type: 'text',
+              label: 'Template Generation Prediction ID',
+              admin: {
+                description: 'Replicate prediction ID for template generation (Nano Banana Pro)',
+              },
+            },
+            {
               name: 'templateUpscalePredictionId',
               type: 'text',
               label: 'Template Upscale Prediction ID',

@@ -814,6 +814,10 @@ export interface Job {
    */
   templateUrl?: string | null;
   /**
+   * Replicate prediction ID for template generation (Nano Banana Pro)
+   */
+  templatePredictionId?: string | null;
+  /**
    * Replicate prediction ID for template upscaling
    */
   templateUpscalePredictionId?: string | null;
@@ -1513,6 +1517,7 @@ export interface JobsSelect<T extends boolean = true> {
       };
   templateType?: T;
   templateUrl?: T;
+  templatePredictionId?: T;
   templateUpscalePredictionId?: T;
   enhancedImageUrls?:
     | T

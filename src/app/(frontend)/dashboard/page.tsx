@@ -236,8 +236,8 @@ export default function DashboardPage() {
           
           // ✅ เช็คว่า template กำลังประมวลผลหรือยัง (สำหรับ custom-prompt)
           const hasTemplateProcessing = job.jobType === 'custom-prompt' && (
-            !job.templateUrl || // ยังไม่มี template URL
-            !!job.templateUpscalePredictionId // กำลัง upscale template
+            !!job.templatePredictionId || // กำลังเจน template อยู่
+            !!job.templateUpscalePredictionId // กำลัง upscale template อยู่
           )
           
           if (hasIncomplete || hasImages || hasTemplateProcessing) {
@@ -436,12 +436,17 @@ export default function DashboardPage() {
         const progress = `${statusData.completed}/${statusData.total}`
         const processingCount = statusData.processing || 0
         
-        // ✅ เช็ค template upscale (fetch job data)
+        // ✅ เช็ค template generation และ upscale (fetch job data)
+        let isTemplateGenerating = false
         let isTemplateUpscaling = false
+        let templatePredictionId: string | null = null
+        
         try {
           const jobRes = await fetch(`/api/jobs/${jobId}`)
           if (jobRes.ok) {
             const jobData = await jobRes.json()
+            templatePredictionId = jobData.job?.templatePredictionId || null
+            isTemplateGenerating = !!templatePredictionId
             isTemplateUpscaling = !!jobData.job?.templateUpscalePredictionId
             
             // Update template URL if available
@@ -452,6 +457,35 @@ export default function DashboardPage() {
           }
         } catch (error) {
           console.warn('⚠️ Failed to fetch job for template check:', error)
+        }
+
+        // ✅ ถ้ากำลังเจน template → poll create-template API แทน
+        if (isTemplateGenerating && templatePredictionId) {
+          console.log(`🎨 Template generation in progress, polling create-template API...`)
+          setProcessingStatus(`🎨 กำลังสร้าง Template (รอ 30-60 วิ)...`)
+          
+          try {
+            const templateRes = await fetch(`/api/generate/create-template?predictionId=${templatePredictionId}&jobId=${jobId}`)
+            if (templateRes.ok) {
+              const templateData = await templateRes.json()
+              console.log(`📊 Template status: ${templateData.status}`)
+              
+              if (templateData.status === 'succeeded' && templateData.imageUrl) {
+                console.log('✅ Template generation completed!')
+                setGeneratedTemplateUrl(templateData.imageUrl)
+                // templatePredictionId will be cleared by the GET handler
+                // Continue polling to check for upscale completion
+              } else if (templateData.status === 'failed') {
+                console.error('❌ Template generation failed')
+                setProcessingStatus('❌ Template generation failed')
+                break
+              }
+            }
+          } catch (error) {
+            console.warn('⚠️ Failed to poll create-template:', error)
+          }
+          
+          continue // Skip normal status check
         }
         
         // ✅ แสดงสถานะตามประเภทของงาน

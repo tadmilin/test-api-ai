@@ -135,6 +135,25 @@ export async function POST(request: NextRequest) {
     // ✅ Cache jobId for GET handler
     jobIdCache.set(prediction.id, jobId)
 
+    // ✅ บันทึก templatePredictionId ลง MongoDB
+    try {
+      const { getPayload } = await import('payload')
+      const configPromise = await import('@payload-config')
+      const payload = await getPayload({ config: configPromise.default })
+      
+      await payload.update({
+        collection: 'jobs',
+        id: jobId,
+        data: {
+          templatePredictionId: prediction.id,
+        },
+      })
+      console.log(`✅ Saved templatePredictionId to job ${jobId}`)
+    } catch (dbError) {
+      console.warn('⚠️ Failed to save templatePredictionId:', dbError)
+      // Don't fail - GET handler can still use cache
+    }
+
     return NextResponse.json({
       predictionId: prediction.id,
       status: prediction.status,
@@ -180,6 +199,32 @@ export async function GET(request: NextRequest) {
           status: 'succeeded',
           imageUrl: cachedUrl,
         })
+      }
+      
+      // ✅ Check if webhook already processed this (check MongoDB)
+      if (jobId) {
+        try {
+          const { getPayload } = await import('payload')
+          const configPromise = await import('@payload-config')
+          const payload = await getPayload({ config: configPromise.default })
+          
+          const jobData = await payload.findByID({
+            collection: 'jobs',
+            id: jobId,
+          })
+          
+          // ถ้า webhook บันทึก templateUrl ไว้แล้ว → ใช้ URL นั้นเลย
+          if (jobData.templateUrl && !jobData.templateUpscalePredictionId) {
+            console.log(`✅ Template already processed by webhook: ${jobData.templateUrl}`)
+            uploadCache.set(predictionId, jobData.templateUrl)
+            return NextResponse.json({
+              status: 'succeeded',
+              imageUrl: jobData.templateUrl,
+            })
+          }
+        } catch (error) {
+          console.warn('⚠️ Failed to check job for existing templateUrl:', error)
+        }
       }
       
       const imageUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
@@ -236,7 +281,7 @@ export async function GET(request: NextRequest) {
       const upscalePredictionId = upscaleData.predictionId
       console.log(`✅ Upscale started: ${upscalePredictionId}`)
 
-      // ✅ บันทึก templateUpscalePredictionId ลง MongoDB
+      // ✅ บันทึก templateUpscalePredictionId และลบ templatePredictionId ลง MongoDB
       const targetJobId = jobId || jobIdCache.get(predictionId) // ✅ ใช้ parameter ก่อน, fallback cache
       if (targetJobId) {
         try {
@@ -248,10 +293,11 @@ export async function GET(request: NextRequest) {
             collection: 'jobs',
             id: targetJobId,
             data: {
-              templateUpscalePredictionId: upscalePredictionId,
+              templatePredictionId: null, // ✅ ลบ template generation prediction ID
+              templateUpscalePredictionId: upscalePredictionId, // ✅ บันทึก upscale prediction ID
             },
           })
-          console.log(`✅ Saved templateUpscalePredictionId to job ${targetJobId}`)
+          console.log(`✅ Saved templateUpscalePredictionId and cleared templatePredictionId for job ${targetJobId}`)
         } catch (dbError) {
           console.warn('⚠️ Failed to save templateUpscalePredictionId:', dbError)
           // Don't fail - webhook can still work
@@ -277,6 +323,27 @@ export async function GET(request: NextRequest) {
             
             // Cache upscaled URL
             uploadCache.set(predictionId, upscalePollData.imageUrl)
+            
+            // ✅ บันทึก templateUrl ลง MongoDB
+            if (targetJobId) {
+              try {
+                const { getPayload } = await import('payload')
+                const configPromise = await import('@payload-config')
+                const payload = await getPayload({ config: configPromise.default })
+                
+                await payload.update({
+                  collection: 'jobs',
+                  id: targetJobId,
+                  data: {
+                    templateUrl: upscalePollData.imageUrl,
+                    templateUpscalePredictionId: null, // ✅ ลบ upscale prediction ID เพราะเสร็จแล้ว
+                  },
+                })
+                console.log(`✅ Saved templateUrl to job ${targetJobId}`)
+              } catch (dbError) {
+                console.warn('⚠️ Failed to save templateUrl:', dbError)
+              }
+            }
             
             // ✅ ลบ temp files (tempBlob ที่สร้างใน GET handler)
             try {
