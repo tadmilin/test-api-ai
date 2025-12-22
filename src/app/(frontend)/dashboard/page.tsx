@@ -450,13 +450,15 @@ export default function DashboardPage() {
         let isTemplateGenerating = false
         let isTemplateUpscaling = false
         let templatePredictionId: string | null = null
+        let jobData: any = null
+        let templateGen: any = {}
         
         try {
           const jobRes = await fetch(`/api/jobs/${jobId}`)
           if (jobRes.ok) {
-            const jobData = await jobRes.json()
+            jobData = await jobRes.json()
             // ✅ อ่านจาก templateGeneration object (ใหม่) หรือ legacy fields
-            const templateGen = jobData.templateGeneration || {}
+            templateGen = jobData.templateGeneration || {}
             templatePredictionId = templateGen.predictionId || jobData.templatePredictionId || null
             isTemplateGenerating = !!templatePredictionId && templateGen.status !== 'succeeded'
             isTemplateUpscaling = !!templateGen.upscalePredictionId || !!jobData.templateUpscalePredictionId
@@ -507,7 +509,6 @@ export default function DashboardPage() {
           setProcessingStatus(`🎨 กำลัง Upscale Template เป็น 2048x2048...`)
           
           // ✅ เช็คอีกครั้งว่า upscale เสร็จหรือยัง (templateGen.url มีค่าแล้ว)
-          const templateGen = jobData.templateGeneration || {}
           if (templateGen.url && templateGen.status === 'succeeded') {
             console.log('✅ Template upscale completed!')
             setGeneratedTemplateUrl(templateGen.url)
