@@ -486,6 +486,8 @@ export default function DashboardPage() {
               if (templateData.status === 'succeeded' && templateData.imageUrl) {
                 console.log('✅ Template completed!')
                 setGeneratedTemplateUrl(templateData.imageUrl)
+                setProcessingStatus('✅ Template พร้อมแล้ว!')
+                break // ✅ หยุด polling เมื่อเสร็จ
               } else if (templateData.status === 'failed') {
                 console.error('❌ Template failed')
                 setProcessingStatus('❌ Template generation failed')
@@ -499,10 +501,15 @@ export default function DashboardPage() {
           continue // Skip normal status check
         }
         
-        // ✅ แสดงสถานะตามประเภทของงาน
+        // ✅ ถ้ากำลัง upscale template → แสดงสถานะและ continue
         if (isTemplateUpscaling) {
+          console.log(`🔍 Template upscale in progress`)
           setProcessingStatus(`🎨 กำลัง Upscale Template เป็น 2048x2048...`)
-        } else if (processingCount > 0) {
+          continue // ✅ ให้ GET handler ทำงานต่อ ไม่ต้องเรียก API upscale ซ้ำ
+        }
+        
+        // ✅ แสดงสถานะตามประเภทของงาน
+        if (processingCount > 0) {
           // มีงานที่กำลังประมวลผลอยู่ (อาจเป็น upscale)
           const upscalingCount = statusData.images?.filter((img: any) => img.upscalePredictionId && img.status === 'pending').length || 0
           
