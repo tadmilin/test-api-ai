@@ -145,6 +145,50 @@ export async function POST() {
       console.warn(`   ⚠️ Errors encountered: ${errors.length}`)
     }
 
+    // ✅ Cleanup orphan template upscale predictions (stuck > 10 minutes)
+    console.log(`\n🧹 [Cleanup] Checking for orphan template predictions...`)
+    try {
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+      
+      const orphanJobs = await payload.find({
+        collection: 'jobs',
+        where: {
+          and: [
+            {
+              templateUpscalePredictionId: {
+                exists: true,
+              },
+            },
+            {
+              updatedAt: {
+                less_than: tenMinutesAgo,
+              },
+            },
+          ],
+        },
+      })
+
+      if (orphanJobs.docs.length > 0) {
+        console.log(`   Found ${orphanJobs.docs.length} orphan template predictions`)
+        
+        for (const orphanJob of orphanJobs.docs) {
+          await payload.update({
+            collection: 'jobs',
+            id: orphanJob.id,
+            data: {
+              templateUpscalePredictionId: null,
+            } as any,
+          })
+          console.log(`   ✅ Cleared orphan prediction from job ${orphanJob.id}`)
+        }
+      } else {
+        console.log(`   ✅ No orphan template predictions found`)
+      }
+    } catch (orphanError) {
+      console.warn(`   ⚠️ Orphan cleanup failed:`, orphanError)
+      // Don't fail the whole operation
+    }
+
     return NextResponse.json({
       success: true,
       message: `Deleted ${deletedCount} old jobs`,
@@ -186,6 +230,17 @@ export async function GET() {
     const estimatedStorageMB = Math.round(totalDocs * 4.5)
     const storagePercent = Math.round((estimatedStorageMB / 1024) * 100)
 
+    // เช็ค orphan template predictions
+    const orphanJobs = await payload.find({
+      collection: 'jobs',
+      where: {
+        templateUpscalePredictionId: {
+          exists: true,
+        },
+      },
+      limit: 0,
+    })
+
     // สถานะ
     let status: 'healthy' | 'warning' | 'critical' = 'healthy'
     if (totalDocs > MAX_JOBS + 10) status = 'critical'
@@ -199,6 +254,7 @@ export async function GET() {
       usagePercent: Math.round((totalDocs / MAX_JOBS) * 100),
       estimatedStorageMB,
       storagePercent,
+      orphanTemplatePredictions: orphanJobs.totalDocs,
       status,
       timestamp: new Date().toISOString(),
     })

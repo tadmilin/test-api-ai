@@ -213,6 +213,14 @@ export const Jobs: CollectionConfig = {
               },
             },
             {
+              name: 'templateUpscalePredictionId',
+              type: 'text',
+              label: 'Template Upscale Prediction ID',
+              admin: {
+                description: 'Replicate prediction ID for template upscaling',
+              },
+            },
+            {
               name: 'enhancedImageUrls',
               type: 'array',
               label: 'Enhanced Images',

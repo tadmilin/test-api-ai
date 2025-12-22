@@ -16,6 +16,9 @@ const replicate = new Replicate({
 // ✅ Cache to prevent duplicate uploads (predictionId -> blobUrl)
 const uploadCache = new Map<string, string>()
 
+// ✅ Cache jobId mapping (predictionId -> jobId) for GET handler
+const jobIdCache = new Map<string, string>()
+
 /**
  * Convert any URL to a stable direct image URL
  * - Google Drive URLs → Download and upload to Blob
@@ -61,7 +64,7 @@ async function ensureDirectImageUrl(url: string, label: string): Promise<string>
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { enhancedImageUrls, templateUrl } = body
+    const { enhancedImageUrls, templateUrl, jobId } = body
 
     // Validate
     if (!enhancedImageUrls || !Array.isArray(enhancedImageUrls) || enhancedImageUrls.length === 0) {
@@ -74,6 +77,13 @@ export async function POST(request: NextRequest) {
     if (!templateUrl) {
       return NextResponse.json(
         { error: 'templateUrl is required' },
+        { status: 400 }
+      )
+    }
+
+    if (!jobId) {
+      return NextResponse.json(
+        { error: 'jobId is required' },
         { status: 400 }
       )
     }
@@ -121,6 +131,9 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ Template generation started: ${prediction.id}`)
     console.log(`   Status: ${prediction.status}`)
+
+    // ✅ Cache jobId for GET handler
+    jobIdCache.set(prediction.id, jobId)
 
     return NextResponse.json({
       predictionId: prediction.id,
@@ -221,6 +234,30 @@ export async function GET(request: NextRequest) {
       const upscaleData = await upscaleRes.json()
       const upscalePredictionId = upscaleData.predictionId
       console.log(`✅ Upscale started: ${upscalePredictionId}`)
+
+      // ✅ บันทึก templateUpscalePredictionId ลง MongoDB
+      const cachedJobId = jobIdCache.get(predictionId)
+      if (cachedJobId) {
+        try {
+          const { getPayload } = await import('payload')
+          const configPromise = await import('@payload-config')
+          const payload = await getPayload({ config: configPromise.default })
+          
+          await payload.update({
+            collection: 'jobs',
+            id: cachedJobId,
+            data: {
+              templateUpscalePredictionId: upscalePredictionId,
+            } as any, // ✅ Type assertion เพื่อให้ TypeScript ยอมรับ field ใหม่
+          })
+          console.log(`✅ Saved templateUpscalePredictionId to job ${cachedJobId}`)
+        } catch (dbError) {
+          console.warn('⚠️ Failed to save templateUpscalePredictionId:', dbError)
+          // Don't fail - webhook can still work
+        }
+      } else {
+        console.warn('⚠️ No cached jobId found for prediction:', predictionId)
+      }
 
       // Poll upscale (max 30 attempts = 60 seconds)
       for (let i = 0; i < 30; i++) {

@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     console.log('[Webhook] Full body:', JSON.stringify(body, null, 2))
     console.log('[Webhook] ===========================================')
 
-    // ✅ ค้นหา Job ที่มี predictionId หรือ upscalePredictionId
+    // ✅ ค้นหา Job ที่มี predictionId หรือ upscalePredictionId หรือ templateUpscalePredictionId
     const jobs = await payload.find({
       collection: 'jobs',
       where: {
@@ -51,6 +51,11 @@ export async function POST(req: Request) {
               equals: predictionId,
             },
           },
+          {
+            'templateUpscalePredictionId': {
+              equals: predictionId,
+            },
+          },
         ],
       },
     })
@@ -62,6 +67,66 @@ export async function POST(req: Request) {
 
     const job = jobs.docs[0]
     console.log('[Webhook] ✅ Found job:', job.id)
+
+    // ✅ เช็คว่าเป็น template upscale หรือไม่
+    const isTemplateUpscale = (job as any).templateUpscalePredictionId === predictionId
+    
+    if (isTemplateUpscale) {
+      console.log('[Webhook] 🎨 Processing template upscale')
+      
+      if (status === 'succeeded' && output) {
+        const replicateUrl = Array.isArray(output) ? output[0] : output
+        
+        try {
+          // Download and upload to Blob
+          const imageResponse = await fetch(replicateUrl)
+          const imageBuffer = await imageResponse.arrayBuffer()
+          
+          // Compress to JPG quality 85
+          const optimizedBuffer = await sharp(Buffer.from(imageBuffer))
+            .jpeg({ quality: 85, mozjpeg: true })
+            .toBuffer()
+          
+          const blobResult = await put(`jobs/${job.id}/template-2048x2048.jpg`, optimizedBuffer, {
+            access: 'public',
+            contentType: 'image/jpeg',
+            addRandomSuffix: true,
+          })
+          
+          console.log('[Webhook] ✅ Template uploaded:', blobResult.url)
+          
+          // Update job with template URL
+          await payload.update({
+            collection: 'jobs',
+            id: job.id,
+            data: {
+              templateUrl: blobResult.url,
+              templateUpscalePredictionId: null, // Clear after completion
+            } as any, // ✅ Type assertion
+          })
+          
+          console.log('[Webhook] ✅ Template upscale completed')
+          return NextResponse.json({ received: true, jobId: job.id })
+          
+        } catch (error) {
+          console.error('[Webhook] ❌ Template upload failed:', error)
+          return NextResponse.json({ received: true, error: 'Upload failed' })
+        }
+      } else if (status === 'failed') {
+        console.error('[Webhook] ❌ Template upscale failed')
+        await payload.update({
+          collection: 'jobs',
+          id: job.id,
+          data: {
+            templateUpscalePredictionId: null,
+          } as any, // ✅ Type assertion
+        })
+        return NextResponse.json({ received: true, error: 'Template upscale failed' })
+      }
+      
+      // Processing/starting - no action
+      return NextResponse.json({ received: true })
+    }
 
     // ✅ อัปเดตสถานะรูปภาพที่ตรงกับ predictionId หรือ upscalePredictionId
     const updatedUrls = await Promise.all(job.enhancedImageUrls?.map(async (img, index) => {

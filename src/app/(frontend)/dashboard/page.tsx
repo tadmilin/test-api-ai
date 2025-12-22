@@ -235,7 +235,10 @@ export default function DashboardPage() {
           const hasImages = job.enhancedImageUrls.some((img: { url?: string }) => !!img.url)
           
           // ✅ เช็คว่า template กำลังประมวลผลหรือยัง (สำหรับ custom-prompt)
-          const hasTemplateProcessing = job.jobType === 'custom-prompt' && !job.templateUrl
+          const hasTemplateProcessing = job.jobType === 'custom-prompt' && (
+            !job.templateUrl || // ยังไม่มี template URL
+            !!job.templateUpscalePredictionId // กำลัง upscale template
+          )
           
           if (hasIncomplete || hasImages || hasTemplateProcessing) {
             const needsPolling = hasIncomplete || hasTemplateProcessing
@@ -433,8 +436,28 @@ export default function DashboardPage() {
         const progress = `${statusData.completed}/${statusData.total}`
         const processingCount = statusData.processing || 0
         
+        // ✅ เช็ค template upscale (fetch job data)
+        let isTemplateUpscaling = false
+        try {
+          const jobRes = await fetch(`/api/jobs/${jobId}`)
+          if (jobRes.ok) {
+            const jobData = await jobRes.json()
+            isTemplateUpscaling = !!jobData.job?.templateUpscalePredictionId
+            
+            // Update template URL if available
+            if (jobData.job?.templateUrl && jobData.job.templateUrl !== generatedTemplateUrl) {
+              setGeneratedTemplateUrl(jobData.job.templateUrl)
+              console.log('✅ Template URL updated:', jobData.job.templateUrl)
+            }
+          }
+        } catch (error) {
+          console.warn('⚠️ Failed to fetch job for template check:', error)
+        }
+        
         // ✅ แสดงสถานะตามประเภทของงาน
-        if (processingCount > 0) {
+        if (isTemplateUpscaling) {
+          setProcessingStatus(`🎨 กำลัง Upscale Template เป็น 2048x2048...`)
+        } else if (processingCount > 0) {
           // มีงานที่กำลังประมวลผลอยู่ (อาจเป็น upscale)
           const upscalingCount = statusData.images?.filter((img: any) => img.upscalePredictionId && img.status === 'pending').length || 0
           
@@ -543,6 +566,7 @@ export default function DashboardPage() {
                 body: JSON.stringify({
                   enhancedImageUrls,
                   templateUrl: pendingTemplateUrl,
+                  jobId: jobId,  // ✅ ส่ง jobId เพื่อบันทึก upscale prediction
                 }),
               })
 
