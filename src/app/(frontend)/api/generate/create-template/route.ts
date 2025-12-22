@@ -13,12 +13,6 @@ const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN,
 })
 
-// ✅ Cache to prevent duplicate uploads (predictionId -> blobUrl)
-const uploadCache = new Map<string, string>()
-
-// ✅ Cache jobId mapping (predictionId -> jobId) for GET handler
-const jobIdCache = new Map<string, string>()
-
 /**
  * Convert any URL to a stable direct image URL
  * - Google Drive URLs → Download and upload to Blob
@@ -114,7 +108,11 @@ export async function POST(request: NextRequest) {
     })
 
     // Step 3: Start Nano Banana Pro (async, return predictionId)
-    console.log(`\n🚀 Step 3: Starting Nano Banana Pro (async)...`)
+    console.log(`\n🚀 Step 3: Starting Nano Banana Pro (async with webhook)...`)
+    
+    const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
+    const webhookUrl = `${baseUrl}/api/webhooks/replicate`
+    
     const input = {
       prompt: "ใช้ภาพต้นฉบับนี้เป็น Template อ้างอิง โดยต้องรักษาตำแหน่งเลเยอร์ กราฟิคและกรอบดีไซน์ทั้งหมดไว้เหมือนเดิมห้ามแก้ไข คำสั่ง: ให้เปลี่ยนเฉพาะส่วนที่เป็น 'ภาพถ่ายสถานที่' ใน Template นี้ทั้งหมด (รวมถึงภาพพื้นหลังและรูปเล็ก) ให้เป็นไฟล์ภาพใหม่ที่แนบมานี้ โดยให้ภาพแรกเป็นภาพหลัก แทนที่ลงไปตามตำแหน่งที่เหมาะสม โดยให้ภาพใหม่อยู่ในเลเยอร์ด้านหลังข้อความและกรอบอย่างสมบูรณ์",
       image_input: imageInputs,
@@ -122,6 +120,8 @@ export async function POST(request: NextRequest) {
       aspect_ratio: "1:1",
       output_format: "png",
       safety_filter_level: "block_only_high",
+      webhook: webhookUrl, // ✅ ใช้ webhook แทน polling
+      webhook_events_filter: ["completed"], // ✅ เฉพาะเมื่อเสร็จ
     }
 
     const prediction = await replicate.predictions.create({
@@ -131,9 +131,6 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ Template generation started: ${prediction.id}`)
     console.log(`   Status: ${prediction.status}`)
-
-    // ✅ Cache jobId for GET handler
-    jobIdCache.set(prediction.id, jobId)
 
     // ✅ บันทึก templatePredictionId ลง MongoDB
     try {
@@ -172,13 +169,12 @@ export async function POST(request: NextRequest) {
 
 /**
  * GET /api/generate/create-template?predictionId=xxx
- * Poll for template generation status
+ * Poll for template generation status (webhook handles upload/upscale)
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const predictionId = searchParams.get('predictionId')
-    const jobId = searchParams.get('jobId') // ✅ รับ jobId จาก query
 
     if (!predictionId) {
       return NextResponse.json({ error: 'predictionId required' }, { status: 400 })
@@ -189,197 +185,7 @@ export async function GET(request: NextRequest) {
     
     console.log(`📊 Template prediction ${predictionId}: ${prediction.status}`)
 
-    // If succeeded, upload to Blob (only once!)
-    if (prediction.status === 'succeeded' && prediction.output) {
-      // ✅ Check cache first to prevent duplicate uploads
-      const cachedUrl = uploadCache.get(predictionId)
-      if (cachedUrl) {
-        console.log(`✅ Using cached Blob URL: ${cachedUrl}`)
-        return NextResponse.json({
-          status: 'succeeded',
-          imageUrl: cachedUrl,
-        })
-      }
-      
-      // ✅ Check if webhook already processed this (check MongoDB)
-      if (jobId) {
-        try {
-          const { getPayload } = await import('payload')
-          const configPromise = await import('@payload-config')
-          const payload = await getPayload({ config: configPromise.default })
-          
-          const jobData = await payload.findByID({
-            collection: 'jobs',
-            id: jobId,
-          })
-          
-          // ถ้า webhook บันทึก templateUrl ไว้แล้ว → ใช้ URL นั้นเลย
-          if (jobData.templateUrl && !jobData.templateUpscalePredictionId) {
-            console.log(`✅ Template already processed by webhook: ${jobData.templateUrl}`)
-            uploadCache.set(predictionId, jobData.templateUrl)
-            return NextResponse.json({
-              status: 'succeeded',
-              imageUrl: jobData.templateUrl,
-            })
-          }
-        } catch (error) {
-          console.warn('⚠️ Failed to check job for existing templateUrl:', error)
-        }
-      }
-      
-      const imageUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
-      
-      if (!imageUrl) {
-        throw new Error('No output from prediction')
-      }
-
-      console.log(`📥 Downloading template result (first time)...`)
-      const response = await fetch(imageUrl as string)
-      
-      if (!response.ok) {
-        throw new Error(`Failed to download: ${response.status}`)
-      }
-
-      const buffer = await response.arrayBuffer()
-      console.log(`   Downloaded ${Math.round(buffer.byteLength / 1024)}KB`)
-
-      // Upload template to Vercel Blob (temporary, for upscaling)
-      const tempBlob = await put(
-        `template-temp-${Date.now()}.png`,
-        buffer,
-        {
-          access: 'public',
-          contentType: 'image/png',
-        }
-      )
-
-      console.log(`📤 Temp template uploaded: ${tempBlob.url}`)
-      console.log(`🔍 Starting upscale to 2048x2048...`)
-
-      // Start upscaling to 2048x2048
-      const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
-      const upscaleRes = await fetch(`${baseUrl}/api/generate/upscale`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageUrl: tempBlob.url,
-          scale: 2, // 1024 → 2048
-        }),
-      })
-
-      if (!upscaleRes.ok) {
-        console.error('❌ Failed to start upscale, using original template')
-        // Fallback to original template
-        uploadCache.set(predictionId, tempBlob.url)
-        return NextResponse.json({
-          status: 'succeeded',
-          imageUrl: tempBlob.url,
-        })
-      }
-
-      const upscaleData = await upscaleRes.json()
-      const upscalePredictionId = upscaleData.predictionId
-      console.log(`✅ Upscale started: ${upscalePredictionId}`)
-
-      // ✅ บันทึก templateUpscalePredictionId และลบ templatePredictionId ลง MongoDB
-      const targetJobId = jobId || jobIdCache.get(predictionId) // ✅ ใช้ parameter ก่อน, fallback cache
-      if (targetJobId) {
-        try {
-          const { getPayload } = await import('payload')
-          const configPromise = await import('@payload-config')
-          const payload = await getPayload({ config: configPromise.default })
-          
-          await payload.update({
-            collection: 'jobs',
-            id: targetJobId,
-            data: {
-              templatePredictionId: null, // ✅ ลบ template generation prediction ID
-              templateUpscalePredictionId: upscalePredictionId, // ✅ บันทึก upscale prediction ID
-            },
-          })
-          console.log(`✅ Saved templateUpscalePredictionId and cleared templatePredictionId for job ${targetJobId}`)
-        } catch (dbError) {
-          console.warn('⚠️ Failed to save templateUpscalePredictionId:', dbError)
-          // Don't fail - webhook can still work
-        }
-      } else {
-        console.warn('⚠️ No cached jobId found for prediction:', predictionId)
-      }
-
-      // Poll upscale (max 30 attempts = 60 seconds)
-      for (let i = 0; i < 30; i++) {
-        await new Promise(resolve => setTimeout(resolve, 2000))
-        
-        const upscalePollRes = await fetch(
-          `${baseUrl}/api/generate/upscale?predictionId=${upscalePredictionId}`
-        )
-        
-        if (upscalePollRes.ok) {
-          const upscalePollData = await upscalePollRes.json()
-          console.log(`📊 Upscale poll ${i + 1}: ${upscalePollData.status}`)
-          
-          if (upscalePollData.status === 'succeeded' && upscalePollData.imageUrl) {
-            console.log(`✅ Template upscaled to 2048x2048: ${upscalePollData.imageUrl}`)
-            
-            // Cache upscaled URL
-            uploadCache.set(predictionId, upscalePollData.imageUrl)
-            
-            // ✅ บันทึก templateUrl ลง MongoDB
-            if (targetJobId) {
-              try {
-                const { getPayload } = await import('payload')
-                const configPromise = await import('@payload-config')
-                const payload = await getPayload({ config: configPromise.default })
-                
-                await payload.update({
-                  collection: 'jobs',
-                  id: targetJobId,
-                  data: {
-                    templateUrl: upscalePollData.imageUrl,
-                    templateUpscalePredictionId: null, // ✅ ลบ upscale prediction ID เพราะเสร็จแล้ว
-                  },
-                })
-                console.log(`✅ Saved templateUrl to job ${targetJobId}`)
-              } catch (dbError) {
-                console.warn('⚠️ Failed to save templateUrl:', dbError)
-              }
-            }
-            
-            // ✅ ลบ temp files (tempBlob ที่สร้างใน GET handler)
-            try {
-              await del(tempBlob.url)
-              console.log(`🗑️  Deleted temp template: ${tempBlob.url}`)
-            } catch (delError) {
-              console.warn(`⚠️ Failed to delete temp file:`, delError)
-            }
-            
-            return NextResponse.json({
-              status: 'succeeded',
-              imageUrl: upscalePollData.imageUrl,
-            })
-          }
-          
-          if (upscalePollData.status === 'failed') {
-            console.error('❌ Upscale failed, using original template')
-            uploadCache.set(predictionId, tempBlob.url)
-            return NextResponse.json({
-              status: 'succeeded',
-              imageUrl: tempBlob.url,
-            })
-          }
-        }
-      }
-
-      // Timeout - use original
-      console.warn('⚠️ Upscale timeout, using original template')
-      uploadCache.set(predictionId, tempBlob.url)
-      return NextResponse.json({
-        status: 'succeeded',
-        imageUrl: tempBlob.url,
-      })
-    }
-
-    // Return current status
+    // Return current status (webhook handles everything else)
     return NextResponse.json({
       status: prediction.status,
       error: prediction.error || null,

@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     console.log('[Webhook] Full body:', JSON.stringify(body, null, 2))
     console.log('[Webhook] ===========================================')
 
-    // ✅ ค้นหา Job ที่มี predictionId หรือ upscalePredictionId หรือ templateUpscalePredictionId
+    // ✅ ค้นหา Job ที่มี predictionId หรือ upscalePredictionId หรือ templatePredictionId หรือ templateUpscalePredictionId
     const jobs = await payload.find({
       collection: 'jobs',
       where: {
@@ -48,6 +48,11 @@ export async function POST(req: Request) {
           },
           {
             'enhancedImageUrls.upscalePredictionId': {
+              equals: predictionId,
+            },
+          },
+          {
+            'templatePredictionId': {
               equals: predictionId,
             },
           },
@@ -67,6 +72,92 @@ export async function POST(req: Request) {
 
     const job = jobs.docs[0]
     console.log('[Webhook] ✅ Found job:', job.id)
+
+    // ✅ เช็คว่าเป็น template generation หรือไม่
+    const isTemplateGeneration = job.templatePredictionId === predictionId
+    
+    if (isTemplateGeneration) {
+      console.log('[Webhook] 🎨 Processing template generation')
+      
+      if (status === 'succeeded' && output) {
+        const replicateUrl = Array.isArray(output) ? output[0] : output
+        
+        try {
+          // Download template
+          console.log('[Webhook] 📥 Downloading template from Replicate...')
+          const imageResponse = await fetch(replicateUrl)
+          const imageBuffer = await imageResponse.arrayBuffer()
+          
+          // Upload temp blob for upscale
+          console.log('[Webhook] 📤 Uploading temp template...')
+          const tempBlob = await put(`jobs/${job.id}/template-temp-${Date.now()}.png`, Buffer.from(imageBuffer), {
+            access: 'public',
+            contentType: 'image/png',
+          })
+          
+          console.log('[Webhook] ✅ Temp template uploaded:', tempBlob.url)
+          console.log('[Webhook] 🔍 Starting upscale to 2048x2048...')
+          
+          // Start upscale
+          const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
+          const upscaleRes = await fetch(`${baseUrl}/api/generate/upscale`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              imageUrl: tempBlob.url,
+              scale: 2,
+            }),
+          })
+          
+          if (!upscaleRes.ok) {
+            throw new Error('Failed to start upscale')
+          }
+          
+          const upscaleData = await upscaleRes.json()
+          console.log('[Webhook] ✅ Upscale started:', upscaleData.predictionId)
+          
+          // Update job: clear templatePredictionId, set templateUpscalePredictionId
+          await payload.update({
+            collection: 'jobs',
+            id: job.id,
+            data: {
+              templatePredictionId: null,
+              templateUpscalePredictionId: upscaleData.predictionId,
+            },
+          })
+          
+          console.log('[Webhook] ✅ Template generation completed, upscale in progress')
+          return NextResponse.json({ received: true, jobId: job.id })
+          
+        } catch (error) {
+          console.error('[Webhook] ❌ Template processing failed:', error)
+          
+          // Clear templatePredictionId on error
+          await payload.update({
+            collection: 'jobs',
+            id: job.id,
+            data: {
+              templatePredictionId: null,
+            },
+          })
+          
+          return NextResponse.json({ received: true, error: 'Template processing failed' })
+        }
+      } else if (status === 'failed') {
+        console.error('[Webhook] ❌ Template generation failed')
+        await payload.update({
+          collection: 'jobs',
+          id: job.id,
+          data: {
+            templatePredictionId: null,
+          },
+        })
+        return NextResponse.json({ received: true, error: 'Template generation failed' })
+      }
+      
+      // Processing/starting - no action
+      return NextResponse.json({ received: true })
+    }
 
     // ✅ เช็คว่าเป็น template upscale หรือไม่
     const isTemplateUpscale = job.templateUpscalePredictionId === predictionId

@@ -201,21 +201,27 @@ export default function DashboardPage() {
   // Resume processing for any jobs stuck in processing/enhancing state
   const resumeProcessingJobs = useCallback(async () => {
     try {
-      // Check BOTH 'processing' AND 'enhancing' status
-      const [processingRes, enhancingRes] = await Promise.all([
+      // Check BOTH 'processing' AND 'enhancing' status AND active template jobs
+      const [processingRes, enhancingRes, completedRes] = await Promise.all([
         fetch('/api/jobs?status=processing'),
-        fetch('/api/jobs?status=enhancing')
+        fetch('/api/jobs?status=enhancing'),
+        fetch('/api/jobs?status=completed&limit=5') // ✅ เช็ค completed jobs ล่าสุดด้วย (สำหรับ template generation)
       ])
       
       const processingData = await processingRes.json()
       const enhancingData = await enhancingRes.json()
+      const completedData = await completedRes.json()
       
       const allJobs = [
         ...(processingData.jobs || []),
-        ...(enhancingData.jobs || [])
+        ...(enhancingData.jobs || []),
+        ...(completedData.jobs || []).filter((job: any) => 
+          // ✅ เฉพาะ completed jobs ที่กำลังเจน template อยู่
+          !!job.templatePredictionId || !!job.templateUpscalePredictionId
+        )
       ]
       
-      console.log(`📋 Found ${allJobs.length} jobs (processing + enhancing)`)
+      console.log(`📋 Found ${allJobs.length} jobs (processing + enhancing + template generation)`)
       
       // Find jobs with predictions that might still be running
       for (const job of allJobs) {
@@ -439,57 +445,28 @@ export default function DashboardPage() {
         // ✅ เช็ค template generation และ upscale (fetch job data)
         let isTemplateGenerating = false
         let isTemplateUpscaling = false
-        let templatePredictionId: string | null = null
         
         try {
           const jobRes = await fetch(`/api/jobs/${jobId}`)
           if (jobRes.ok) {
             const jobData = await jobRes.json()
-            templatePredictionId = jobData.job?.templatePredictionId || null
-            isTemplateGenerating = !!templatePredictionId
+            isTemplateGenerating = !!jobData.job?.templatePredictionId
             isTemplateUpscaling = !!jobData.job?.templateUpscalePredictionId
             
-            // Update template URL if available
+            // Update template URL if available (webhook completed)
             if (jobData.job?.templateUrl && jobData.job.templateUrl !== generatedTemplateUrl) {
               setGeneratedTemplateUrl(jobData.job.templateUrl)
-              console.log('✅ Template URL updated:', jobData.job.templateUrl)
+              console.log('✅ Template URL updated from webhook:', jobData.job.templateUrl)
             }
           }
         } catch (error) {
           console.warn('⚠️ Failed to fetch job for template check:', error)
         }
 
-        // ✅ ถ้ากำลังเจน template → poll create-template API แทน
-        if (isTemplateGenerating && templatePredictionId) {
-          console.log(`🎨 Template generation in progress, polling create-template API...`)
-          setProcessingStatus(`🎨 กำลังสร้าง Template (รอ 30-60 วิ)...`)
-          
-          try {
-            const templateRes = await fetch(`/api/generate/create-template?predictionId=${templatePredictionId}&jobId=${jobId}`)
-            if (templateRes.ok) {
-              const templateData = await templateRes.json()
-              console.log(`📊 Template status: ${templateData.status}`)
-              
-              if (templateData.status === 'succeeded' && templateData.imageUrl) {
-                console.log('✅ Template generation completed!')
-                setGeneratedTemplateUrl(templateData.imageUrl)
-                // templatePredictionId will be cleared by the GET handler
-                // Continue polling to check for upscale completion
-              } else if (templateData.status === 'failed') {
-                console.error('❌ Template generation failed')
-                setProcessingStatus('❌ Template generation failed')
-                break
-              }
-            }
-          } catch (error) {
-            console.warn('⚠️ Failed to poll create-template:', error)
-          }
-          
-          continue // Skip normal status check
-        }
-        
         // ✅ แสดงสถานะตามประเภทของงาน
-        if (isTemplateUpscaling) {
+        if (isTemplateGenerating) {
+          setProcessingStatus(`🎨 กำลังสร้าง Template (รอ 30-60 วิ)...`)
+        } else if (isTemplateUpscaling) {
           setProcessingStatus(`🎨 กำลัง Upscale Template เป็น 2048x2048...`)
         } else if (processingCount > 0) {
           // มีงานที่กำลังประมวลผลอยู่ (อาจเป็น upscale)
