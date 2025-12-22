@@ -241,13 +241,13 @@ export default function DashboardPage() {
           // ✅ แสดงรูปแม้เสร็จแล้ว (สำหรับ refresh)
           const hasImages = job.enhancedImageUrls.some((img: { url?: string }) => !!img.url)
           
-          // ✅ เช็คว่า template กำลังประมวลผลหรือยัง (สำหรับ custom-prompt)
+          // ✅ เช็คว่า template กำลังประมวลผลหรือยัง
           const templateGen = job.templateGeneration || {}
-          const hasTemplateProcessing = job.jobType === 'custom-prompt' && (
-            !!templateGen.predictionId || // กำลังเจน template อยู่
-            !!templateGen.upscalePredictionId || // กำลัง upscale template อยู่
-            !!job.templatePredictionId || // legacy
-            !!job.templateUpscalePredictionId // legacy
+          const hasTemplateProcessing = !!(
+            templateGen.predictionId || // กำลังเจน template อยู่
+            templateGen.upscalePredictionId || // กำลัง upscale template อยู่
+            job.templatePredictionId || // legacy
+            job.templateUpscalePredictionId // legacy
           )
           
           if (hasIncomplete || hasImages || hasTemplateProcessing) {
