@@ -334,50 +334,6 @@ export default function CustomPromptPage() {
             </div>
           )}
 
-          {/* Selected Images Preview */}
-          {selectedImagesMap.size > 0 && (
-            <div className="mb-6 bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-xl border-2 border-purple-300 shadow-lg">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-purple-900 flex items-center gap-2">
-                    <span className="text-2xl">✅</span>
-                    <span>รูปที่เลือกแล้ว ({selectedImagesMap.size} รูป)</span>
-                  </h3>
-                  <p className="text-sm text-purple-700 mt-1">จากทุกโฟลเดอร์ที่เลือกมา</p>
-                </div>
-                <button
-                  onClick={() => setSelectedImagesMap(new Map())}
-                  className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg font-semibold transition-all border border-red-300"
-                >
-                  🗑️ ล้างทั้งหมด
-                </button>
-              </div>
-              <div className="grid grid-cols-4 gap-3">
-                {Array.from(selectedImagesMap.values()).map((img) => (
-                  <div key={img.id} className="relative group">
-                    <div className="aspect-square rounded-lg overflow-hidden border-2 border-purple-400 shadow-md">
-                      <Image
-                        src={img.thumbnailUrl}
-                        alt={img.name}
-                        width={200}
-                        height={200}
-                        className="object-cover w-full h-full"
-                        unoptimized
-                      />
-                    </div>
-                    <button
-                      onClick={() => toggleImageSelection(img)}
-                      className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-7 h-7 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg font-bold"
-                    >
-                      ✕
-                    </button>
-                    <p className="text-xs text-purple-800 mt-1 truncate font-medium">{img.name}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Form */}
           <div className="space-y-6">
             {/* 1. Google Drive Images */}
@@ -484,6 +440,50 @@ export default function CustomPromptPage() {
                       </div>
                     )
                   })}
+                </div>
+              </div>
+            )}
+
+            {/* Selected Images Preview - แสดงรูปที่เลือกจากทุกโฟลเดอร์ */}
+            {selectedImagesMap.size > 0 && (
+              <div className="mt-6 bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-xl border-2 border-purple-300 shadow-lg">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-purple-900 flex items-center gap-2">
+                      <span className="text-2xl">✅</span>
+                      <span>รูปที่เลือกแล้ว ({selectedImagesMap.size} รูป)</span>
+                    </h3>
+                    <p className="text-sm text-purple-700 mt-1">จากทุกโฟลเดอร์ที่เลือกมา</p>
+                  </div>
+                  <button
+                    onClick={() => setSelectedImagesMap(new Map())}
+                    className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg font-semibold transition-all border border-red-300"
+                  >
+                    🗑️ ล้างทั้งหมด
+                  </button>
+                </div>
+                <div className="grid grid-cols-4 gap-3">
+                  {Array.from(selectedImagesMap.values()).map((img) => (
+                    <div key={img.id} className="relative group">
+                      <div className="aspect-square rounded-lg overflow-hidden border-2 border-purple-400 shadow-md">
+                        <Image
+                          src={img.thumbnailUrl}
+                          alt={img.name}
+                          width={200}
+                          height={200}
+                          className="object-cover w-full h-full"
+                          unoptimized
+                        />
+                      </div>
+                      <button
+                        onClick={() => toggleImageSelection(img)}
+                        className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-7 h-7 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg font-bold"
+                      >
+                        ✕
+                      </button>
+                      <p className="text-xs text-purple-800 mt-1 truncate font-medium">{img.name}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
