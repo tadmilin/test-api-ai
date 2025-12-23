@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Replicate from 'replicate'
-import { put } from '@vercel/blob'
+import { uploadBufferToCloudinary } from '@/utilities/cloudinaryUpload'
 import { getPayload } from 'payload'
 import config from '@payload-config'
 
@@ -132,15 +132,16 @@ export async function POST(request: NextRequest) {
       const finalSizeMB = processedBuffer.byteLength / 1024 / 1024
       console.log(`✅ Final size: ${finalSizeMB.toFixed(2)} MB`)
 
-      // Upload to Vercel Blob as source image
+      // Upload to Cloudinary as source image
       const timestamp = Date.now()
-      const sourceBlob = await put(`jobs/${jobId}/source-${timestamp}.jpg`, processedBuffer, {
-        access: 'public',
-        contentType: 'image/jpeg',
-      })
+      const cloudinaryUrl = await uploadBufferToCloudinary(
+        processedBuffer,
+        `jobs/${jobId}`,
+        `source-${timestamp}`
+      )
       
-      processedImageUrl = sourceBlob.url
-      console.log('✅ Uploaded to Blob:', processedImageUrl)
+      processedImageUrl = cloudinaryUrl
+      console.log('✅ Uploaded to Cloudinary:', processedImageUrl)
       console.log('🔍 Image optimized: JPEG format with dimensions divisible by 64')
       
     } else if (isLocalhost) {
@@ -179,15 +180,16 @@ export async function POST(request: NextRequest) {
         .jpeg({ quality: 92, chromaSubsampling: '4:4:4' })
         .toBuffer()
       
-      // Upload to Vercel Blob
+      // Upload to Cloudinary
       const timestamp = Date.now()
-      const sourceBlob = await put(`jobs/${jobId}/source-local-${timestamp}.jpg`, processedBuffer, {
-        access: 'public',
-        contentType: 'image/jpeg',
-      })
+      const cloudinaryUrl = await uploadBufferToCloudinary(
+        processedBuffer,
+        `jobs/${jobId}`,
+        `source-local-${timestamp}`
+      )
       
-      processedImageUrl = sourceBlob.url
-      console.log('✅ Uploaded Localhost image to Blob:', processedImageUrl)
+      processedImageUrl = cloudinaryUrl
+      console.log('✅ Uploaded Localhost image to Cloudinary:', processedImageUrl)
       
     } else {
       // ถ้าเป็น Public URL ปกติ (เช่น AWS S3, Cloudinary, หรือ Blob ที่มีอยู่แล้ว)
@@ -405,6 +407,7 @@ export async function GET(request: NextRequest) {
         }
 
         const finalImageBuffer = await finalImageResponse.arrayBuffer()
+        const finalImageBufferNode = Buffer.from(finalImageBuffer)
         
         // Detect correct content type and extension
         const contentType = finalImageResponse.headers.get('content-type') || 'image/png'
@@ -417,15 +420,17 @@ export async function GET(request: NextRequest) {
         const filename = `enhanced-${timestamp}-${randomSuffix}.${extension}`
 
         // Use jobId if provided, otherwise use 'temp' folder
-        const blobPath = jobId ? `jobs/${jobId}/${filename}` : `temp/${filename}`
+        const folder = jobId ? `jobs/${jobId}` : `temp`
+        const filenameWithoutExt = `enhanced-${timestamp}-${randomSuffix}`
         
-        console.log(`📤 Uploading to Blob (${contentType})...`)
-        const blob = await put(blobPath, finalImageBuffer, {
-          access: 'public',
-          contentType: contentType, // Use actual content type from Replicate
-        })
+        console.log(`📤 Uploading to Cloudinary (${contentType})...`)
+        const cloudinaryUrl = await uploadBufferToCloudinary(
+          finalImageBufferNode,
+          folder,
+          filenameWithoutExt
+        )
 
-        console.log(`📦 Uploaded to Blob: ${blob.url}`)
+        console.log(`📦 Uploaded to Cloudinary: ${cloudinaryUrl}`)
 
         // ✅ CRITICAL: Update DB with Blob URL (idempotent)
         if (jobId) {
@@ -445,15 +450,15 @@ export async function GET(request: NextRequest) {
               photoType?: string | null;
             }) => {
               if (img.predictionId === predictionId) {
-                // ✅ Guard: ถ้ามี blob แล้วไม่ต้องทับ (idempotent)
-                if (img.url && String(img.url).includes('blob.vercel-storage.com')) {
-                  console.log(`   ℹ️ Already has Blob URL, skipping update`)
+                // ✅ Guard: ถ้ามี URL แล้วไม่ต้องทับ (idempotent)
+                if (img.url && (String(img.url).includes('cloudinary.com') || String(img.url).includes('blob.vercel-storage.com'))) {
+                  console.log(`   ℹ️ Already has URL, skipping update`)
                   return img
                 }
-                console.log(`   ✅ Updating image with Blob URL`)
+                console.log(`   ✅ Updating image with Cloudinary URL`)
                 return { 
                   ...img, 
-                  url: blob.url, // ✅ Permanent Blob URL
+                  url: cloudinaryUrl, // ✅ Permanent Cloudinary URL
                   tempOutputUrl: enhancedImageUrl, // Keep temp URL for debugging
                   status: 'completed' as const,
                   webhookFailed: null, // Clear flag
@@ -488,7 +493,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({
           success: true,
           status: 'succeeded',
-          imageUrl: blob.url,
+          imageUrl: cloudinaryUrl,
           originalUrl: enhancedImageUrl,
           predictionId,
           cached: false,

@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getPayload } from 'payload'
 import configPromise from '@payload-config'
-import { put, del } from '@vercel/blob'
 import sharp from 'sharp'
+import { uploadBufferToCloudinary } from '@/utilities/cloudinaryUpload'
 
 // ✅ Force Node.js runtime
 export const runtime = 'nodejs'
@@ -103,11 +103,12 @@ export async function POST(req: Request) {
           if (job.outputSize === '1:1-2K') {
             console.log('[Webhook] 🔍 Starting upscale to 2048x2048...')
             
-            // Upload temp blob for upscale
-            const tempBlob = await put(`jobs/${job.id}/template-temp-${Date.now()}.png`, Buffer.from(imageBuffer), {
-              access: 'public',
-              contentType: 'image/png',
-            })
+            // Upload temp to Cloudinary for upscale
+            const tempUrl = await uploadBufferToCloudinary(
+              Buffer.from(imageBuffer),
+              `jobs/${job.id}`,
+              `template-temp-${Date.now()}`
+            )
             
             // Start upscale
             const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
@@ -115,7 +116,7 @@ export async function POST(req: Request) {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                imageUrl: tempBlob.url,
+                imageUrl: tempUrl,
                 scale: 2,
               }),
             })
@@ -165,13 +166,13 @@ export async function POST(req: Request) {
               .jpeg({ quality: 90, mozjpeg: true })
               .toBuffer()
             
-            const blobResult = await put(`jobs/${job.id}/template-${targetSize.width}x${targetSize.height}.jpg`, resizedBuffer, {
-              access: 'public',
-              contentType: 'image/jpeg',
-              addRandomSuffix: true,
-            })
+            const cloudinaryUrl = await uploadBufferToCloudinary(
+              resizedBuffer,
+              `jobs/${job.id}`,
+              `template-${targetSize.width}x${targetSize.height}`
+            )
             
-            console.log('[Webhook] ✅ Template uploaded:', blobResult.url)
+            console.log('[Webhook] ✅ Template uploaded:', cloudinaryUrl)
             
             // Update job with template URL
             await payload.update({
@@ -182,9 +183,9 @@ export async function POST(req: Request) {
                   predictionId: null,
                   upscalePredictionId: null,
                   status: 'succeeded',
-                  url: blobResult.url,
+                  url: cloudinaryUrl,
                 },
-                templateUrl: blobResult.url,
+                templateUrl: cloudinaryUrl,
               },
             })
             
@@ -251,13 +252,13 @@ export async function POST(req: Request) {
             .jpeg({ quality: 90, mozjpeg: true })
             .toBuffer()
           
-          const blobResult = await put(`jobs/${job.id}/template-2048x2048.jpg`, optimizedBuffer, {
-            access: 'public',
-            contentType: 'image/jpeg',
-            addRandomSuffix: true,
-          })
+          const cloudinaryUrl = await uploadBufferToCloudinary(
+            optimizedBuffer,
+            `jobs/${job.id}`,
+            `template-2048x2048`
+          )
           
-          console.log('[Webhook] ✅ Template uploaded:', blobResult.url)
+          console.log('[Webhook] ✅ Template uploaded:', cloudinaryUrl)
           
           // Update job with template URL
           await payload.update({
@@ -268,9 +269,9 @@ export async function POST(req: Request) {
                 predictionId: null,
                 upscalePredictionId: null,
                 status: 'succeeded',
-                url: blobResult.url,
+                url: cloudinaryUrl,
               },
-              templateUrl: blobResult.url,
+              templateUrl: cloudinaryUrl,
             },
           })
           
@@ -483,31 +484,22 @@ export async function POST(req: Request) {
               finalContentType = contentType
             }
             
-            const imageName = `jobs/${job.id}/enhanced-${img.predictionId}.${ext}`
+            const filename = `enhanced-${img.predictionId}`
             
-            const blobResult = await put(imageName, optimizedBuffer, {
-              access: 'public',
-              contentType: finalContentType,
-              addRandomSuffix: true,
-            })
+            const cloudinaryUrl = await uploadBufferToCloudinary(
+              optimizedBuffer,
+              `jobs/${job.id}`,
+              filename
+            )
             
-            console.log('[Webhook] ✅ Blob uploaded successfully:', blobResult.url)
+            console.log('[Webhook] ✅ Cloudinary uploaded successfully:', cloudinaryUrl)
             
-            // ✅ ลบไฟล์ temp/preupscale หลังอัพสเกลสำเร็จ
-            if (isUpscalePrediction && img.url && String(img.url).includes('blob.vercel-storage.com')) {
-              try {
-                // ลบไฟล์ preupscale เก่า
-                await del(img.url)
-                console.log('[Webhook] 🗑️  Deleted old preupscale image:', img.url)
-              } catch (delError) {
-                console.warn('[Webhook] ⚠️ Failed to delete old image:', delError)
-              }
-            }
+            // Note: Cloudinary handles old file cleanup automatically with same public_id
             
             // ✅ Set completed และ clear prediction IDs ตามประเภท
             return {
               ...img,
-              url: blobResult.url,
+              url: cloudinaryUrl,
               originalUrl: replicateUrl,
               tempOutputUrl: replicateUrl,
               status: 'completed' as const,

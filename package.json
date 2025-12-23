@@ -43,6 +43,7 @@
     "@vercel/blob": "^2.0.0",
     "@vercel/og": "^0.8.5",
     "class-variance-authority": "^0.7.0",
+    "cloudinary": "^2.8.0",
     "clsx": "^2.1.1",
     "cross-env": "^7.0.3",
     "dotenv": "16.4.7",

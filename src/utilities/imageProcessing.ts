@@ -1,5 +1,5 @@
-import { put } from '@vercel/blob'
 import { google } from 'googleapis'
+import { uploadBufferToCloudinary } from './cloudinaryUpload'
 
 /**
  * Ensures an image URL is publicly accessible (Vercel Blob).
@@ -95,15 +95,16 @@ export async function ensurePublicImage(imageUrl: string, jobId: string, baseUrl
         .toBuffer()
     }
 
-    // Upload to Blob
+    // Upload to Cloudinary
     const timestamp = Date.now()
-    const blob = await put(`jobs/${jobId}/optimized-${timestamp}.png`, processedBuffer, {
-      access: 'public',
-      contentType: 'image/png',
-    })
+    const cloudinaryUrl = await uploadBufferToCloudinary(
+      processedBuffer,
+      `jobs/${jobId}`,
+      `optimized-${timestamp}`
+    )
 
-    console.log(`✅ Converted to Public Blob: ${blob.url}`)
-    return blob.url
+    console.log(`✅ Converted to Cloudinary: ${cloudinaryUrl}`)
+    return cloudinaryUrl
 
   } catch (error) {
     console.error('❌ Error converting image to public:', error)
