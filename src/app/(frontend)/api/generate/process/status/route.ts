@@ -294,14 +294,29 @@ export async function GET(request: NextRequest) {
         upscalePredictionId: img.upscalePredictionId ? img.upscalePredictionId.substring(0, 15) + '...' : null
       })), null, 2))
       
-      await payload.update({
-        collection: 'jobs',
-        id: jobId,
-        data: {
-          enhancedImageUrls: updatedImages,
-        },
-      })
-      console.log(`✅ Job updated successfully`)
+      // Retry logic for MongoDB write conflicts
+      let retries = 3
+      while (retries > 0) {
+        try {
+          await payload.update({
+            collection: 'jobs',
+            id: jobId,
+            data: {
+              enhancedImageUrls: updatedImages,
+            },
+          })
+          console.log(`✅ Job updated successfully`)
+          break
+        } catch (err: any) {
+          if (err.code === 112 && retries > 1) {
+            console.log(`⚠️ Write conflict, retrying... (${retries - 1} attempts left)`)
+            retries--
+            await new Promise(resolve => setTimeout(resolve, 100 * (4 - retries))) // Exponential backoff
+          } else {
+            throw err
+          }
+        }
+      }
     } else {
       console.log(`⏭️ No changes detected, skipping job update`)
       console.log('📋 Current state:', JSON.stringify(updatedImages.map((img, i) => ({
@@ -355,23 +370,40 @@ export async function GET(request: NextRequest) {
     // Update job status if all complete
     if (allComplete && (job.status === 'enhancing' || job.status === 'processing')) {
       console.log(`🎉 All images complete! Updating job to completed`)
-      await payload.update({
-        collection: 'jobs',
-        id: jobId,
-        data: {
-          status: 'completed',
-        },
-      })
       
-      await payload.create({
-        collection: 'job-logs',
-        data: {
-          jobId,
-          level: 'info',
-          message: `Job completed: ${completed} succeeded, ${failed} failed`,
-          timestamp: new Date().toISOString(),
-        },
-      })
+      // Retry logic for MongoDB write conflicts
+      let retries = 3
+      while (retries > 0) {
+        try {
+          await payload.update({
+            collection: 'jobs',
+            id: jobId,
+            data: {
+              status: 'completed',
+            },
+          })
+          
+          await payload.create({
+            collection: 'job-logs',
+            data: {
+              jobId,
+              level: 'info',
+              message: `Job completed: ${completed} succeeded, ${failed} failed`,
+              timestamp: new Date().toISOString(),
+            },
+          })
+          break
+        } catch (err: any) {
+          if (err.code === 112 && retries > 1) {
+            console.log(`⚠️ Write conflict on status update, retrying... (${retries - 1} attempts left)`)
+            retries--
+            await new Promise(resolve => setTimeout(resolve, 100 * (4 - retries))) // Exponential backoff
+          } else {
+            console.warn('⚠️ Failed to update job status:', err.message)
+            break // Don't fail entire request
+          }
+        }
+      }
     }
 
     console.log(`===== END STATUS CHECK =====\n`)
