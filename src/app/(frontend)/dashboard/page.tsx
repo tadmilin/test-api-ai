@@ -2101,8 +2101,8 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {enhancedImages.map((img, index) => {
                 const hasMetadata = img.photoType || img.contentTopic || img.postTitleHeadline
-                const isReady = img.status === 'completed' && !!img.url && img.url.trim() !== '' && !img.upscalePredictionId
-                const isUpscaling = !!img.upscalePredictionId && img.status === 'pending'
+                const isUpscaling = !!img.upscalePredictionId
+                const isReady = img.status === 'completed' && !!img.url && img.url.trim() !== '' && !isUpscaling
                 return (
                   <div key={index} className="bg-white rounded-xl border-2 border-gray-200 shadow-sm hover:shadow-md transition-all overflow-hidden">
                     {/* Header with Status */}
