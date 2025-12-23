@@ -152,6 +152,7 @@ export async function POST(req: Request) {
               '4:5': { width: 1080, height: 1350 },
               '4:5-2K': { width: 1080, height: 1350 },
               '4:3': { width: 1080, height: 1350 },
+              '3:4': { width: 1080, height: 1350 },
               '9:16': { width: 1080, height: 1920 },
               '9:16-2K': { width: 1080, height: 1920 },
             }
@@ -565,15 +566,44 @@ export async function POST(req: Request) {
       newJobStatus = 'enhancing' // หรือ 'persisting' ถ้ามี status นี้
     }
 
-    // อัปเดต Job ใน Database
-    await payload.update({
-      collection: 'jobs',
-      id: job.id,
-      data: {
-        enhancedImageUrls: updatedUrls as typeof job.enhancedImageUrls,
-        status: newJobStatus,
-      },
-    })
+    // อัปเดต Job ใน Database (with exponential backoff for production)
+    let retries = 5 // เพิ่มเป็น 5 ครั้งสำหรับ concurrent users
+    let updateSuccess = false
+    let attempt = 0
+    
+    while (retries > 0 && !updateSuccess) {
+      try {
+        await payload.update({
+          collection: 'jobs',
+          id: job.id,
+          data: {
+            enhancedImageUrls: updatedUrls as typeof job.enhancedImageUrls,
+            status: newJobStatus,
+          },
+        })
+        updateSuccess = true
+        console.log('[Webhook] ✅ Job updated successfully')
+      } catch (updateError: any) {
+        retries--
+        attempt++
+        if (updateError.code === 112 || updateError.codeName === 'WriteConflict') {
+          // Exponential backoff: 200ms, 400ms, 800ms, 1600ms, 2000ms (max)
+          const baseDelay = Math.pow(2, attempt) * 100
+          const jitter = Math.random() * 100 // Random 0-100ms
+          const delay = Math.min(baseDelay + jitter, 2000)
+          console.log(`[Webhook] ⚠️ WriteConflict (attempt ${attempt}), retry in ${delay.toFixed(0)}ms... (${retries} left)`)
+          await new Promise(resolve => setTimeout(resolve, delay))
+        } else {
+          // Other error, throw
+          throw updateError
+        }
+      }
+    }
+    
+    if (!updateSuccess) {
+      console.error('[Webhook] ❌ Failed to update job after retries')
+      return NextResponse.json({ error: 'Failed to update job' }, { status: 500 })
+    }
 
     console.log('[Webhook] Updated job:', job.id, 'Status:', newJobStatus)
 

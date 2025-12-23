@@ -142,7 +142,11 @@ export async function GET(request: NextRequest) {
                 // enhance API returns imageUrl = Blob URL (already uploaded)
                 const blobUrl = data.imageUrl
                 
-                // ✅ CRITICAL: Re-fetch job เพื่อเช็คว่า webhook update ไปแล้วหรือยัง (prevent race condition)
+                // ✅ CRITICAL: รอ 500ms ให้ webhook ทัน update ก่อน (prevent race condition)
+                console.log(`   ⏱️  Waiting 500ms for webhook to complete...`)
+                await new Promise(resolve => setTimeout(resolve, 500))
+                
+                // ✅ Re-fetch job เพื่อเช็คว่า webhook update ไปแล้วหรือยัง
                 console.log(`   🔍 Re-checking job to prevent duplicate upload...`)
                 const { getPayload } = await import('payload')
                 const configPromise = await import('@payload-config')
