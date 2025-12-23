@@ -2799,7 +2799,7 @@ export default function DashboardPage() {
                         {(() => {
                           const sizeLabels: Record<string, string> = {
                             '1:1-2K': '2048×2048',
-                            '4:5-2K': '1080×1350',
+                            '4:5-2K': '3:4 (1080×1350)',
                             '9:16-2K': '1080×1920',
                           }
                           const outputSize = job.outputSize || '1:1-2K'

@@ -597,7 +597,7 @@ export default function CustomPromptPage() {
                   className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-gray-900 font-medium focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 >
                   <option value="1:1-2K">1:1 Square (2048×2048) - FB/IG Feed</option>
-                  <option value="4:5-2K">4:5 Portrait (1080×1350) - FB/IG Feed</option>
+                  <option value="4:5-2K">3:4 Portrait (1080×1350) - FB/IG Feed</option>
                   <option value="9:16-2K">9:16 Vertical (1080×1920) - Story/TikTok</option>
                 </select>
                 <p className="text-xs text-gray-500 mt-2">

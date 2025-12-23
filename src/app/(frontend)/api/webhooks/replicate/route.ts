@@ -439,7 +439,8 @@ export async function POST(req: Request) {
               '1:1-2K': null, // จะไปทาง upscale แทน (ไม่ resize)
               '4:5': { width: 1080, height: 1350 },
               '4:5-2K': { width: 1080, height: 1350 },
-              '4:3': { width: 1080, height: 1350 },
+              '4:3': { width: 1440, height: 1920 },
+              '3:4': { width: 1440, height: 1920 },
               '9:16': { width: 1080, height: 1920 },
               '9:16-2K': { width: 1080, height: 1920 },
             }
@@ -452,13 +453,14 @@ export async function POST(req: Request) {
             
             console.log(`[Webhook] 🔍 Debug resize: jobId=${job.id}, outputSize=${job.outputSize}, targetSize=${JSON.stringify(targetSize)}, isMainPrediction=${isMainPrediction}, shouldUpscale=${shouldUpscale}, isCustomPrompt=${isCustomPrompt}`)
             
-            if (targetSize && isMainPrediction) {
-              // Resize to target dimensions
-              console.log(`[Webhook] 📐 Resizing to ${targetSize.width}×${targetSize.height}...`)
+            if (targetSize) {
+              // Resize to target dimensions (ทำทั้ง main และ upscale prediction)
+              console.log(`[Webhook] 📐 RESIZING to ${targetSize.width}×${targetSize.height}...`)
               optimizedBuffer = await sharp(Buffer.from(imageBuffer))
                 .resize(targetSize.width, targetSize.height, { fit: 'cover' })
                 .jpeg({ quality: 90, mozjpeg: true })
                 .toBuffer()
+              console.log(`[Webhook] ✅ RESIZE COMPLETED to ${targetSize.width}×${targetSize.height}`)
             } else if (contentType.includes('png')) {
               // Convert PNG → JPG
               optimizedBuffer = await sharp(Buffer.from(imageBuffer))

@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     // Imagen supports: 1:1, 16:9, 9:16, 3:4, 4:3 ONLY
     const OUTPUT_SIZE_TO_ASPECT_RATIO: Record<string, string> = {
       '1:1-2K': '1:1',
-      '4:5-2K': '4:3',   // ✅ ใช้ 4:3 แทน 4:5 (ใกล้เคียงที่สุด)
+      '4:5-2K': '3:4',   // ✅ Portrait (0.75) → resize เป็น 1440×1920 หรือ 1080×1350
       '9:16-2K': '9:16',
     }
     const aspectRatio = OUTPUT_SIZE_TO_ASPECT_RATIO[outputSize] || '1:1'
@@ -135,6 +135,9 @@ export async function POST(request: NextRequest) {
       console.log(`🚀 Starting Imagen 4 Ultra for image ${i + 1}/${numImages}...`)
       
       try {
+        const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
+        const webhookUrl = `${baseUrl}/api/webhooks/replicate`
+        
         const prediction = await replicate.predictions.create({
           model: 'google/imagen-4-ultra',
           input: {
@@ -145,6 +148,8 @@ export async function POST(request: NextRequest) {
             safety_tolerance: 2,
             negative_prompt: 'blurry, low quality, distorted, watermark, text, logo',
           },
+          webhook: webhookUrl,
+          webhook_events_filter: ['completed'],
         })
 
         predictions.push({
