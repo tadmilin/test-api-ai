@@ -37,9 +37,10 @@ export async function POST(request: NextRequest) {
     } = body
 
     // ✅ Map outputSize to aspectRatio for Imagen 4 Ultra
+    // Imagen supports: 1:1, 16:9, 9:16, 3:4, 4:3 ONLY
     const OUTPUT_SIZE_TO_ASPECT_RATIO: Record<string, string> = {
       '1:1-2K': '1:1',
-      '4:5-2K': '4:5',
+      '4:5-2K': '4:3',   // ✅ ใช้ 4:3 แทน 4:5 (ใกล้เคียงที่สุด)
       '9:16-2K': '9:16',
     }
     const aspectRatio = OUTPUT_SIZE_TO_ASPECT_RATIO[outputSize] || '1:1'

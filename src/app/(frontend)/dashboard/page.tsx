@@ -298,12 +298,17 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (currentUser) {
-      fetchDashboardData()
-      fetchSpreadsheets()
-      fetchDriveFolders()
+      // ✅ เรียกครั้งเดียว sequential (ไม่พร้อมกัน)
+      const initDashboard = async () => {
+        await fetchDashboardData()
+        await fetchSpreadsheets()
+        await fetchDriveFolders()
+        
+        // Auto-resume processing jobs (หลังจาก fetch data เสร็จแล้ว)
+        resumeProcessingJobs()
+      }
       
-      // Auto-resume processing jobs
-      resumeProcessingJobs()
+      initDashboard()
       
       // Check if coming from custom-prompt page
       const fromCustomPrompt = localStorage.getItem('fromCustomPrompt')
@@ -340,11 +345,11 @@ export default function DashboardPage() {
     }
   }, [])
 
-  // ✅ Poll storage status every 30 seconds
+  // ✅ Poll storage status every 60 seconds (ลดเหลือ 1 นาที)
   useEffect(() => {
     if (currentUser) {
       fetchStorageStatus()
-      const interval = setInterval(fetchStorageStatus, 30000)
+      const interval = setInterval(fetchStorageStatus, 60000)  // ✅ เปลี่ยนเป็น 60 วินาที
       return () => clearInterval(interval)
     }
   }, [currentUser, fetchStorageStatus])
@@ -389,7 +394,7 @@ export default function DashboardPage() {
     isPollingRef.current = true
     console.log(`🔄 Starting polling for job ${jobId}`)
     
-    const maxPolls = 120  // 10 นาที (120 * 5 วินาที = 600 วินาที)
+    const maxPolls = 60  // ✅ ลดเหลือ 2 นาที (60 * 2s = 120s)
     let polls = 0
     
     try {
