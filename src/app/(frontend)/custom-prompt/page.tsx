@@ -33,7 +33,7 @@ export default function CustomPromptPage() {
   const [selectedFolderId, setSelectedFolderId] = useState<string>('')
   const [driveFolderId, setDriveFolderId] = useState<string>('')
   const [driveImages, setDriveImages] = useState<DriveImage[]>([])
-  const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set())
+  const [selectedImagesMap, setSelectedImagesMap] = useState<Map<string, DriveImage>>(new Map())
   const [customPrompt, setCustomPrompt] = useState<string>('')
   const [creating, setCreating] = useState(false)
   const [processingStatus, setProcessingStatus] = useState<string>('')
@@ -89,7 +89,6 @@ export default function CustomPromptPage() {
   async function handleFolderSelect(folderId: string) {
     setSelectedFolderId(folderId)
     setDriveImages([])
-    setSelectedImages(new Set())
   }
 
   async function loadDriveImages() {
@@ -126,19 +125,18 @@ export default function CustomPromptPage() {
   function handleDriveFolderChange(driveId: string) {
     setDriveFolderId(driveId)
     setSelectedFolderId('')
-    setSelectedImages(new Set())
     setDriveImages([])
   }
 
-  function toggleImageSelection(imageId: string) {
-    setSelectedImages(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(imageId)) {
-        newSet.delete(imageId)
+  function toggleImageSelection(image: DriveImage) {
+    setSelectedImagesMap(prev => {
+      const newMap = new Map(prev)
+      if (newMap.has(image.id)) {
+        newMap.delete(image.id)
       } else {
-        newSet.add(imageId)
+        newMap.set(image.id, image)
       }
-      return newSet
+      return newMap
     })
   }
 
@@ -172,7 +170,7 @@ export default function CustomPromptPage() {
   }
 
   async function handleCreate() {
-    if (selectedImages.size === 0) {
+    if (selectedImagesMap.size === 0) {
       alert('กรุณาเลือกรูปอย่างน้อย 1 รูป')
       return
     }
@@ -192,9 +190,7 @@ export default function CustomPromptPage() {
     setProcessingStatus('กำลังสร้างงาน...')
 
     try {
-      const selectedImageUrls = driveImages
-        .filter(img => selectedImages.has(img.id))
-        .map(img => ({ url: img.url }))
+      const selectedImageUrls = Array.from(selectedImagesMap.values()).map(img => ({ url: img.url }))
 
       // Create job
       const jobRes = await fetch('/api/jobs', {
@@ -221,7 +217,7 @@ export default function CustomPromptPage() {
       const jobData = response.doc || response
       const jobId = jobData.id
 
-      setProcessingStatus(`เริ่มประมวลผล ${selectedImages.size} รูป...`)
+      setProcessingStatus(`เริ่มประมวลผล ${selectedImagesMap.size} รูป...`)
 
       // Start processing
       const processRes = await fetch('/api/generate/process', {
@@ -338,6 +334,50 @@ export default function CustomPromptPage() {
             </div>
           )}
 
+          {/* Selected Images Preview */}
+          {selectedImagesMap.size > 0 && (
+            <div className="mb-6 bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-xl border-2 border-purple-300 shadow-lg">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-purple-900 flex items-center gap-2">
+                    <span className="text-2xl">✅</span>
+                    <span>รูปที่เลือกแล้ว ({selectedImagesMap.size} รูป)</span>
+                  </h3>
+                  <p className="text-sm text-purple-700 mt-1">จากทุกโฟลเดอร์ที่เลือกมา</p>
+                </div>
+                <button
+                  onClick={() => setSelectedImagesMap(new Map())}
+                  className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg font-semibold transition-all border border-red-300"
+                >
+                  🗑️ ล้างทั้งหมด
+                </button>
+              </div>
+              <div className="grid grid-cols-4 gap-3">
+                {Array.from(selectedImagesMap.values()).map((img) => (
+                  <div key={img.id} className="relative group">
+                    <div className="aspect-square rounded-lg overflow-hidden border-2 border-purple-400 shadow-md">
+                      <Image
+                        src={img.thumbnailUrl}
+                        alt={img.name}
+                        width={200}
+                        height={200}
+                        className="object-cover w-full h-full"
+                        unoptimized
+                      />
+                    </div>
+                    <button
+                      onClick={() => toggleImageSelection(img)}
+                      className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-7 h-7 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg font-bold"
+                    >
+                      ✕
+                    </button>
+                    <p className="text-xs text-purple-800 mt-1 truncate font-medium">{img.name}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Form */}
           <div className="space-y-6">
             {/* 1. Google Drive Images */}
@@ -394,20 +434,20 @@ export default function CustomPromptPage() {
                     </p>
                   </div>
                   <div className={`px-4 py-2 rounded-lg font-semibold ${
-                    selectedImages.size > 0
+                    selectedImagesMap.size > 0
                       ? 'bg-purple-100 text-purple-700' 
                       : 'bg-gray-100 text-gray-600'
                   }`}>
-                    {selectedImages.size} รูป
+                    {selectedImagesMap.size} รูป
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   {driveImages.map((img) => {
-                    const isSelected = selectedImages.has(img.id)
+                    const isSelected = selectedImagesMap.has(img.id)
                     return (
                       <div
                         key={img.id}
-                        onClick={() => toggleImageSelection(img.id)}
+                        onClick={() => toggleImageSelection(img)}
                         className={`group relative rounded-xl overflow-hidden transition-all duration-300 ${
                           isSelected
                             ? 'ring-4 ring-purple-500 shadow-xl scale-[1.02] cursor-pointer'
@@ -449,7 +489,7 @@ export default function CustomPromptPage() {
             )}
 
             {/* 3. Custom Prompt */}
-            {selectedImages.size > 0 && (
+            {selectedImagesMap.size > 0 && (
               <div className="mt-6 bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-xl border-2 border-purple-200">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   3️⃣ เขียน Prompt (คำสั่งให้ AI ตกแต่งรูป)
@@ -468,7 +508,7 @@ export default function CustomPromptPage() {
             )}
 
             {/* 4. Template Selection (Optional) */}
-            {selectedImages.size > 0 && customPrompt.trim() && (
+            {selectedImagesMap.size > 0 && customPrompt.trim() && (
               <div className="mt-6 bg-gradient-to-br from-blue-50 to-cyan-50 p-6 rounded-xl border-2 border-blue-200">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
@@ -585,12 +625,12 @@ export default function CustomPromptPage() {
             )}
 
             {/* 5. Create Button */}
-            {selectedImages.size > 0 && customPrompt.trim() && (
+            {selectedImagesMap.size > 0 && customPrompt.trim() && (
               <div className="mt-6 bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-xl border-2 border-purple-200">
                 <div className="pt-6 border-t border-purple-200">
                   <button
                     onClick={handleCreate}
-                    disabled={creating || selectedImages.size === 0 || !customPrompt.trim() || (enableTemplate && !selectedTemplate)}
+                    disabled={creating || selectedImagesMap.size === 0 || !customPrompt.trim() || (enableTemplate && !selectedTemplate)}
                     className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-4 rounded-lg hover:from-purple-700 hover:to-blue-700 font-bold text-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
                   >
                     {creating ? (
@@ -604,8 +644,8 @@ export default function CustomPromptPage() {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
                         {enableTemplate 
-                          ? `🎨 สร้างรูป + Template ({selectedImages.size} รูป)`
-                          : `✨ สร้างรูปด้วย Custom Prompt ({selectedImages.size} รูป)`
+                          ? `🎨 สร้างรูป + Template (${selectedImagesMap.size} รูป)`
+                          : `✨ สร้างรูปด้วย Custom Prompt (${selectedImagesMap.size} รูป)`
                         }
                       </>
                     )}
