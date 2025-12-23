@@ -90,10 +90,10 @@ export async function POST(request: NextRequest) {
         productName: `Text to Image: ${prompt.substring(0, 50)}${prompt.length > 50 ? '...' : ''}`,
         status: 'processing',
         createdBy: user.id,
-        customPrompt: prompt,
+        // ✅ ไม่ใช้ customPrompt field เพื่อไม่ให้สับสนกับ custom-prompt feature
         contentTopic: `Text-to-Image (${aspectRatio})`,
         postTitleHeadline: `Generated from: "${prompt.substring(0, 100)}"`,
-        contentDescription: `Aspect Ratio: ${aspectRatio} | Format: ${outputFormat} | Images: ${numImages}`,
+        contentDescription: `Aspect Ratio: ${aspectRatio} | Format: ${outputFormat} | Images: ${numImages} | Prompt: ${prompt.substring(0, 200)}`,
         outputSize: outputSize,
       },
     })

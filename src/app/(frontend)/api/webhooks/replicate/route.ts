@@ -363,7 +363,8 @@ export async function POST(req: Request) {
           // Custom-Prompt: รูปแต่ละรูป → ไม่ upscale (เก็บไว้สร้าง template)
           // Text-to-Image: 1:1 → upscale เป็น 2048×2048, อื่นๆ → resize
           const isImagenModel = body.model?.includes('imagen') || false
-          const isCustomPrompt = !!job.customPrompt
+          // ✅ เช็คจาก contentTopic แทน customPrompt เพราะ text-to-image ก็ใช้ customPrompt field
+          const isCustomPrompt = job.contentTopic && !job.contentTopic.includes('Text-to-Image')
           
           // ✅ Upscale เฉพาะ text-to-image (ไม่ใช่ custom-prompt) + outputSize มี 1:1
           const shouldUpscale = isMainPrediction && !isCustomPrompt && job.outputSize && (job.outputSize.includes('1:1') || job.outputSize.startsWith('1:1'))
