@@ -65,6 +65,14 @@ export default buildConfig({
   editor: defaultLexical,
   db: mongooseAdapter({
     url: process.env.DATABASE_URI || '',
+    connectOptions: {
+      maxPoolSize: 10,  // ✅ จำกัด connection pool ไว้ 10 connections
+      minPoolSize: 2,   // ✅ รักษา connection ไว้อย่างน้อย 2 connections
+      maxIdleTimeMS: 30000,  // ✅ ปิด idle connections หลัง 30 วินาที
+      serverSelectionTimeoutMS: 10000,  // ✅ timeout 10 วินาที
+      socketTimeoutMS: 45000,  // ✅ socket timeout 45 วินาที
+    },
+    autoIndex: false,  // ✅ ปิด auto-indexing (เร็วขึ้น, ลด overhead)
   }),
   collections: [Pages, Posts, Media, Categories, Users, Jobs, JobLogs, ApiConfigs],
   cors: [getServerSideURL()].filter(Boolean),

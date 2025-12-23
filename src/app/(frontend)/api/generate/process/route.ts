@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPayload } from 'payload'
 import config from '@payload-config'
+import type { Job } from '@/payload-types'
 
 // ✅ Force Node.js runtime
 export const runtime = 'nodejs'
@@ -23,30 +24,7 @@ export async function POST(request: NextRequest) {
     const job = await payload.findByID({
       collection: 'jobs',
       id: jobId,
-    }) as { 
-      id: string; 
-      status: string; 
-      photoTypeFromSheet?: string; 
-      contentTopic?: string; 
-      postTitleHeadline?: string; 
-      contentDescription?: string;
-      customPrompt?: string; 
-      outputSize?: string;
-      referenceImageUrls?: Array<{ url?: string | null }>;
-      enhancedImageUrls?: Array<{
-        originalUrl?: string | null;
-        tempOutputUrl?: string | null;
-        url?: string | null;
-        webhookFailed?: boolean | null;
-        status?: ('pending' | 'completed' | 'failed' | 'approved' | 'regenerating') | null;
-        predictionId?: string | null;
-        upscalePredictionId?: string | null;
-        photoType?: string | null;
-        contentTopic?: string | null;
-        postTitleHeadline?: string | null;
-        contentDescription?: string | null;
-      }>;
-    }
+    }) as Job
 
     if (!job) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 })
@@ -126,18 +104,7 @@ export async function POST(request: NextRequest) {
       console.log(`✅ Placeholders created, job status: enhancing`)
 
       // ✅ STEP 2: Keep local copy in memory (avoid DB reads in loop)
-      type EnhancedImage = {
-        originalUrl: string;
-        url: string | null;
-        tempOutputUrl: string | null;
-        predictionId: string | null;
-        status: 'pending' | 'completed' | 'failed' | 'approved' | 'regenerating';
-        photoType: string;
-        contentTopic: string;
-        postTitleHeadline: string;
-        contentDescription: string;
-        error?: string;
-      }
+      type EnhancedImage = NonNullable<Job['enhancedImageUrls']>[number]
       const localEnhanced: EnhancedImage[] = [...placeholders]
 
       // ✅ STEP 3: Process images sequentially with stagger delay

@@ -2787,7 +2787,7 @@ export default function DashboardPage() {
                             '4:5-2K': '1080×1350',
                             '9:16-2K': '1080×1920',
                           }
-                          const outputSize = (job as any).outputSize || '1:1-2K'
+                          const outputSize = job.outputSize || '1:1-2K'
                           return (
                             <span className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded">
                               {sizeLabels[outputSize] || outputSize}
