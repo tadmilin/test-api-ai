@@ -72,7 +72,6 @@ export default buildConfig({
       serverSelectionTimeoutMS: 10000,  // ✅ timeout 10 วินาที
       socketTimeoutMS: 45000,  // ✅ socket timeout 45 วินาที
     },
-    autoIndex: false,  // ✅ ปิด auto-indexing (เร็วขึ้น, ลด overhead)
   }),
   collections: [Pages, Posts, Media, Categories, Users, Jobs, JobLogs, ApiConfigs],
   cors: [getServerSideURL()].filter(Boolean),
