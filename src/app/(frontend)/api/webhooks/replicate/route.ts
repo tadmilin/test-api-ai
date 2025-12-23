@@ -147,11 +147,16 @@ export async function POST(req: Request) {
           } else {
             // ✅ 4:5 หรือ 9:16 → resize
             const OUTPUT_SIZE_MAP: Record<string, { width: number; height: number }> = {
+              '1:1': { width: 2048, height: 2048 },
+              '1:1-2K': { width: 2048, height: 2048 },
+              '4:5': { width: 1080, height: 1350 },
               '4:5-2K': { width: 1080, height: 1350 },
+              '4:3': { width: 1080, height: 1350 },
+              '9:16': { width: 1080, height: 1920 },
               '9:16-2K': { width: 1080, height: 1920 },
             }
             
-            const targetSize = OUTPUT_SIZE_MAP[job.outputSize || '4:5-2K']
+            const targetSize = OUTPUT_SIZE_MAP[job.outputSize || ''] || { width: 1080, height: 1350 }
             console.log(`[Webhook] 📐 Resizing template to ${targetSize.width}×${targetSize.height}`)
             
             const resizedBuffer = await sharp(Buffer.from(imageBuffer))
@@ -360,8 +365,8 @@ export async function POST(req: Request) {
           const isImagenModel = body.model?.includes('imagen') || false
           const isCustomPrompt = !!job.customPrompt
           
-          // ✅ Upscale เฉพาะ text-to-image (ไม่ใช่ custom-prompt) + outputSize = 1:1-2K
-          const shouldUpscale = isMainPrediction && job.outputSize === '1:1-2K' && !isCustomPrompt
+          // ✅ Upscale เฉพาะ text-to-image (ไม่ใช่ custom-prompt) + outputSize มี 1:1
+          const shouldUpscale = isMainPrediction && !isCustomPrompt && job.outputSize && (job.outputSize.includes('1:1') || job.outputSize.startsWith('1:1'))
           
           console.log(`[Webhook] Model: ${body.model || 'unknown'}, isImagen: ${isImagenModel}, isCustomPrompt: ${isCustomPrompt}, outputSize: ${job.outputSize}, shouldUpscale: ${shouldUpscale}`)
           
@@ -429,16 +434,22 @@ export async function POST(req: Request) {
             
             // ตรวจสอบว่าต้อง resize หรือไม่
             const OUTPUT_SIZE_MAP: Record<string, { width: number; height: number } | null> = {
-              '1:1-2K': { width: 2048, height: 2048 }, // Imagen resize, Nano Banana upscale แล้วจะเป็น null
+              '1:1': null, // จะไปทาง upscale แทน (ไม่ resize)
+              '1:1-2K': null, // จะไปทาง upscale แทน (ไม่ resize)
+              '4:5': { width: 1080, height: 1350 },
               '4:5-2K': { width: 1080, height: 1350 },
+              '4:3': { width: 1080, height: 1350 },
+              '9:16': { width: 1080, height: 1920 },
               '9:16-2K': { width: 1080, height: 1920 },
             }
             
-            // ถ้า shouldUpscale = true (Nano Banana 1:1) จะไม่มาถึงตรงนี้ เพราะรอ upscale
-            // ถ้าเป็น Imagen 1:1 จะ resize ที่นี่
-            const targetSize = OUTPUT_SIZE_MAP[job.outputSize || '1:1-2K']
+            // ถ้า shouldUpscale = true จะไม่มาถึงตรงนี้ เพราะรอ upscale
+            // ถ้าไม่เจอใน map ให้ใช้ค่า default สำหรับ 4:5
+            const targetSize = OUTPUT_SIZE_MAP[job.outputSize || ''] !== undefined 
+              ? OUTPUT_SIZE_MAP[job.outputSize || ''] 
+              : { width: 1080, height: 1350 }
             
-            console.log(`[Webhook] 🔍 Debug resize: jobId=${job.id}, outputSize=${job.outputSize}, targetSize=${JSON.stringify(targetSize)}, isMainPrediction=${isMainPrediction}`)
+            console.log(`[Webhook] 🔍 Debug resize: jobId=${job.id}, outputSize=${job.outputSize}, targetSize=${JSON.stringify(targetSize)}, isMainPrediction=${isMainPrediction}, shouldUpscale=${shouldUpscale}, isCustomPrompt=${isCustomPrompt}`)
             
             if (targetSize && isMainPrediction) {
               // Resize to target dimensions
