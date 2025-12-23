@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { put } from '@vercel/blob'
+import { uploadBufferToCloudinary } from '@/utilities/cloudinaryUpload'
 import Replicate from 'replicate'
 import sharp from 'sharp'
 
@@ -57,13 +57,14 @@ export async function POST(request: NextRequest) {
     const metaNorm = await sharp(normalizedBuf).metadata()
     console.log(`📐 NORMALIZED size: ${metaNorm.width}x${metaNorm.height}`) // Must be 1024x1024
 
-    // Upload normalized image to Blob
-    const normalizedBlob = await put(`preupscale-${Date.now()}.png`, normalizedBuf, {
-      access: 'public',
-      contentType: 'image/png',
-    })
+    // Upload normalized image to Cloudinary
+    const normalizedUrl = await uploadBufferToCloudinary(
+      normalizedBuf,
+      'preupscale',
+      `preupscale-${Date.now()}`
+    )
 
-    console.log(`   ✅ Normalized: ${normalizedBlob.url}`)
+    console.log(`   ✅ Normalized: ${normalizedUrl}`)
 
     // Start Real-ESRGAN upscaling with normalized image
     const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
     const prediction = await replicate.predictions.create({
       model: 'nightmareai/real-esrgan',
       input: {
-        image: normalizedBlob.url,
+        image: normalizedUrl,
         scale: finalScale, // 2x upscale (1024 → 2048)
         face_enhance: false,
       },
@@ -158,21 +159,18 @@ export async function GET(request: NextRequest) {
           .toBuffer()
       }
 
-      // Upload to Vercel Blob (permanent)
-      const blob = await put(
-        `upscaled-2048-${Date.now()}.jpg`,
+      // Upload to Cloudinary (permanent)
+      const cloudinaryUrl = await uploadBufferToCloudinary(
         finalBuf,
-        {
-          access: 'public',
-          contentType: 'image/jpeg',
-        }
+        'upscaled',
+        `upscaled-2048-${Date.now()}`
       )
 
-      console.log(`✅ Upscaled image saved: ${blob.url}`)
+      console.log(`✅ Upscaled image saved: ${cloudinaryUrl}`)
 
       return NextResponse.json({
         status: 'succeeded',
-        imageUrl: blob.url,
+        imageUrl: cloudinaryUrl,
         size: '2048x2048',
       })
     }
@@ -223,16 +221,13 @@ async function _resizeAndUpload(imageUrl: string, outputSize: string): Promise<s
     .jpeg({ quality: 90, mozjpeg: true })
     .toBuffer()
 
-  // Upload to Blob
-  const blob = await put(
-    `resized-${outputSize}-${Date.now()}.jpg`,
+  // Upload to Cloudinary
+  const cloudinaryUrl = await uploadBufferToCloudinary(
     resized,
-    {
-      access: 'public',
-      contentType: 'image/jpeg',
-    }
+    'resized',
+    `resized-${outputSize}-${Date.now()}`
   )
 
-  console.log(`✅ Resized image saved: ${blob.url}`)
-  return blob.url
+  console.log(`✅ Resized image saved: ${cloudinaryUrl}`)
+  return cloudinaryUrl
 }
