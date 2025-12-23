@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { google } from 'googleapis'
+import { google, drive_v3 } from 'googleapis'
 
 export async function GET() {
   try {
@@ -45,7 +45,7 @@ export async function GET() {
     console.log(`Found ${myDriveFolders.length} folders accessible to Service Account`)
 
     // Step 3: Get folders from each Shared Drive
-    const allDriveData: Array<{ driveId: string; driveName: string; folders: Array<{ id: string; name: string; parents?: string[]; path: string; imageCount: number; children: unknown[]; level: number }> }> = []
+    const allDriveData: Array<{ driveId: string; driveName: string; folders: drive_v3.Schema$File[] }> = []
 
     // Add My Drive
     if (myDriveFolders.length > 0) {
