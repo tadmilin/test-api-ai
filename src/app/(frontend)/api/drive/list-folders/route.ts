@@ -1,6 +1,17 @@
 import { NextResponse } from 'next/server'
 import { google, drive_v3 } from 'googleapis'
 
+// Define folder structure type
+interface FolderNode {
+  id: string
+  name: string
+  parents?: string[]
+  path: string
+  imageCount: number
+  children: FolderNode[]
+  level: number
+}
+
 export async function GET() {
   try {
     const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
@@ -94,15 +105,7 @@ export async function GET() {
       const { driveId, driveName, folders: files } = driveData
 
       // Build folder hierarchy with paths and image counts
-      const folderMap = new Map<string, { 
-        id: string
-        name: string
-        parents?: string[]
-        path: string
-        imageCount: number
-        children: Array<{ id: string; name: string; parents?: string[]; path: string; imageCount: number; children: unknown[]; level: number }>
-        level: number
-      }>()
+      const folderMap = new Map<string, FolderNode>()
       
       // First pass: create map of all folders
       files.forEach(file => {
@@ -160,7 +163,7 @@ export async function GET() {
       }
 
       // Fourth pass: build parent-child relationships
-      const rootFolders: Array<{ id: string; name: string; parents?: string[]; path: string; imageCount: number; children: unknown[]; level: number }> = []
+      const rootFolders: FolderNode[] = []
       const folderWithChildrenMap = new Map(Array.from(folderMap.entries()))
 
       folderWithChildrenMap.forEach((folder) => {
@@ -178,7 +181,7 @@ export async function GET() {
       })
 
       // Recursive function to sort children
-      const sortChildren = (folder: { children: Array<{ name: string; children: unknown[] }> }) => {
+      const sortChildren = (folder: FolderNode): void => {
         folder.children.sort((a, b) => a.name.localeCompare(b.name))
         folder.children.forEach((child) => sortChildren(child))
       }
