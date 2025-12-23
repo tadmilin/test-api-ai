@@ -66,12 +66,6 @@ export default function CustomPromptPage() {
     checkAuth()
   }, [checkAuth])
 
-  useEffect(() => {
-    if (currentUser) {
-      fetchDriveFolders()
-    }
-  }, [currentUser, fetchDriveFolders])
-
   async function fetchDriveFolders() {
     try {
       const res = await fetch('/api/drive/list-folders')
@@ -84,6 +78,13 @@ export default function CustomPromptPage() {
       console.error('Error fetching Drive folders:', error)
     }
   }
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchDriveFolders()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser])  // ✅ ลบ fetchDriveFolders ออกจาก dependencies
 
   async function handleFolderSelect(folderId: string) {
     setSelectedFolderId(folderId)
