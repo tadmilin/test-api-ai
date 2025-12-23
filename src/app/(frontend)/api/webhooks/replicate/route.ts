@@ -99,50 +99,92 @@ export async function POST(req: Request) {
           const imageResponse = await fetch(replicateUrl)
           const imageBuffer = await imageResponse.arrayBuffer()
           
-          // Upload temp blob for upscale
-          console.log('[Webhook] 📤 Uploading temp template...')
-          const tempBlob = await put(`jobs/${job.id}/template-temp-${Date.now()}.png`, Buffer.from(imageBuffer), {
-            access: 'public',
-            contentType: 'image/png',
-          })
-          
-          console.log('[Webhook] ✅ Temp template uploaded:', tempBlob.url)
-          console.log('[Webhook] 🔍 Starting upscale to 2048x2048...')
-          
-          // Start upscale
-          const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
-          const upscaleRes = await fetch(`${baseUrl}/api/generate/upscale`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              imageUrl: tempBlob.url,
-              scale: 2,
-            }),
-          })
-          
-          if (!upscaleRes.ok) {
-            throw new Error('Failed to start upscale')
-          }
-          
-          const upscaleData = await upscaleRes.json()
-          console.log('[Webhook] ✅ Upscale started:', upscaleData.predictionId)
-          
-          // Update job: clear templateGeneration.predictionId, set upscalePredictionId
-          await payload.update({
-            collection: 'jobs',
-            id: job.id,
-            data: {
-              templateGeneration: {
-                predictionId: null,
-                upscalePredictionId: upscaleData.predictionId,
-                status: 'processing',
-                url: null,
+          // ✅ ถ้า 1:1 → upscale, ถ้าอื่น → resize
+          if (job.outputSize === '1:1-2K') {
+            console.log('[Webhook] 🔍 Starting upscale to 2048x2048...')
+            
+            // Upload temp blob for upscale
+            const tempBlob = await put(`jobs/${job.id}/template-temp-${Date.now()}.png`, Buffer.from(imageBuffer), {
+              access: 'public',
+              contentType: 'image/png',
+            })
+            
+            // Start upscale
+            const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
+            const upscaleRes = await fetch(`${baseUrl}/api/generate/upscale`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                imageUrl: tempBlob.url,
+                scale: 2,
+              }),
+            })
+            
+            if (!upscaleRes.ok) {
+              throw new Error('Failed to start upscale')
+            }
+            
+            const upscaleData = await upscaleRes.json()
+            console.log('[Webhook] ✅ Upscale started:', upscaleData.predictionId)
+            
+            // Update job: set upscalePredictionId
+            await payload.update({
+              collection: 'jobs',
+              id: job.id,
+              data: {
+                templateGeneration: {
+                  predictionId: null,
+                  upscalePredictionId: upscaleData.predictionId,
+                  status: 'processing',
+                  url: null,
+                },
               },
-            },
-          })
-          
-          console.log('[Webhook] ✅ Template generation completed, upscale in progress')
-          return NextResponse.json({ received: true, jobId: job.id })
+            })
+            
+            console.log('[Webhook] ✅ Template generation completed, upscale in progress')
+            return NextResponse.json({ received: true, jobId: job.id })
+            
+          } else {
+            // ✅ 4:5 หรือ 9:16 → resize
+            const OUTPUT_SIZE_MAP: Record<string, { width: number; height: number }> = {
+              '4:5-2K': { width: 1080, height: 1350 },
+              '9:16-2K': { width: 1080, height: 1920 },
+            }
+            
+            const targetSize = OUTPUT_SIZE_MAP[job.outputSize || '4:5-2K']
+            console.log(`[Webhook] 📐 Resizing template to ${targetSize.width}×${targetSize.height}`)
+            
+            const resizedBuffer = await sharp(Buffer.from(imageBuffer))
+              .resize(targetSize.width, targetSize.height, { fit: 'cover' })
+              .jpeg({ quality: 90, mozjpeg: true })
+              .toBuffer()
+            
+            const blobResult = await put(`jobs/${job.id}/template-${targetSize.width}x${targetSize.height}.jpg`, resizedBuffer, {
+              access: 'public',
+              contentType: 'image/jpeg',
+              addRandomSuffix: true,
+            })
+            
+            console.log('[Webhook] ✅ Template uploaded:', blobResult.url)
+            
+            // Update job with template URL
+            await payload.update({
+              collection: 'jobs',
+              id: job.id,
+              data: {
+                templateGeneration: {
+                  predictionId: null,
+                  upscalePredictionId: null,
+                  status: 'succeeded',
+                  url: blobResult.url,
+                },
+                templateUrl: blobResult.url,
+              },
+            })
+            
+            console.log('[Webhook] ✅ Template completed')
+            return NextResponse.json({ received: true, jobId: job.id })
+          }
           
         } catch (error) {
           console.error('[Webhook] ❌ Template processing failed:', error)
@@ -184,7 +226,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ received: true })
     }
 
-    // ✅ เช็คว่าเป็น template upscale หรือไม่ (support both new and legacy)
+    // ✅ เช็คว่าเป็น template upscale หรือไม่
     const isTemplateUpscale = templateGen.upscalePredictionId === predictionId || job.templateUpscalePredictionId === predictionId
     
     if (isTemplateUpscale) {
@@ -198,9 +240,9 @@ export async function POST(req: Request) {
           const imageResponse = await fetch(replicateUrl)
           const imageBuffer = await imageResponse.arrayBuffer()
           
-          // Compress to JPG quality 85
+          // Compress to JPG quality 90
           const optimizedBuffer = await sharp(Buffer.from(imageBuffer))
-            .jpeg({ quality: 85, mozjpeg: true })
+            .jpeg({ quality: 90, mozjpeg: true })
             .toBuffer()
           
           const blobResult = await put(`jobs/${job.id}/template-2048x2048.jpg`, optimizedBuffer, {
@@ -222,7 +264,7 @@ export async function POST(req: Request) {
                 status: 'succeeded',
                 url: blobResult.url,
               },
-              templateUrl: blobResult.url, // legacy compatibility
+              templateUrl: blobResult.url,
             },
           })
           
@@ -239,7 +281,12 @@ export async function POST(req: Request) {
           collection: 'jobs',
           id: job.id,
           data: {
-            templateUpscalePredictionId: null,
+            templateGeneration: {
+              predictionId: null,
+              upscalePredictionId: null,
+              status: 'failed',
+              url: null,
+            },
           },
         })
         return NextResponse.json({ received: true, error: 'Template upscale failed' })
@@ -307,14 +354,16 @@ export async function POST(req: Request) {
             }
           }
           
-          // ✅ เช็คว่าเป็น main prediction (เช็ค model ด้วย)
-          // Nano Banana Pro 1:1: ใช้ upscale (Real-ESRGAN) เพื่อคุณภาพสูงสุด
-          // Imagen 4 Ultra 1:1: ใช้ resize ธรรมดาก็พอ (คุณภาพดีอยู่แล้ว)
-          // 4:5, 9:16 ทุก model: resize เท่านั้น
+          // ✅ Upscale logic:
+          // Custom-Prompt: รูปแต่ละรูป → ไม่ upscale (เก็บไว้สร้าง template)
+          // Text-to-Image: 1:1 → upscale เป็น 2048×2048, อื่นๆ → resize
           const isImagenModel = body.model?.includes('imagen') || false
-          const shouldUpscale = isMainPrediction && job.outputSize === '1:1-2K' && !isImagenModel
+          const isCustomPrompt = !!job.customPrompt
           
-          console.log(`[Webhook] Model: ${body.model || 'unknown'}, isImagen: ${isImagenModel}, outputSize: ${job.outputSize}, shouldUpscale: ${shouldUpscale}`)
+          // ✅ Upscale เฉพาะ text-to-image (ไม่ใช่ custom-prompt) + outputSize = 1:1-2K
+          const shouldUpscale = isMainPrediction && job.outputSize === '1:1-2K' && !isCustomPrompt
+          
+          console.log(`[Webhook] Model: ${body.model || 'unknown'}, isImagen: ${isImagenModel}, isCustomPrompt: ${isCustomPrompt}, outputSize: ${job.outputSize}, shouldUpscale: ${shouldUpscale}`)
           
           if (shouldUpscale) {
             console.log('[Webhook] 📐 Output size is 1:1-2K, starting upscale to 2048x2048...')

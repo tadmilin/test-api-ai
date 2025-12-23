@@ -199,201 +199,8 @@ export default function DashboardPage() {
     checkAuth()
   }, [checkAuth])
 
-  // Resume processing for any jobs stuck in processing/enhancing state
-  const resumeProcessingJobs = useCallback(async () => {
-    try {
-      // Check BOTH 'processing' AND 'enhancing' status AND active template jobs
-      const [processingRes, enhancingRes, completedRes] = await Promise.all([
-        fetch('/api/jobs?status=processing'),
-        fetch('/api/jobs?status=enhancing'),
-        fetch('/api/jobs?status=completed&limit=5') // ✅ เช็ค completed jobs ล่าสุดด้วย (สำหรับ template generation)
-      ])
-      
-      const processingData = await processingRes.json()
-      const enhancingData = await enhancingRes.json()
-      const completedData = await completedRes.json()
-      
-      const allJobs = [
-        ...(processingData.jobs || []),
-        ...(enhancingData.jobs || []),
-        ...(completedData.jobs || []).filter((job: Job) => {
-          // ✅ เฉพาะ completed jobs ที่กำลังเจน template อยู่
-          const templateGen = (job as Job & { templateGeneration?: { predictionId?: string; upscalePredictionId?: string }; templatePredictionId?: string; templateUpscalePredictionId?: string }).templateGeneration || {}
-          return !!templateGen.predictionId || !!templateGen.upscalePredictionId || !!(job as typeof job & { templatePredictionId?: string }).templatePredictionId || !!(job as typeof job & { templateUpscalePredictionId?: string }).templateUpscalePredictionId
-        })
-      ]
-      
-      console.log(`📋 Found ${allJobs.length} jobs (processing + enhancing + template generation)`)
-      
-      // Find jobs with predictions that might still be running
-      for (const job of allJobs) {
-        console.log(`🔍 Checking job ${job.id}`)
-        
-        // Check if job has enhancedImageUrls (started processing)
-        if (job.enhancedImageUrls && job.enhancedImageUrls.length > 0) {
-          const hasIncomplete = job.enhancedImageUrls.some(
-            (img: { url?: string; status?: string; upscalePredictionId?: string }) => 
-              !img.url || 
-              img.status === 'processing' || 
-              img.status === 'pending' ||
-              !!img.upscalePredictionId  // ✅ ถ้ากำลัง upscale ให้ถือว่ายัง incomplete
-          )
-          
-          // ✅ แสดงรูปแม้เสร็จแล้ว (สำหรับ refresh)
-          const hasImages = job.enhancedImageUrls.some((img: { url?: string }) => !!img.url)
-          
-          // ✅ เช็คว่า template กำลังประมวลผลหรือยัง
-          const templateGen = job.templateGeneration || {}
-          const hasTemplateProcessing = !!(
-            templateGen.predictionId || // กำลังเจน template อยู่
-            templateGen.upscalePredictionId || // กำลัง upscale template อยู่
-            job.templatePredictionId || // legacy
-            job.templateUpscalePredictionId // legacy
-          )
-          
-          if (hasIncomplete || hasImages || hasTemplateProcessing) {
-            const needsPolling = hasIncomplete || hasTemplateProcessing
-            console.log(`🔄 ${needsPolling ? 'Resuming' : 'Loading completed'} job ${job.id} with ${job.enhancedImageUrls.length} images...`)
-            console.log(`   hasIncomplete: ${hasIncomplete}, hasTemplateProcessing: ${hasTemplateProcessing}`)
-            
-            setProcessingJobId(needsPolling ? job.id : null)  // ✅ เสร็จแล้วไม่ต้อง set processing
-            setCurrentJobId(job.id)
-            setEnhancedImages(job.enhancedImageUrls)
-            setReviewMode(true)
-            
-            if (hasIncomplete) {
-              setProcessingStatus(`🔄 กำลังประมวลผล ${job.enhancedImageUrls.length} รูป...`)
-            } else if (hasTemplateProcessing) {
-              setProcessingStatus(`🎨 กำลังสร้าง Template...`)
-            }
-            
-            // ✅ Set template URL if exists
-            if (job.templateUrl) {
-              console.log(`✅ Found existing template: ${job.templateUrl}`)
-              setGeneratedTemplateUrl(job.templateUrl)
-            }
-            
-            // ✅ Poll if incomplete OR template processing
-            if (needsPolling) {
-              setTimeout(() => pollJobStatus(job.id), 0)
-            }
-            break // Only resume one job at a time
-          }
-        } else {
-          // Job just created, hasn't started processing yet
-          console.log(`⏳ Job ${job.id} is pending, will poll for updates...`)
-          setProcessingJobId(job.id)
-          setCurrentJobId(job.id)
-          setProcessingStatus(`⏳ กำลังเตรียมประมวลผล...`)
-          
-          // Start polling to wait for enhancedImageUrls to appear
-          setTimeout(() => pollJobStatus(job.id), 2000)
-          break
-        }
-      }
-    } catch (error) {
-      console.error('Error resuming jobs:', error)
-    }
-  }, [pollJobStatus]) // Include pollJobStatus in dependencies
-
-  useEffect(() => {
-    if (!currentUser) return
-    
-    // ✅ ป้องกันเรียกซ้ำ - ใช้ ref เป็น flag
-    let mounted = true
-    
-    const initDashboard = async () => {
-      if (!mounted) return
-      
-      await fetchDashboardData()
-      await fetchSpreadsheets()
-      await fetchDriveFolders()
-      
-      // Auto-resume processing jobs (หลังจาก fetch data เสร็จแล้ว)
-      if (mounted) resumeProcessingJobs()
-    }
-    
-    initDashboard()
-    
-    // Check if coming from custom-prompt page
-    const fromCustomPrompt = localStorage.getItem('fromCustomPrompt')
-    const fromTextToImage = localStorage.getItem('fromTextToImage')
-    const savedJobId = localStorage.getItem('processingJobId')
-    
-    if ((fromCustomPrompt === 'true' || fromTextToImage === 'true') && savedJobId) {
-      localStorage.removeItem('fromCustomPrompt')
-      localStorage.removeItem('fromTextToImage')
-      localStorage.removeItem('processingJobId')
-      
-      // Show processing status IMMEDIATELY
-      setProcessingStatus('⏳ กำลังเตรียมการประมวลผล...')
-      setProcessingJobId(savedJobId)
-      setCurrentJobId(savedJobId)
-      
-      // Start polling directly with the jobId (much faster!)
-      console.log(`🎯 Direct polling for job ${savedJobId}`)
-      setTimeout(() => pollJobStatus(savedJobId), 500)
-    }
-    
-    return () => {
-      mounted = false
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser]) // ✅ ลบ resumeProcessingJobs และ pollJobStatus ออก
-
-  // ✅ Fetch storage status
-  const fetchStorageStatus = useCallback(async () => {
-    try {
-      const res = await fetch('/api/cleanup/enforce-limit')
-      if (res.ok) {
-        const data = await res.json()
-        setStorageStatus(data)
-      }
-    } catch (error) {
-      console.error('Failed to fetch storage status:', error)
-    }
-  }, [])
-
-  // ✅ Poll storage status every 60 seconds (ลดเหลือ 1 นาที)
-  useEffect(() => {
-    if (currentUser) {
-      fetchStorageStatus()
-      const interval = setInterval(fetchStorageStatus, 60000)  // ✅ เปลี่ยนเป็น 60 วินาที
-      return () => clearInterval(interval)
-    }
-  }, [currentUser, fetchStorageStatus])
-
-  // ✅ Manual cleanup trigger
-  async function handleManualCleanup() {
-    setCleanupLoading(true)
-    try {
-      const res = await fetch('/api/cleanup/enforce-limit', { method: 'POST' })
-      const data = await res.json()
-      
-      if (data.success) {
-        alert(`✅ Cleanup success!\nDeleted: ${data.deleted} jobs\nCurrent: ${data.newTotal}/${data.limit} jobs`)
-        fetchStorageStatus()
-        fetchDashboardData()
-      } else {
-        alert(`❌ Cleanup failed: ${data.error}`)
-      }
-    } catch (error) {
-      alert(`❌ Cleanup error: ${error instanceof Error ? error.message : 'Unknown'}`)
-    } finally {
-      setCleanupLoading(false)
-    }
-  }
-
-  async function handleLogout() {
-    try {
-      await fetch('/api/users/logout', { method: 'POST' })
-      router.push('/login')
-    } catch (error) {
-      console.error('Logout error:', error)
-    }
-  }
-  
-  async function pollJobStatus(jobId: string) {
+  // ✅ CRITICAL FIX: Define pollJobStatus FIRST using useCallback to prevent circular dependency
+  const pollJobStatus = useCallback(async (jobId: string) => {
     // ✅ Guard: prevent multiple polling loops running concurrently
     if (isPollingRef.current) {
       console.log('⚠️ Polling already active, skipping duplicate call')
@@ -461,7 +268,7 @@ export default function DashboardPage() {
         const progress = `${statusData.completed}/${statusData.total}`
         const processingCount = statusData.processing || 0
         
-        // ✅ เช็ค template generation และ upscale (เหมือน enhancedImageUrls)
+        // ✅ เช็ค template generation และ upscale
         let isTemplateGenerating = false
         let isTemplateUpscaling = false
         let templatePredictionId: string | null = null
@@ -520,20 +327,20 @@ export default function DashboardPage() {
           continue // Skip normal status check
         }
         
-        // ✅ ถ้ากำลัง upscale template → แสดงสถานะและ continue
+        // ✅ ถ้ากำลัง upscale template (เฉพาะ 1:1) → แสดงสถานะและ continue
         if (isTemplateUpscaling) {
           console.log(`🔍 Template upscale in progress`)
           setProcessingStatus(`🎨 กำลัง Upscale Template เป็น 2048x2048...`)
           
-          // ✅ เช็คอีกครั้งว่า upscale เสร็จหรือยัง (templateGen.url มีค่าแล้ว)
+          // ✅ เช็คอีกครั้งว่า upscale เสร็จหรือยัง
           if (templateGen.url && templateGen.status === 'succeeded') {
             console.log('✅ Template upscale completed!')
             setGeneratedTemplateUrl(templateGen.url)
             setProcessingStatus('✅ Template พร้อมแล้ว!')
-            break // ✅ หยุด polling เมื่อเสร็จ
+            break
           }
           
-          continue // ให้ GET handler ทำงานต่อ ไม่ต้องเรียก API upscale ซ้ำ
+          continue
         }
         
         // ✅ แสดงสถานะตามประเภทของงาน
@@ -580,7 +387,7 @@ export default function DashboardPage() {
         // ✅ Convert to boolean (in case API returns string)
         const allComplete = statusData.allComplete === true || statusData.allComplete === 'true'
         
-        // ✅ ถ้ากำลังเจน template/upscale อยู่ → ยัง poll ต่อ (ไม่ต้องเช็ค allComplete)
+        // ✅ ถ้ากำลังเจน template/upscale อยู่ → ยัง poll ต่อ
         if (isTemplateGenerating || isTemplateUpscaling) {
           console.log('🎨 Template processing in progress, continuing to poll...')
           continue // Skip allComplete check
@@ -779,8 +586,202 @@ export default function DashboardPage() {
       isPollingRef.current = false
       console.log(`✅ Polling completed for job ${jobId}`)
     }
+  }, [generatedTemplateUrl, fetchDashboardData]) // ✅ Dependencies for useCallback
+
+  // Resume processing for any jobs stuck in processing/enhancing state
+  const resumeProcessingJobs = useCallback(async () => {
+    try {
+      // Check BOTH 'processing' AND 'enhancing' status AND active template jobs
+      const [processingRes, enhancingRes, completedRes] = await Promise.all([
+        fetch('/api/jobs?status=processing'),
+        fetch('/api/jobs?status=enhancing'),
+        fetch('/api/jobs?status=completed&limit=5') // ✅ เช็ค completed jobs ล่าสุดด้วย (สำหรับ template generation)
+      ])
+      
+      const processingData = await processingRes.json()
+      const enhancingData = await enhancingRes.json()
+      const completedData = await completedRes.json()
+      
+      const allJobs = [
+        ...(processingData.jobs || []),
+        ...(enhancingData.jobs || []),
+        ...(completedData.jobs || []).filter((job: Job) => {
+          // ✅ เฉพาะ completed jobs ที่กำลังเจน template อยู่
+          const templateGen = (job as Job & { templateGeneration?: { predictionId?: string; upscalePredictionId?: string }; templatePredictionId?: string; templateUpscalePredictionId?: string }).templateGeneration || {}
+          return !!templateGen.predictionId || !!templateGen.upscalePredictionId || !!(job as typeof job & { templatePredictionId?: string }).templatePredictionId || !!(job as typeof job & { templateUpscalePredictionId?: string }).templateUpscalePredictionId
+        })
+      ]
+      
+      console.log(`📋 Found ${allJobs.length} jobs (processing + enhancing + template generation)`)
+      
+      // Find jobs with predictions that might still be running
+      for (const job of allJobs) {
+        console.log(`🔍 Checking job ${job.id}`)
+        
+        // Check if job has enhancedImageUrls (started processing)
+        if (job.enhancedImageUrls && job.enhancedImageUrls.length > 0) {
+          const hasIncomplete = job.enhancedImageUrls.some(
+            (img: { url?: string; status?: string; upscalePredictionId?: string }) => 
+              !img.url || 
+              img.status === 'processing' || 
+              img.status === 'pending' ||
+              !!img.upscalePredictionId  // ✅ ถ้ากำลัง upscale ให้ถือว่ายัง incomplete
+          )
+          
+          // ✅ แสดงรูปแม้เสร็จแล้ว (สำหรับ refresh)
+          const hasImages = job.enhancedImageUrls.some((img: { url?: string }) => !!img.url)
+          
+          // ✅ เช็คว่า template กำลังประมวลผลหรือยัง
+          const templateGen = job.templateGeneration || {}
+          const hasTemplateProcessing = !!(
+            templateGen.predictionId || // กำลังเจน template อยู่
+            templateGen.upscalePredictionId || // กำลัง upscale template อยู่ (1:1)
+            job.templatePredictionId || // legacy
+            job.templateUpscalePredictionId // legacy
+          )
+          
+          if (hasIncomplete || hasImages || hasTemplateProcessing) {
+            const needsPolling = hasIncomplete || hasTemplateProcessing
+            console.log(`🔄 ${needsPolling ? 'Resuming' : 'Loading completed'} job ${job.id} with ${job.enhancedImageUrls.length} images...`)
+            console.log(`   hasIncomplete: ${hasIncomplete}, hasTemplateProcessing: ${hasTemplateProcessing}`)
+            
+            setProcessingJobId(needsPolling ? job.id : null)  // ✅ เสร็จแล้วไม่ต้อง set processing
+            setCurrentJobId(job.id)
+            setEnhancedImages(job.enhancedImageUrls)
+            setReviewMode(true)
+            
+            if (hasIncomplete) {
+              setProcessingStatus(`🔄 กำลังประมวลผล ${job.enhancedImageUrls.length} รูป...`)
+            } else if (hasTemplateProcessing) {
+              setProcessingStatus(`🎨 กำลังสร้าง Template...`)
+            }
+            
+            // ✅ Set template URL if exists
+            if (job.templateUrl) {
+              console.log(`✅ Found existing template: ${job.templateUrl}`)
+              setGeneratedTemplateUrl(job.templateUrl)
+            }
+            
+            // ✅ Poll if incomplete OR template processing
+            if (needsPolling) {
+              setTimeout(() => pollJobStatus(job.id), 0)
+            }
+            break // Only resume one job at a time
+          }
+        } else {
+          // Job just created, hasn't started processing yet
+          console.log(`⏳ Job ${job.id} is pending, will poll for updates...`)
+          setProcessingJobId(job.id)
+          setCurrentJobId(job.id)
+          setProcessingStatus(`⏳ กำลังเตรียมประมวลผล...`)
+          
+          // Start polling to wait for enhancedImageUrls to appear
+          setTimeout(() => pollJobStatus(job.id), 2000)
+          break
+        }
+      }
+    } catch (error) {
+      console.error('Error resuming jobs:', error)
+    }
+  }, [pollJobStatus]) // ✅ Now pollJobStatus is defined above
+
+  useEffect(() => {
+    if (!currentUser) return
+    
+    // ✅ ป้องกันเรียกซ้ำ - ใช้ ref เป็น flag
+    let mounted = true
+    
+    const initDashboard = async () => {
+      if (!mounted) return
+      
+      await fetchDashboardData()
+      await fetchSpreadsheets()
+      await fetchDriveFolders()
+      
+      // Auto-resume processing jobs (หลังจาก fetch data เสร็จแล้ว)
+      if (mounted) resumeProcessingJobs()
+    }
+    
+    initDashboard()
+    
+    // Check if coming from custom-prompt page
+    const fromCustomPrompt = localStorage.getItem('fromCustomPrompt')
+    const fromTextToImage = localStorage.getItem('fromTextToImage')
+    const savedJobId = localStorage.getItem('processingJobId')
+    
+    if ((fromCustomPrompt === 'true' || fromTextToImage === 'true') && savedJobId) {
+      localStorage.removeItem('fromCustomPrompt')
+      localStorage.removeItem('fromTextToImage')
+      localStorage.removeItem('processingJobId')
+      
+      // Show processing status IMMEDIATELY
+      setProcessingStatus('⏳ กำลังเตรียมการประมวลผล...')
+      setProcessingJobId(savedJobId)
+      setCurrentJobId(savedJobId)
+      
+      // Start polling directly with the jobId (much faster!)
+      console.log(`🎯 Direct polling for job ${savedJobId}`)
+      setTimeout(() => pollJobStatus(savedJobId), 500)
+    }
+    
+    return () => {
+      mounted = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser]) // ✅ ลบ resumeProcessingJobs และ pollJobStatus ออก
+
+  // ✅ Fetch storage status
+  const fetchStorageStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/cleanup/enforce-limit')
+      if (res.ok) {
+        const data = await res.json()
+        setStorageStatus(data)
+      }
+    } catch (error) {
+      console.error('Failed to fetch storage status:', error)
+    }
+  }, [])
+
+  // ✅ Poll storage status every 60 seconds (ลดเหลือ 1 นาที)
+  useEffect(() => {
+    if (currentUser) {
+      fetchStorageStatus()
+      const interval = setInterval(fetchStorageStatus, 60000)  // ✅ เปลี่ยนเป็น 60 วินาที
+      return () => clearInterval(interval)
+    }
+  }, [currentUser, fetchStorageStatus])
+
+  // ✅ Manual cleanup trigger
+  async function handleManualCleanup() {
+    setCleanupLoading(true)
+    try {
+      const res = await fetch('/api/cleanup/enforce-limit', { method: 'POST' })
+      const data = await res.json()
+      
+      if (data.success) {
+        alert(`✅ Cleanup success!\nDeleted: ${data.deleted} jobs\nCurrent: ${data.newTotal}/${data.limit} jobs`)
+        fetchStorageStatus()
+        fetchDashboardData()
+      } else {
+        alert(`❌ Cleanup failed: ${data.error}`)
+      }
+    } catch (error) {
+      alert(`❌ Cleanup error: ${error instanceof Error ? error.message : 'Unknown'}`)
+    } finally {
+      setCleanupLoading(false)
+    }
   }
 
+  async function handleLogout() {
+    try {
+      await fetch('/api/users/logout', { method: 'POST' })
+      router.push('/login')
+    } catch (error) {
+      console.error('Logout error:', error)
+    }
+  }
+  
   async function fetchDashboardData() {
     try {
       setLoading(true)
