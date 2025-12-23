@@ -196,7 +196,7 @@ export async function GET(request: NextRequest) {
  * Helper function: Resize and upload image (for non-upscale sizes)
  * Used for 4:5 and 9:16 aspect ratios
  */
-export async function resizeAndUpload(imageUrl: string, outputSize: string): Promise<string> {
+async function _resizeAndUpload(imageUrl: string, outputSize: string): Promise<string> {
   const SIZE_MAP: Record<string, { width: number; height: number }> = {
     '4:5-2K': { width: 1080, height: 1350 },
     '9:16-2K': { width: 1080, height: 1920 },

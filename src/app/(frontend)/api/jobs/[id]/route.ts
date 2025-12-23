@@ -63,7 +63,7 @@ export async function PATCH(
       const updatedJob = await payload.update({
         collection: 'jobs',
         id,
-        data: { templateUrl } as any, // Type assertion for flexibility
+        data: { templateUrl } as Partial<{ templateUrl: string }>,
       })
 
       return NextResponse.json({
@@ -167,7 +167,7 @@ export async function PATCH(
       collection: 'jobs',
       id,
       data: {
-        enhancedImageUrls: enhancedImages as any, // Type assertion for new fields
+        enhancedImageUrls: enhancedImages as typeof job.enhancedImageUrls,
       },
     })
 
@@ -225,7 +225,7 @@ export async function DELETE(
         collection: 'jobs',
         id,
       })
-    } catch (err) {
+    } catch (_err) {
       // ✅ Idempotent - job already deleted or never existed
       console.log(`Job ${id} not found, may already be deleted`)
       return NextResponse.json({
@@ -251,7 +251,7 @@ export async function DELETE(
     if (job.referenceImageUrls && Array.isArray(job.referenceImageUrls)) {
       for (const item of job.referenceImageUrls) {
         // Handle both string array and object array formats
-        const url = typeof item === 'string' ? item : (item as any)?.url
+        const url = typeof item === 'string' ? item : (item as { url?: string })?.url
         if (url && typeof url === 'string' && url.includes('blob.vercel-storage.com')) {
           blobUrls.push(url)
         }

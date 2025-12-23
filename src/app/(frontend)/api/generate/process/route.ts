@@ -23,7 +23,30 @@ export async function POST(request: NextRequest) {
     const job = await payload.findByID({
       collection: 'jobs',
       id: jobId,
-    }) as any  // Type assertion to access customPrompt
+    }) as { 
+      id: string; 
+      status: string; 
+      photoTypeFromSheet?: string; 
+      contentTopic?: string; 
+      postTitleHeadline?: string; 
+      contentDescription?: string;
+      customPrompt?: string; 
+      outputSize?: string;
+      referenceImageUrls?: Array<{ url?: string | null }>;
+      enhancedImageUrls?: Array<{
+        originalUrl?: string | null;
+        tempOutputUrl?: string | null;
+        url?: string | null;
+        webhookFailed?: boolean | null;
+        status?: ('pending' | 'completed' | 'failed' | 'approved' | 'regenerating') | null;
+        predictionId?: string | null;
+        upscalePredictionId?: string | null;
+        photoType?: string | null;
+        contentTopic?: string | null;
+        postTitleHeadline?: string | null;
+        contentDescription?: string | null;
+      }>;
+    }
 
     if (!job) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 })
@@ -77,10 +100,10 @@ export async function POST(request: NextRequest) {
 
       // ✅ STEP 1: Create placeholders in DB first (visible immediately)
       console.log(`📝 Creating placeholders for ${referenceUrls.length} images...`)
-      const placeholders = referenceUrls.map((url: any, index: number) => {
+      const placeholders = referenceUrls.map((url: string | null | undefined, index: number) => {
         const sheetRow = sheetRows[index] || {}
         return {
-          originalUrl: url as string,
+          originalUrl: (url || '') as string,
           url: null, // No Blob URL yet
           tempOutputUrl: null, // No Replicate URL yet
           predictionId: null, // Will be filled after create prediction
@@ -103,7 +126,19 @@ export async function POST(request: NextRequest) {
       console.log(`✅ Placeholders created, job status: enhancing`)
 
       // ✅ STEP 2: Keep local copy in memory (avoid DB reads in loop)
-      const localEnhanced = [...placeholders]
+      type EnhancedImage = {
+        originalUrl: string;
+        url: string | null;
+        tempOutputUrl: string | null;
+        predictionId: string | null;
+        status: 'pending' | 'completed' | 'failed' | 'approved' | 'regenerating';
+        photoType: string;
+        contentTopic: string;
+        postTitleHeadline: string;
+        contentDescription: string;
+        error?: string;
+      }
+      const localEnhanced: EnhancedImage[] = [...placeholders]
 
       // ✅ STEP 3: Process images sequentially with stagger delay
       const STAGGER_DELAY_MS = 2000
@@ -324,7 +359,7 @@ export async function POST(request: NextRequest) {
             await payload.update({
               collection: 'jobs',
               id: jobId,
-              data: { enhancedImageUrls: localEnhanced as any },
+              data: { enhancedImageUrls: localEnhanced as typeof job.enhancedImageUrls },
             })
             console.log(`   ✅ Updated placeholder ${i} with predictionId`)
           } catch (updateErr) {
@@ -340,15 +375,15 @@ export async function POST(request: NextRequest) {
           try {
             localEnhanced[i] = {
               ...localEnhanced[i],
-              status: 'failed' as const,
+              status: 'failed',
               error: message,
-            } as any
+            }
             
             await payload.update({
               collection: 'jobs',
               id: jobId,
               data: { 
-                enhancedImageUrls: localEnhanced as any,
+                enhancedImageUrls: localEnhanced as typeof job.enhancedImageUrls,
                 status: 'failed'  // Mark job as failed
               },
             })

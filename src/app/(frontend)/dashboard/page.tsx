@@ -145,7 +145,7 @@ export default function DashboardPage() {
   const [generatedTemplateUrl, setGeneratedTemplateUrl] = useState<string | null>(null)
   const [expandedImageIds, setExpandedImageIds] = useState<Set<number | string>>(new Set())
   const [reviewMode, setReviewMode] = useState(false)
-  const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null)
+  const [_regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null)
   const [_finalImageUrl, setFinalImageUrl] = useState<string | null>(null)
   const [imageLoadErrors, setImageLoadErrors] = useState<Record<string, number>>({})
 
@@ -216,10 +216,10 @@ export default function DashboardPage() {
       const allJobs = [
         ...(processingData.jobs || []),
         ...(enhancingData.jobs || []),
-        ...(completedData.jobs || []).filter((job: any) => {
+        ...(completedData.jobs || []).filter((job: Job) => {
           // ✅ เฉพาะ completed jobs ที่กำลังเจน template อยู่
-          const templateGen = job.templateGeneration || {}
-          return !!templateGen.predictionId || !!templateGen.upscalePredictionId || !!job.templatePredictionId || !!job.templateUpscalePredictionId
+          const templateGen = (job as Job & { templateGeneration?: { predictionId?: string; upscalePredictionId?: string }; templatePredictionId?: string; templateUpscalePredictionId?: string }).templateGeneration || {}
+          return !!templateGen.predictionId || !!templateGen.upscalePredictionId || !!(job as typeof job & { templatePredictionId?: string }).templatePredictionId || !!(job as typeof job & { templateUpscalePredictionId?: string }).templateUpscalePredictionId
         })
       ]
       
@@ -294,7 +294,7 @@ export default function DashboardPage() {
     } catch (error) {
       console.error('Error resuming jobs:', error)
     }
-  }, []) // Empty deps - only uses setState and fetch
+  }, [pollJobStatus]) // Include pollJobStatus in dependencies
 
   useEffect(() => {
     if (currentUser) {
@@ -325,7 +325,7 @@ export default function DashboardPage() {
         setTimeout(() => pollJobStatus(savedJobId), 500)
       }
     }
-  }, [currentUser, resumeProcessingJobs])
+  }, [currentUser, resumeProcessingJobs, pollJobStatus])
 
   // ✅ Fetch storage status
   const fetchStorageStatus = useCallback(async () => {
@@ -451,24 +451,26 @@ export default function DashboardPage() {
         let isTemplateGenerating = false
         let isTemplateUpscaling = false
         let templatePredictionId: string | null = null
-        let jobData: any = null
-        let templateGen: any = {}
+        let jobData: Job & { templateGeneration?: { predictionId?: string; upscalePredictionId?: string; status?: string; url?: string }; templatePredictionId?: string; templateUpscalePredictionId?: string; templateUrl?: string } | null = null
+        let templateGen: { predictionId?: string; upscalePredictionId?: string; status?: string; url?: string } = {}
         
         try {
           const jobRes = await fetch(`/api/jobs/${jobId}`)
           if (jobRes.ok) {
             jobData = await jobRes.json()
-            // ✅ อ่านจาก templateGeneration object (ใหม่) หรือ legacy fields
-            templateGen = jobData.templateGeneration || {}
-            templatePredictionId = templateGen.predictionId || jobData.templatePredictionId || null
-            isTemplateGenerating = !!templatePredictionId && templateGen.status !== 'succeeded'
-            isTemplateUpscaling = !!templateGen.upscalePredictionId || !!jobData.templateUpscalePredictionId
-            
-            // Update template URL if available
-            const templateUrl = templateGen.url || jobData.templateUrl
-            if (templateUrl && templateUrl !== generatedTemplateUrl) {
-              setGeneratedTemplateUrl(templateUrl)
-              console.log('✅ Template URL updated:', templateUrl)
+            if (jobData) {
+              // ✅ อ่านจาก templateGeneration object (ใหม่) หรือ legacy fields
+              templateGen = jobData.templateGeneration || {}
+              templatePredictionId = templateGen.predictionId || jobData.templatePredictionId || null
+              isTemplateGenerating = !!templatePredictionId && templateGen.status !== 'succeeded'
+              isTemplateUpscaling = !!templateGen.upscalePredictionId || !!jobData.templateUpscalePredictionId
+              
+              // Update template URL if available
+              const templateUrl = templateGen.url || jobData.templateUrl
+              if (templateUrl && templateUrl !== generatedTemplateUrl) {
+                setGeneratedTemplateUrl(templateUrl)
+                console.log('✅ Template URL updated:', templateUrl)
+              }
             }
           }
         } catch (error) {
@@ -523,7 +525,7 @@ export default function DashboardPage() {
         // ✅ แสดงสถานะตามประเภทของงาน
         if (processingCount > 0) {
           // มีงานที่กำลังประมวลผลอยู่ (อาจเป็น upscale)
-          const upscalingCount = statusData.images?.filter((img: any) => img.upscalePredictionId && img.status === 'pending').length || 0
+          const upscalingCount = statusData.images?.filter((img: { upscalePredictionId?: string; status?: string }) => img.upscalePredictionId && img.status === 'pending').length || 0
           
           if (upscalingCount > 0) {
             setProcessingStatus(`🔄 กำลัง Upscale รูปเป็น 2048x2048... (${statusData.completed}/${statusData.total})`)
@@ -616,11 +618,11 @@ export default function DashboardPage() {
               
               // Get enhanced image URLs from job status API
               const enhancedImageUrls = (jobStatusData.images || [])
-                .filter((img: any) => {
+                .filter((img: { status?: string; url?: string }) => {
                   console.log(`   Image filter: status=${img.status}, hasUrl=${!!img.url}`)
                   return img.status === 'completed' && img.url
                 })
-                .map((img: any) => img.url)
+                .map((img: { url: string }) => img.url)
               
               console.log(`   ✅ Found ${enhancedImageUrls.length} completed images`)
               
@@ -1273,7 +1275,7 @@ export default function DashboardPage() {
   }
 
   // NEW: Regenerate image
-  async function handleRegenerateImage(index: number) {
+  async function _handleRegenerateImage(index: number) {
     if (!currentJobId) return
 
     setRegeneratingIndex(index)
@@ -1321,7 +1323,7 @@ export default function DashboardPage() {
   }
 
   // Complete job after all images done (no approval required)
-  async function handleCompleteJob() {
+  async function _handleCompleteJob() {
     if (!currentJobId) return
 
     const isImageReady = (img: (typeof enhancedImages)[number]) =>
@@ -2269,11 +2271,11 @@ export default function DashboardPage() {
                         <span className="font-medium">postTitleHeadline</span> {viewingJob.postTitleHeadline}
                       </div>
                     )}
-                    {(viewingJob as any).customPrompt && (
+                    {(viewingJob as Job & { customPrompt?: string }).customPrompt && (
                       <div className="mt-3 p-3 bg-purple-50 border-2 border-purple-200 rounded-lg">
                         <div className="flex items-start gap-2">
                           <span className="text-purple-700 font-bold text-sm">⚡ Custom Prompt:</span>
-                          <p className="text-purple-900 text-sm whitespace-pre-wrap flex-1">{(viewingJob as any).customPrompt}</p>
+                          <p className="text-purple-900 text-sm whitespace-pre-wrap flex-1">{(viewingJob as Job & { customPrompt?: string }).customPrompt}</p>
                         </div>
                       </div>
                     )}

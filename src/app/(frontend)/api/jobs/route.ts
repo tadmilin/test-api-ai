@@ -125,9 +125,10 @@ export async function POST(request: NextRequest) {
         customPrompt: customPrompt || undefined,
         targetPlatforms: targetPlatforms || ['facebook', 'instagram_feed'],
         referenceImageUrls: referenceImageUrls || [],
-        status,
+        outputSize: '1:1-2K', // Default output size
+        status: status as 'pending' | 'processing' | 'enhancing' | 'review_pending' | 'style_selection' | 'generating_template' | 'completed' | 'failed' | 'approved' | 'rejected',
         createdBy: currentUser?.id || undefined,
-      } as any,  // Type assertion until types are regenerated
+      },
     })
 
     return NextResponse.json({

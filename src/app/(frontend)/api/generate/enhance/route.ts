@@ -434,7 +434,16 @@ export async function GET(request: NextRequest) {
           try {
             const job = await payload.findByID({ collection: 'jobs', id: jobId })
             
-            const updatedImages = (job.enhancedImageUrls || []).map((img: any) => {
+            const updatedImages = (job.enhancedImageUrls || []).map((img: { 
+              originalUrl?: string | null; 
+              tempOutputUrl?: string | null; 
+              url?: string | null; 
+              webhookFailed?: boolean | null; 
+              status?: ('pending' | 'completed' | 'failed' | 'approved' | 'regenerating') | null;
+              predictionId?: string | null;
+              upscalePredictionId?: string | null;
+              photoType?: string | null;
+            }) => {
               if (img.predictionId === predictionId) {
                 // ✅ Guard: ถ้ามี blob แล้วไม่ต้องทับ (idempotent)
                 if (img.url && String(img.url).includes('blob.vercel-storage.com')) {
@@ -446,8 +455,8 @@ export async function GET(request: NextRequest) {
                   ...img, 
                   url: blob.url, // ✅ Permanent Blob URL
                   tempOutputUrl: enhancedImageUrl, // Keep temp URL for debugging
-                  status: 'completed',
-                  webhookFailed: undefined, // Clear flag
+                  status: 'completed' as const,
+                  webhookFailed: null, // Clear flag
                 }
               }
               return img

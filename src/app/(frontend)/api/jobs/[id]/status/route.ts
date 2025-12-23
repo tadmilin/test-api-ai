@@ -47,7 +47,7 @@ export async function GET(
       status: img.status || 'pending',
       url: img.url || null,
       predictionId: img.predictionId || null,
-      error: (img as any).error || null,
+      error: (img as { error?: string }).error || null,
       canRetry: img.status === 'failed' && !img.predictionId, // Can retry if failed without prediction
     }))
 

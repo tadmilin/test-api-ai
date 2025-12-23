@@ -5,7 +5,6 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { FolderTree, type TreeFolder } from '@/components/FolderTree'
-import { isGoogleDriveUrl } from '@/utilities/googleDriveUrl'
 
 interface CurrentUser {
   id: string
@@ -71,8 +70,7 @@ export default function CustomPromptPage() {
     if (currentUser) {
       fetchDriveFolders()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser])
+  }, [currentUser, fetchDriveFolders])
 
   async function fetchDriveFolders() {
     try {
@@ -123,7 +121,7 @@ export default function CustomPromptPage() {
     }
   }
 
-  function handleDriveFolderChange(driveId: string) {
+  function _handleDriveFolderChange(driveId: string) {
     setDriveFolderId(driveId)
     setSelectedFolderId('')
     setDriveImages([])

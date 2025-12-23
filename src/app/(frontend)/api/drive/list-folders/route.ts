@@ -45,7 +45,7 @@ export async function GET() {
     console.log(`Found ${myDriveFolders.length} folders accessible to Service Account`)
 
     // Step 3: Get folders from each Shared Drive
-    const allDriveData: Array<{ driveId: string; driveName: string; folders: any[] }> = []
+    const allDriveData: Array<{ driveId: string; driveName: string; folders: Array<{ id: string; name: string; parents?: string[]; path: string; imageCount: number; children: unknown[]; level: number }> }> = []
 
     // Add My Drive
     if (myDriveFolders.length > 0) {
@@ -100,7 +100,7 @@ export async function GET() {
         parents?: string[]
         path: string
         imageCount: number
-        children: any[]
+        children: Array<{ id: string; name: string; parents?: string[]; path: string; imageCount: number; children: unknown[]; level: number }>
         level: number
       }>()
       
@@ -160,7 +160,7 @@ export async function GET() {
       }
 
       // Fourth pass: build parent-child relationships
-      const rootFolders: any[] = []
+      const rootFolders: Array<{ id: string; name: string; parents?: string[]; path: string; imageCount: number; children: unknown[]; level: number }> = []
       const folderWithChildrenMap = new Map(Array.from(folderMap.entries()))
 
       folderWithChildrenMap.forEach((folder) => {
@@ -178,9 +178,9 @@ export async function GET() {
       })
 
       // Recursive function to sort children
-      const sortChildren = (folder: any) => {
-        folder.children.sort((a: any, b: any) => a.name.localeCompare(b.name))
-        folder.children.forEach((child: any) => sortChildren(child))
+      const sortChildren = (folder: { children: Array<{ name: string; children: unknown[] }> }) => {
+        folder.children.sort((a, b) => a.name.localeCompare(b.name))
+        folder.children.forEach((child) => sortChildren(child))
       }
 
       // Sort root folders and their children
