@@ -355,16 +355,16 @@ export async function GET(request: NextRequest) {
           
           console.log(`📊 Job has ${job.enhancedImageUrls?.length || 0} images`)
           
-          // ✅ Cache hit: มี Blob URL แล้ว → return ทันที (read-only fast path)
+          // ✅ Cache hit: มี storage URL แล้ว → return ทันที (read-only fast path)
           const cachedImage = job.enhancedImageUrls?.find(
             (img: { predictionId?: string | null; url?: string | null; status?: string | null }) => 
               img.predictionId === predictionId && 
               img.url && 
-              img.url.includes('blob.vercel-storage.com')
+              (img.url.includes('cloudinary.com') || img.url.includes('blob.vercel-storage.com'))
           )
           
           if (cachedImage?.url) {
-            console.log(`💾 Cache HIT! Using cached Blob URL: ${cachedImage.url}`)
+            console.log(`💾 Cache HIT! Using cached storage URL: ${cachedImage.url}`)
             return NextResponse.json({
               success: true,
               status: 'succeeded',

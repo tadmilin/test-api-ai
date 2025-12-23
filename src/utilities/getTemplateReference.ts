@@ -53,9 +53,9 @@ export async function getTemplateReference(
       return null
     }
     
-    // Check if it's already a full Blob URL
-    if (templateUrl.includes('blob.vercel-storage.com') || templateUrl.includes('public.blob.vercel')) {
-      console.log(`   ✅ Direct Blob URL: ${templateUrl}`)
+    // Check if it's already a full storage URL
+    if (templateUrl.includes('cloudinary.com') || templateUrl.includes('blob.vercel-storage.com') || templateUrl.includes('public.blob.vercel')) {
+      console.log(`   ✅ Direct storage URL: ${templateUrl}`)
       return templateUrl
     }
     

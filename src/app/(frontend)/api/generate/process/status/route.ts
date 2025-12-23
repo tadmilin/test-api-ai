@@ -68,7 +68,8 @@ export async function GET(request: NextRequest) {
       hasUrl: !!img.url,
       hasPredictionId: !!img.predictionId,
       status: img.status,
-      urlType: img.url?.includes('blob.vercel-storage.com') ? 'Blob' : 
+      urlType: img.url?.includes('cloudinary.com') ? 'Cloudinary' :
+               img.url?.includes('blob.vercel-storage.com') ? 'Blob' : 
                img.url?.includes('replicate.delivery') ? 'Replicate' : 
                img.url ? 'Other' : 'None'
     })))
@@ -120,8 +121,8 @@ export async function GET(request: NextRequest) {
           return img
         }
         
-        // Check if image needs processing (has predictionId AND no Blob URL yet)
-        const hasBlobUrl = img.url && img.url.includes('blob.vercel-storage.com')
+        // Check if image needs processing (has predictionId AND no storage URL yet)
+        const hasBlobUrl = img.url && (img.url.includes('cloudinary.com') || img.url.includes('blob.vercel-storage.com'))
         const needsMainProcessing = img.predictionId && !hasBlobUrl
         
         if (needsMainProcessing) {
@@ -158,7 +159,7 @@ export async function GET(request: NextRequest) {
                 })
                 
                 const latestImg = latestJob.enhancedImageUrls?.[index]
-                const alreadyHasBlobUrl = latestImg?.url && String(latestImg.url).includes('blob.vercel-storage.com')
+                const alreadyHasBlobUrl = latestImg?.url && (String(latestImg.url).includes('cloudinary.com') || String(latestImg.url).includes('blob.vercel-storage.com'))
                 
                 if (alreadyHasBlobUrl) {
                   console.log(`   ✅ Webhook already uploaded - URL: ${String(latestImg.url).substring(0, 60)}...`)
@@ -173,13 +174,13 @@ export async function GET(request: NextRequest) {
                 
                 console.log(`   📦 Webhook not yet completed, proceeding with upload...`)
                 
-                // Validate it's actually a Blob URL
-                const isBlobUrl = blobUrl && typeof blobUrl === 'string' && 
-                                 blobUrl.includes('blob.vercel-storage.com')
+                // Validate it's actually a storage URL (Cloudinary or Blob)
+                const isValidUrl = blobUrl && typeof blobUrl === 'string' && 
+                                  (blobUrl.includes('cloudinary.com') || blobUrl.includes('blob.vercel-storage.com'))
                 
-                if (!isBlobUrl) {
-                  console.error(`   ❌ Expected Blob URL but got:`, blobUrl)
-                  return img // Don't update with non-Blob URL
+                if (!isValidUrl) {
+                  console.error(`   ❌ Expected storage URL but got:`, blobUrl)
+                  return img // Don't update with invalid URL
                 }
                 
                 console.log(`   ✅ Image ${index + 1} completed: ${blobUrl}`)

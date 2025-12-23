@@ -312,16 +312,9 @@ export const Jobs: CollectionConfig = {
                 {
                   name: 'url',
                   type: 'text',
-                  label: 'Permanent Blob URL',
+                  label: 'Permanent Storage URL',
                   admin: {
-                    description: 'Vercel Blob storage URL (permanent) - final output only',
-                  },
-                  validate: (val: unknown) => {
-                    if (!val) return true // optional
-                    if (typeof val === 'string' && !val.includes('blob.vercel-storage.com')) {
-                      return 'URL must be a Vercel Blob URL (blob.vercel-storage.com)'
-                    }
-                    return true
+                    description: 'Cloudinary or storage URL (permanent) - final output',
                   },
                 },
                 {

@@ -316,9 +316,9 @@ export async function POST(req: Request) {
           hasUrl: !!img.url,
         })
         
-        // ✅ Guard: ถ้ารูปนี้ completed และมี Blob URL แล้ว → skip (ยกเว้น upscale ที่กำลังแทนที่)
-        if (!isUpscalePrediction && img.status === 'completed' && img.url && String(img.url).includes('blob.vercel-storage.com')) {
-          console.log('[Webhook] ⏭️  Image already has Blob URL - skipping')
+        // ✅ Guard: ถ้ารูปนี้ completed และมี storage URL แล้ว → skip (ยกเว้น upscale ที่กำลังแทนที่)
+        if (!isUpscalePrediction && img.status === 'completed' && img.url && (String(img.url).includes('cloudinary.com') || String(img.url).includes('blob.vercel-storage.com'))) {
+          console.log('[Webhook] ⏭️  Image already has storage URL - skipping')
           return img
         }
 
