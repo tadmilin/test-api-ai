@@ -50,14 +50,18 @@ export async function GET(request: NextRequest) {
     // ❌ Custom Prompt จะ upscale เฉพาะ template (ทำที่ create-template API)
     const hasTemplate = !!job.templateUrl
     const isTextToImageJob = job.contentTopic?.includes('Text-to-Image') && !hasTemplate
+    // ✅ เช็คว่าต้อง upscale หรือไม่ (เฉพาะ 1:1 เท่านั้น)
+    const needsUpscale = isTextToImageJob && job.outputSize && (job.outputSize.includes('1:1') || job.outputSize.startsWith('1:1'))
     
     console.log(`\n🔍 ===== STATUS CHECK: Job ${jobId} =====`)
     console.log(`📊 Job status: ${job.status}`)
     console.log(`� Product Name: ${job.productName}`)
     console.log(`🔥 contentTopic: "${job.contentTopic || 'NONE'}"`)
     console.log(`🔥 customPrompt: ${job.customPrompt ? `"${String(job.customPrompt).substring(0, 50)}..."` : 'NULL'}`)
+    console.log(`🔥 outputSize: ${job.outputSize || 'NONE'}`)
     console.log(`🎨 templateUrl: ${job.templateUrl ? 'EXISTS (will upscale template instead)' : 'NONE'}`)
-    console.log(`🎯 Is Text-to-Image Job (needs upscale): ${isTextToImageJob}`)
+    console.log(`🎯 Is Text-to-Image Job: ${isTextToImageJob}`)
+    console.log(`🎯 Needs Upscale (1:1 only): ${needsUpscale}`)
     console.log(`🖼️ Total images: ${enhancedImages.length}`)
     console.log(`📋 Image states:`, enhancedImages.map((img, i) => ({
       index: i + 1,
@@ -149,9 +153,9 @@ export async function GET(request: NextRequest) {
                 
                 console.log(`   ✅ Image ${index + 1} completed: ${blobUrl}`)
                 
-                // ⭐ ถ้าเป็น text-to-image → เริ่ม upscale ทันที
-                if (isTextToImageJob && !img.upscalePredictionId) {
-                  console.log(`   � Starting upscale for text-to-image ${index + 1}/${enhancedImages.length}...`)
+                // ⭐ ถ้าเป็น text-to-image 1:1 → เริ่ม upscale ทันที
+                if (needsUpscale && !img.upscalePredictionId) {
+                  console.log(`   🔍 Starting upscale for text-to-image 1:1 ${index + 1}/${enhancedImages.length}...`)
                   console.log(`      Job: ${job.productName}`)
                   console.log(`      Image URL: ${blobUrl.substring(0, 60)}...`)
                   try {
