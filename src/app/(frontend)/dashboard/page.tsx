@@ -297,40 +297,49 @@ export default function DashboardPage() {
   }, [pollJobStatus]) // Include pollJobStatus in dependencies
 
   useEffect(() => {
-    if (currentUser) {
-      // ✅ เรียกครั้งเดียว sequential (ไม่พร้อมกัน)
-      const initDashboard = async () => {
-        await fetchDashboardData()
-        await fetchSpreadsheets()
-        await fetchDriveFolders()
-        
-        // Auto-resume processing jobs (หลังจาก fetch data เสร็จแล้ว)
-        resumeProcessingJobs()
-      }
+    if (!currentUser) return
+    
+    // ✅ ป้องกันเรียกซ้ำ - ใช้ ref เป็น flag
+    let mounted = true
+    
+    const initDashboard = async () => {
+      if (!mounted) return
       
-      initDashboard()
+      await fetchDashboardData()
+      await fetchSpreadsheets()
+      await fetchDriveFolders()
       
-      // Check if coming from custom-prompt page
-      const fromCustomPrompt = localStorage.getItem('fromCustomPrompt')
-      const fromTextToImage = localStorage.getItem('fromTextToImage')
-      const savedJobId = localStorage.getItem('processingJobId')
-      
-      if ((fromCustomPrompt === 'true' || fromTextToImage === 'true') && savedJobId) {
-        localStorage.removeItem('fromCustomPrompt')
-        localStorage.removeItem('fromTextToImage')
-        localStorage.removeItem('processingJobId')
-        
-        // Show processing status IMMEDIATELY
-        setProcessingStatus('⏳ กำลังเตรียมการประมวลผล...')
-        setProcessingJobId(savedJobId)
-        setCurrentJobId(savedJobId)
-        
-        // Start polling directly with the jobId (much faster!)
-        console.log(`🎯 Direct polling for job ${savedJobId}`)
-        setTimeout(() => pollJobStatus(savedJobId), 500)
-      }
+      // Auto-resume processing jobs (หลังจาก fetch data เสร็จแล้ว)
+      if (mounted) resumeProcessingJobs()
     }
-  }, [currentUser, resumeProcessingJobs, pollJobStatus])
+    
+    initDashboard()
+    
+    // Check if coming from custom-prompt page
+    const fromCustomPrompt = localStorage.getItem('fromCustomPrompt')
+    const fromTextToImage = localStorage.getItem('fromTextToImage')
+    const savedJobId = localStorage.getItem('processingJobId')
+    
+    if ((fromCustomPrompt === 'true' || fromTextToImage === 'true') && savedJobId) {
+      localStorage.removeItem('fromCustomPrompt')
+      localStorage.removeItem('fromTextToImage')
+      localStorage.removeItem('processingJobId')
+      
+      // Show processing status IMMEDIATELY
+      setProcessingStatus('⏳ กำลังเตรียมการประมวลผล...')
+      setProcessingJobId(savedJobId)
+      setCurrentJobId(savedJobId)
+      
+      // Start polling directly with the jobId (much faster!)
+      console.log(`🎯 Direct polling for job ${savedJobId}`)
+      setTimeout(() => pollJobStatus(savedJobId), 500)
+    }
+    
+    return () => {
+      mounted = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser]) // ✅ ลบ resumeProcessingJobs และ pollJobStatus ออก
 
   // ✅ Fetch storage status
   const fetchStorageStatus = useCallback(async () => {
