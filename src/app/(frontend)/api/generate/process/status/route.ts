@@ -142,6 +142,33 @@ export async function GET(request: NextRequest) {
                 // enhance API returns imageUrl = Blob URL (already uploaded)
                 const blobUrl = data.imageUrl
                 
+                // ✅ CRITICAL: Re-fetch job เพื่อเช็คว่า webhook update ไปแล้วหรือยัง (prevent race condition)
+                console.log(`   🔍 Re-checking job to prevent duplicate upload...`)
+                const { getPayload } = await import('payload')
+                const configPromise = await import('@payload-config')
+                const payload = await getPayload({ config: configPromise.default })
+                
+                const latestJob = await payload.findByID({
+                  collection: 'jobs',
+                  id: jobId,
+                })
+                
+                const latestImg = latestJob.enhancedImageUrls?.[index]
+                const alreadyHasBlobUrl = latestImg?.url && String(latestImg.url).includes('blob.vercel-storage.com')
+                
+                if (alreadyHasBlobUrl) {
+                  console.log(`   ✅ Webhook already uploaded - URL: ${String(latestImg.url).substring(0, 60)}...`)
+                  console.log(`   ⏭️  Skipping duplicate upload`)
+                  return {
+                    ...img,
+                    url: latestImg.url,
+                    status: 'completed' as const,
+                    predictionId: null,
+                  }
+                }
+                
+                console.log(`   📦 Webhook not yet completed, proceeding with upload...`)
+                
                 // Validate it's actually a Blob URL
                 const isBlobUrl = blobUrl && typeof blobUrl === 'string' && 
                                  blobUrl.includes('blob.vercel-storage.com')
