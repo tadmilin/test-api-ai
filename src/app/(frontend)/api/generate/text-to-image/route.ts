@@ -79,6 +79,7 @@ export async function POST(request: NextRequest) {
     console.log(`   User: ${user.email}`)
     console.log(`   Prompt: ${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}`)
     console.log(`   Aspect Ratio: ${aspectRatio}`)
+    console.log(`   Output Size: ${outputSize}`)
     console.log(`   Format: ${outputFormat}`)
     console.log(`   Num Images: ${numImages}`)
 
@@ -151,7 +152,6 @@ export async function POST(request: NextRequest) {
           index: i,
           predictionId: prediction.id,
           status: prediction.status,
-          needsUpscale: true, // Mark for upscaling to 2048x2048
         })
 
         console.log(`   ✅ Prediction ${i + 1} created: ${prediction.id}`)

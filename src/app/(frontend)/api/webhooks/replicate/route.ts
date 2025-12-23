@@ -307,8 +307,14 @@ export async function POST(req: Request) {
             }
           }
           
-          // ✅ เช็คว่าเป็น main prediction (Nano Banana Pro) และต้อง upscale หรือไม่
-          const shouldUpscale = isMainPrediction && job.outputSize === '1:1-2K'
+          // ✅ เช็คว่าเป็น main prediction (เช็ค model ด้วย)
+          // Nano Banana Pro 1:1: ใช้ upscale (Real-ESRGAN) เพื่อคุณภาพสูงสุด
+          // Imagen 4 Ultra 1:1: ใช้ resize ธรรมดาก็พอ (คุณภาพดีอยู่แล้ว)
+          // 4:5, 9:16 ทุก model: resize เท่านั้น
+          const isImagenModel = body.model?.includes('imagen') || false
+          const shouldUpscale = isMainPrediction && job.outputSize === '1:1-2K' && !isImagenModel
+          
+          console.log(`[Webhook] Model: ${body.model || 'unknown'}, isImagen: ${isImagenModel}, outputSize: ${job.outputSize}, shouldUpscale: ${shouldUpscale}`)
           
           if (shouldUpscale) {
             console.log('[Webhook] 📐 Output size is 1:1-2K, starting upscale to 2048x2048...')
@@ -374,11 +380,13 @@ export async function POST(req: Request) {
             
             // ตรวจสอบว่าต้อง resize หรือไม่
             const OUTPUT_SIZE_MAP: Record<string, { width: number; height: number } | null> = {
-              '1:1-2K': null, // จะถูก upscale แล้ว
+              '1:1-2K': { width: 2048, height: 2048 }, // Imagen resize, Nano Banana upscale แล้วจะเป็น null
               '4:5-2K': { width: 1080, height: 1350 },
               '9:16-2K': { width: 1080, height: 1920 },
             }
             
+            // ถ้า shouldUpscale = true (Nano Banana 1:1) จะไม่มาถึงตรงนี้ เพราะรอ upscale
+            // ถ้าเป็น Imagen 1:1 จะ resize ที่นี่
             const targetSize = OUTPUT_SIZE_MAP[job.outputSize || '1:1-2K']
             
             if (targetSize && isMainPrediction) {
