@@ -8,6 +8,7 @@ export default function TextToImagePage() {
   const [prompt, setPrompt] = useState('')
   const outputFormat = 'jpg' // ✅ Fixed to JPG for optimization
   const [numImages, setNumImages] = useState(1)
+  const [outputSize, setOutputSize] = useState('1:1-2K')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -33,7 +34,7 @@ export default function TextToImagePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt,
-          aspectRatio: '1:1', // Fixed for 2048x2048 output
+          outputSize,
           outputFormat,
           numImages,
         }),
@@ -71,7 +72,7 @@ export default function TextToImagePage() {
             ✨ Text to Image
           </h1>
           <p className="text-gray-600 text-lg">
-            สร้างภาพ 2048×2048 px จาก Prompt ด้วย Google Imagen 4 Ultra
+            สร้างภาพจาก Prompt ด้วย Google Imagen 4 Ultra
           </p>
         </div>
 
@@ -118,6 +119,25 @@ export default function TextToImagePage() {
               </div>
               <div className="mt-2 text-sm text-gray-500">
                 ⏱️ แต่ละรูปใช้เวลาประมาณ 30-60 วินาที
+              </div>
+            </div>
+
+            {/* Output Size Selection */}
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-3">
+                📐 ขนาดรูปที่ต้องการ
+              </label>
+              <select
+                value={outputSize}
+                onChange={(e) => setOutputSize(e.target.value)}
+                className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-gray-900 font-medium focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+              >
+                <option value="1:1-2K">1:1 Square (2048×2048) - FB/IG Feed</option>
+                <option value="4:5-2K">4:5 Portrait (1080×1350) - FB/IG Feed</option>
+                <option value="9:16-2K">9:16 Vertical (1080×1920) - Story/TikTok</option>
+              </select>
+              <div className="mt-2 text-sm text-gray-500">
+                💡 1:1 จะถูก upscale เป็น 2048×2048 (ใช้เวลานานกว่า), ขนาดอื่นจะ resize ตรง (เร็วกว่า)
               </div>
             </div>
 

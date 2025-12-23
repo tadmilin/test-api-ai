@@ -191,3 +191,48 @@ export async function GET(request: NextRequest) {
     )
   }
 }
+
+/**
+ * Helper function: Resize and upload image (for non-upscale sizes)
+ * Used for 4:5 and 9:16 aspect ratios
+ */
+export async function resizeAndUpload(imageUrl: string, outputSize: string): Promise<string> {
+  const SIZE_MAP: Record<string, { width: number; height: number }> = {
+    '4:5-2K': { width: 1080, height: 1350 },
+    '9:16-2K': { width: 1080, height: 1920 },
+  }
+
+  const targetSize = SIZE_MAP[outputSize]
+  if (!targetSize) {
+    throw new Error(`Unknown output size: ${outputSize}`)
+  }
+
+  console.log(`📐 Resizing to ${targetSize.width}x${targetSize.height}...`)
+
+  // Download image
+  const res = await fetch(imageUrl)
+  if (!res.ok) {
+    throw new Error(`Failed to download image: ${res.status}`)
+  }
+
+  const buffer = Buffer.from(await res.arrayBuffer())
+
+  // Resize and compress
+  const resized = await sharp(buffer)
+    .resize(targetSize.width, targetSize.height, { fit: 'cover' })
+    .jpeg({ quality: 90, mozjpeg: true })
+    .toBuffer()
+
+  // Upload to Blob
+  const blob = await put(
+    `resized-${outputSize}-${Date.now()}.jpg`,
+    resized,
+    {
+      access: 'public',
+      contentType: 'image/jpeg',
+    }
+  )
+
+  console.log(`✅ Resized image saved: ${blob.url}`)
+  return blob.url
+}

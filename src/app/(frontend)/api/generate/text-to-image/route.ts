@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
       aspectRatio = '1:1', 
       outputFormat = 'png',
       numImages = 1,
+      outputSize = '1:1-2K', // Default output size
     } = body
 
     // Validate
@@ -84,6 +85,7 @@ export async function POST(request: NextRequest) {
     // Create job in database
     const job = await payload.create({
       collection: 'jobs',
+      draft: false,
       data: {
         productName: `Text to Image: ${prompt.substring(0, 50)}${prompt.length > 50 ? '...' : ''}`,
         status: 'processing',
@@ -92,6 +94,7 @@ export async function POST(request: NextRequest) {
         contentTopic: `Text-to-Image (${aspectRatio})`,
         postTitleHeadline: `Generated from: "${prompt.substring(0, 100)}"`,
         contentDescription: `Aspect Ratio: ${aspectRatio} | Format: ${outputFormat} | Images: ${numImages}`,
+        outputSize: outputSize,
       },
     })
 

@@ -753,6 +753,10 @@ export interface Job {
     | 'failed'
     | 'approved'
     | 'rejected';
+  /**
+   * Output image dimensions - 1:1 will be upscaled, others will be resized
+   */
+  outputSize: '1:1-2K' | '4:5-2K' | '9:16-2K';
   productName: string;
   productDescription?: string | null;
   /**
@@ -1505,6 +1509,7 @@ export interface UsersSelect<T extends boolean = true> {
  */
 export interface JobsSelect<T extends boolean = true> {
   status?: T;
+  outputSize?: T;
   productName?: T;
   productDescription?: T;
   contentTopic?: T;

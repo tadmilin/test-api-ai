@@ -19,7 +19,8 @@ export const runtime = 'nodejs'
 // POST: Start image enhancement (returns predictionId immediately)
 export async function POST(request: NextRequest) {
   try {
-    const { imageUrl, prompt, jobId, photoType } = await request.json()
+    const body = await request.json()
+    const { imageUrl, prompt, jobId, photoType, outputSize } = body
 
     if (!imageUrl) {
       return NextResponse.json({ error: 'imageUrl is required' }, { status: 400 })
@@ -37,6 +38,7 @@ export async function POST(request: NextRequest) {
     console.log('[ENHANCE] imageUrl =', imageUrl)
     console.log('📝 Prompt:', prompt.substring(0, 120) + '...')
     console.log('📸 PhotoType:', photoType || 'not specified')
+    console.log('📐 Output Size:', outputSize || '1:1-2K (default)')
 
     // Get payload instance early for logging
     const payload = await getPayload({ config })
@@ -222,13 +224,23 @@ export async function POST(request: NextRequest) {
     
     console.log(`📡 Webhook URL: ${webhookUrl}`)
     
+    // ✅ Output size configuration
+    const OUTPUT_SIZE_CONFIG: Record<string, { aspect_ratio: string; resolution: string }> = {
+      '1:1-2K': { aspect_ratio: '1:1', resolution: '2K' },
+      '4:5-2K': { aspect_ratio: '4:5', resolution: '2K' },
+      '9:16-2K': { aspect_ratio: '9:16', resolution: '2K' },
+    }
+    
+    const sizeConfig = OUTPUT_SIZE_CONFIG[body.outputSize || '1:1-2K']
+    console.log(`📐 Output size: ${body.outputSize || '1:1-2K'} → ${sizeConfig.aspect_ratio} @ ${sizeConfig.resolution}`)
+    
     const nanoBananaPrediction = await replicate.predictions.create({
       model: 'google/nano-banana-pro',
       input: {
         image_input: [processedImageUrl],
         prompt: prompt,
-        resolution: '1K',
-        aspect_ratio: 'match_input_image',
+        aspect_ratio: sizeConfig.aspect_ratio,
+        resolution: sizeConfig.resolution,
         output_format: 'jpg',
         safety_filter_level: 'block_only_high',
       },

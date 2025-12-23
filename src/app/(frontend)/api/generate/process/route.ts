@@ -297,6 +297,7 @@ export async function POST(request: NextRequest) {
               prompt,
               photoType,
               jobId,
+              outputSize: job.outputSize || '1:1-2K', // ✅ ส่ง outputSize ไป enhance API
             }),
           })
 

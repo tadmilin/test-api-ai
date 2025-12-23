@@ -33,6 +33,7 @@ interface Job {
   contentTopic?: string
   postTitleHeadline?: string
   contentDescription?: string
+  outputSize?: string
   createdBy?: {
     id: string
     name: string
@@ -2665,6 +2666,9 @@ export default function DashboardPage() {
                     สถานะ
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    ขนาด
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     สร้างโดย
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -2678,7 +2682,7 @@ export default function DashboardPage() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {recentJobs.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
+                    <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
                       ไม่พบงาน สร้างงานแรกของคุณ!
                     </td>
                   </tr>
@@ -2773,6 +2777,21 @@ export default function DashboardPage() {
                         >
                           {job.status}
                         </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {(() => {
+                          const sizeLabels: Record<string, string> = {
+                            '1:1-2K': '2048×2048',
+                            '4:5-2K': '1080×1350',
+                            '9:16-2K': '1080×1920',
+                          }
+                          const outputSize = (job as any).outputSize || '1:1-2K'
+                          return (
+                            <span className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                              {sizeLabels[outputSize] || outputSize}
+                            </span>
+                          )
+                        })()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">

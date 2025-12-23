@@ -37,6 +37,22 @@ export const Jobs: CollectionConfig = {
       },
     },
     {
+      name: 'outputSize',
+      type: 'select',
+      label: 'Output Size',
+      required: true,
+      defaultValue: '1:1-2K',
+      options: [
+        { label: '1:1 Square (2048×2048) - FB/IG Feed', value: '1:1-2K' },
+        { label: '4:5 Portrait (1080×1350) - FB/IG Feed', value: '4:5-2K' },
+        { label: '9:16 Vertical (1080×1920) - Story/TikTok', value: '9:16-2K' },
+      ],
+      admin: {
+        position: 'sidebar',
+        description: 'Output image dimensions - 1:1 will be upscaled, others will be resized',
+      },
+    },
+    {
       type: 'tabs',
       tabs: [
         {

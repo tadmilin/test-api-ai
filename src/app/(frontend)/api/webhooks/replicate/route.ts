@@ -280,7 +280,7 @@ export async function POST(req: Request) {
           }
         }
         
-        // กรณี succeeded - พยายาม upload Blob (hybrid: fast path)
+        // กรณี succeeded - เช็คว่าต้อง upscale หรือ resize
         if (status === 'succeeded') {
           if (!output) {
             console.error('[Webhook] No output received despite succeeded status')
@@ -307,7 +307,47 @@ export async function POST(req: Request) {
             }
           }
           
-          // ✅ Hybrid: ลอง upload ทันที (fast path)
+          // ✅ เช็คว่าเป็น main prediction (Nano Banana Pro) และต้อง upscale หรือไม่
+          const shouldUpscale = isMainPrediction && job.outputSize === '1:1-2K'
+          
+          if (shouldUpscale) {
+            console.log('[Webhook] 📐 Output size is 1:1-2K, starting upscale to 2048x2048...')
+            
+            try {
+              const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
+              const upscaleRes = await fetch(`${baseUrl}/api/generate/upscale`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  imageUrl: replicateUrl,
+                  scale: 2,
+                }),
+              })
+              
+              if (!upscaleRes.ok) {
+                throw new Error('Failed to start upscale')
+              }
+              
+              const upscaleData = await upscaleRes.json()
+              console.log('[Webhook] ✅ Upscale started:', upscaleData.predictionId)
+              
+              return {
+                ...img,
+                tempOutputUrl: replicateUrl,
+                upscalePredictionId: upscaleData.predictionId,
+                status: 'pending' as const,
+              }
+            } catch (upscaleError) {
+              console.error('[Webhook] ❌ Failed to start upscale:', upscaleError)
+              return {
+                ...img,
+                status: 'failed' as const,
+                error: 'Failed to start upscale process',
+              }
+            }
+          }
+          
+          // ✅ ไม่ต้อง upscale (4:5 หรือ 9:16) หรือเป็น upscale prediction → upload/resize ทันที
           try {
             console.log('[Webhook] 🚀 Attempting to upload to Blob (fast path)...')
             const controller = new AbortController()
@@ -327,12 +367,28 @@ export async function POST(req: Request) {
             const imageBuffer = await imageResponse.arrayBuffer()
             const contentType = imageResponse.headers.get('content-type') || 'image/jpeg'
             
-            // ✅ Optimize: Compress to JPG quality 85 (ลด 70%)
+            // ✅ Resize ตาม outputSize (สำหรับ 4:5 และ 9:16)
             let optimizedBuffer: Buffer
             let finalContentType = 'image/jpeg'
             const ext = 'jpg'
             
-            if (contentType.includes('png')) {
+            // ตรวจสอบว่าต้อง resize หรือไม่
+            const OUTPUT_SIZE_MAP: Record<string, { width: number; height: number } | null> = {
+              '1:1-2K': null, // จะถูก upscale แล้ว
+              '4:5-2K': { width: 1080, height: 1350 },
+              '9:16-2K': { width: 1080, height: 1920 },
+            }
+            
+            const targetSize = OUTPUT_SIZE_MAP[job.outputSize || '1:1-2K']
+            
+            if (targetSize && isMainPrediction) {
+              // Resize to target dimensions for 4:5 and 9:16
+              console.log(`[Webhook] 📐 Resizing to ${targetSize.width}×${targetSize.height}...`)
+              optimizedBuffer = await sharp(Buffer.from(imageBuffer))
+                .resize(targetSize.width, targetSize.height, { fit: 'cover' })
+                .jpeg({ quality: 90, mozjpeg: true })
+                .toBuffer()
+            } else if (contentType.includes('png')) {
               // Convert PNG → JPG
               optimizedBuffer = await sharp(Buffer.from(imageBuffer))
                 .jpeg({ quality: 85, mozjpeg: true })
