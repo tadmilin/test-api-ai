@@ -31,11 +31,18 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { 
       prompt, 
-      aspectRatio = '1:1', 
       outputFormat = 'png',
       numImages = 1,
       outputSize = '1:1-2K', // Default output size
     } = body
+
+    // ✅ Map outputSize to aspectRatio for Imagen 4 Ultra
+    const OUTPUT_SIZE_TO_ASPECT_RATIO: Record<string, string> = {
+      '1:1-2K': '1:1',
+      '4:5-2K': '4:5',
+      '9:16-2K': '9:16',
+    }
+    const aspectRatio = OUTPUT_SIZE_TO_ASPECT_RATIO[outputSize] || '1:1'
 
     // Validate
     if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
@@ -59,14 +66,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const validAspectRatios = ['1:1', '16:9', '9:16', '4:3', '3:4']
-    if (!validAspectRatios.includes(aspectRatio)) {
-      return NextResponse.json(
-        { error: `Invalid aspect ratio. Must be one of: ${validAspectRatios.join(', ')}` },
-        { status: 400 }
-      )
-    }
-
     const validFormats = ['jpg', 'png', 'webp']
     if (!validFormats.includes(outputFormat)) {
       return NextResponse.json(
@@ -78,8 +77,7 @@ export async function POST(request: NextRequest) {
     console.log(`🎨 Text to Image request:`)
     console.log(`   User: ${user.email}`)
     console.log(`   Prompt: ${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}`)
-    console.log(`   Aspect Ratio: ${aspectRatio}`)
-    console.log(`   Output Size: ${outputSize}`)
+    console.log(`   Output Size: ${outputSize} → Aspect Ratio: ${aspectRatio}`)
     console.log(`   Format: ${outputFormat}`)
     console.log(`   Num Images: ${numImages}`)
 

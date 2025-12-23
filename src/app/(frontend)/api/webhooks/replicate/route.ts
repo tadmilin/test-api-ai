@@ -389,8 +389,10 @@ export async function POST(req: Request) {
             // ถ้าเป็น Imagen 1:1 จะ resize ที่นี่
             const targetSize = OUTPUT_SIZE_MAP[job.outputSize || '1:1-2K']
             
+            console.log(`[Webhook] 🔍 Debug resize: jobId=${job.id}, outputSize=${job.outputSize}, targetSize=${JSON.stringify(targetSize)}, isMainPrediction=${isMainPrediction}`)
+            
             if (targetSize && isMainPrediction) {
-              // Resize to target dimensions for 4:5 and 9:16
+              // Resize to target dimensions
               console.log(`[Webhook] 📐 Resizing to ${targetSize.width}×${targetSize.height}...`)
               optimizedBuffer = await sharp(Buffer.from(imageBuffer))
                 .resize(targetSize.width, targetSize.height, { fit: 'cover' })
