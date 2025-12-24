@@ -397,10 +397,16 @@ export async function GET(request: NextRequest) {
 
     console.log(`===== END STATUS CHECK =====\n`)
 
+    // ✅ Refetch job เพื่อเอา status ล่าสุด (กรณี webhook อัพเดท job.status แล้ว)
+    const latestJob = await payload.findByID({
+      collection: 'jobs',
+      id: jobId,
+    })
+
     return NextResponse.json({
       success: true,
       jobId,
-      jobStatus: allComplete ? 'completed' : job.status, // Use existing job object
+      jobStatus: allComplete ? 'completed' : latestJob.status, // ✅ Use latest status
       status: allComplete ? 'completed' : 'enhancing',
       total: updatedImages.length,
       processing,
@@ -408,7 +414,7 @@ export async function GET(request: NextRequest) {
       failed,
       allComplete,
       images: updatedImages,
-      templateGeneration: job.templateGeneration || null, // ✅ Add for polling to check template upscale status
+      templateGeneration: latestJob.templateGeneration || null, // ✅ Use latest templateGeneration
     })
 
   } catch (error: unknown) {
