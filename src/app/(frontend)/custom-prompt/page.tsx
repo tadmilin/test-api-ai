@@ -38,6 +38,8 @@ export default function CustomPromptPage() {
   const [creating, setCreating] = useState(false)
   const [processingStatus, setProcessingStatus] = useState<string>('')
   const [processingError, setProcessingError] = useState<string>('')
+  const [uploadingToCloudinary, setUploadingToCloudinary] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<string>('')
   
   // Template state
   const [enableTemplate, setEnableTemplate] = useState(false)
@@ -187,12 +189,52 @@ export default function CustomPromptPage() {
 
     setCreating(true)
     setProcessingError('')
-    setProcessingStatus('กำลังสร้างงาน...')
+    setUploadingToCloudinary(true)
+    setUploadProgress('กำลังเตรียมรูปภาพ...')
 
     try {
-      const selectedImageUrls = Array.from(selectedImagesMap.values()).map(img => ({ url: img.url }))
+      const selectedImages = Array.from(selectedImagesMap.values())
+      
+      // ✅ STEP 1: Upload Drive images to Cloudinary first
+      console.log(`📤 Uploading ${selectedImages.length} images to Cloudinary...`)
+      const cloudinaryUrls: Array<{ url: string }> = []
+      
+      for (let i = 0; i < selectedImages.length; i++) {
+        const driveImage = selectedImages[i]
+        setUploadProgress(`กำลังอัปโหลดรูปที่ ${i + 1}/${selectedImages.length}...`)
+        
+        try {
+          const uploadRes = await fetch('/api/upload/drive-to-cloudinary', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              driveUrl: driveImage.url,
+              folder: 'custom-prompt-source',
+            }),
+          })
+          
+          if (!uploadRes.ok) {
+            const errorData = await uploadRes.json().catch(() => ({ error: 'Upload failed' }))
+            throw new Error(errorData.error || `Failed to upload image ${i + 1}`)
+          }
+          
+          const { cloudinaryUrl } = await uploadRes.json()
+          cloudinaryUrls.push({ url: cloudinaryUrl })
+          console.log(`✅ Image ${i + 1} uploaded:`, cloudinaryUrl)
+          
+        } catch (uploadError) {
+          console.error(`❌ Failed to upload image ${i + 1}:`, uploadError)
+          throw uploadError
+        }
+      }
+      
+      setUploadingToCloudinary(false)
+      setUploadProgress('')
+      setProcessingStatus('กำลังสร้างงาน...')
+      
+      console.log(`✅ All images uploaded to Cloudinary:`, cloudinaryUrls)
 
-      // Create job
+      // ✅ STEP 2: Create job with Cloudinary URLs
       const jobRes = await fetch('/api/jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -200,7 +242,7 @@ export default function CustomPromptPage() {
           productName: 'Custom Prompt Job',
           productDescription: customPrompt.trim(),
           // contentTopic: ไม่ระบุ - เพราะ upscale จะทำที่ template แทน
-          referenceImageUrls: selectedImageUrls,
+          referenceImageUrls: cloudinaryUrls, // ✅ Use Cloudinary URLs
           customPrompt: customPrompt.trim(),
           templateType: 'custom',
           status: 'pending',
@@ -406,9 +448,14 @@ export default function CustomPromptPage() {
           )}
 
           {/* Processing Status */}
-          {processingStatus && (
+          {(processingStatus || uploadProgress) && (
             <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-8">
-              <p className="text-blue-900 font-semibold">{processingStatus}</p>
+              <div className="flex items-center gap-3">
+                {uploadingToCloudinary && (
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                )}
+                <p className="text-blue-900 font-semibold">{uploadProgress || processingStatus}</p>
+              </div>
             </div>
           )}
 
@@ -729,13 +776,13 @@ export default function CustomPromptPage() {
                 <div className="pt-6 border-t border-purple-200">
                   <button
                     onClick={handleCreate}
-                    disabled={creating || selectedImagesMap.size === 0 || !customPrompt.trim() || (enableTemplate && !selectedTemplate)}
+                    disabled={creating || uploadingToCloudinary || selectedImagesMap.size === 0 || !customPrompt.trim() || (enableTemplate && !selectedTemplate)}
                     className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-4 rounded-lg hover:from-purple-700 hover:to-blue-700 font-bold text-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
                   >
-                    {creating ? (
+                    {creating || uploadingToCloudinary ? (
                       <>
                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-                        กำลังสร้าง...
+                        {uploadingToCloudinary ? 'กำลังอัปโหลด...' : 'กำลังสร้าง...'}
                       </>
                     ) : (
                       <>
