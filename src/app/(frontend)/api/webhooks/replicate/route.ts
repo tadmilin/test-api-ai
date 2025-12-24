@@ -261,6 +261,12 @@ export async function POST(req: Request) {
         const replicateUrl = Array.isArray(output) ? output[0] : output
         
         try {
+          // ⚠️ Guard: ถ้า template URL มีแล้วและ job completed → skip (ป้องกัน duplicate upscale webhook)
+          if (job.templateUrl && job.status === 'completed') {
+            console.log('[Webhook] ⏭️ Template already completed - skipping duplicate upscale')
+            return NextResponse.json({ received: true, jobId: job.id, message: 'Already completed' })
+          }
+          
           // Download and upload to Blob
           const imageResponse = await fetch(replicateUrl)
           const imageBuffer = await imageResponse.arrayBuffer()
