@@ -401,7 +401,7 @@ export default function DashboardPage() {
           
           // DON'T auto-clear - let user refresh or retry
           // setProcessingJobId(null) - keep banner visible
-          fetchDashboardData()  // Refresh to show failed status in job list
+          fetchDashboardData(true)  // Refresh to show failed status (force)
           break
         }
         
@@ -527,10 +527,10 @@ export default function DashboardPage() {
                   // Wait 3s to show success message before clearing
                   await new Promise(resolve => setTimeout(resolve, 3000))
                   
-                  // Clear banner and refresh dashboard
+                  // Clear banner and refresh dashboard (force to bypass cache)
                   setProcessingStatus('')
                   setProcessingJobId(null)
-                  fetchDashboardData()
+                  fetchDashboardData(true)
                   
                   // localStorage already cleared after prediction started
                   
@@ -557,8 +557,8 @@ export default function DashboardPage() {
               localStorage.removeItem('pendingTemplateUrl')
               localStorage.removeItem('pendingTemplateJobId')
               
-              // Refresh to show failed status in job list
-              fetchDashboardData()
+              // Refresh to show failed status in job list (force)
+              fetchDashboardData(true)
               break
             }
             
@@ -576,6 +576,9 @@ export default function DashboardPage() {
               setCurrentJobId(jobId)
               setReviewMode(true)  // ✅ แสดงรูปทันที
             }
+            
+            // ✅ Update job list to show "completed" status (force refresh to bypass cache)
+            fetchDashboardData(true).catch(err => console.error('Failed to refresh dashboard:', err))
             
             // ✅ Mark as successful completion (for finally block)
             setProcessingStatus('✅ ประมวลผลสำเร็จ!')
@@ -595,7 +598,7 @@ export default function DashboardPage() {
       
       // DON'T auto-clear - let user refresh manually
       // Keep banner visible so user knows there's an issue
-      fetchDashboardData()  // Refresh to show current status in job list
+      fetchDashboardData(true)  // Refresh to show current status (force)
     }
     
     } catch (error) {
@@ -835,11 +838,11 @@ export default function DashboardPage() {
     }
   }
   
-  async function fetchDashboardData() {
+  async function fetchDashboardData(forceRefresh = false) {
     try {
-      // ✅ Cache: Skip if fetched within last 10 seconds
+      // ✅ Cache: Skip if fetched within last 10 seconds (unless forced)
       const now = Date.now()
-      if (dashboardDataCache && (now - dashboardDataCache.timestamp) < 10000) {
+      if (!forceRefresh && dashboardDataCache && (now - dashboardDataCache.timestamp) < 10000) {
         console.log('⚡ Using cached dashboard data')
         return
       }
