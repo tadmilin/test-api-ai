@@ -583,34 +583,45 @@ export async function POST(req: Request) {
       
       // ✅ CRITICAL: Auto-start template generation for custom-prompt jobs
       if (!hasFailed && job.customPrompt && job.templateUrl) {
-        console.log('[Webhook] 🎨 All images completed + has template → Starting template generation...')
-        try {
-          const enhancedImageUrls = updatedUrls
-            ?.filter(img => img.status === 'completed' && img.url)
-            .map(img => img.url as string) || []
-          
-          if (enhancedImageUrls.length > 0) {
-            const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
-            const templateRes = await fetch(`${baseUrl}/api/generate/create-template`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                enhancedImageUrls,
-                templateUrl: job.templateUrl,
-                jobId: job.id,
-                outputSize: job.outputSize, // ✅ ส่ง outputSize ไปด้วยเพื่อป้องกัน race condition
-              }),
-            })
+        // ⚠️ Guard: Refetch job เพื่อดูสถานะล่าสุด (ป้องกัน race condition)
+        const latestJob = await payload.findByID({
+          collection: 'jobs',
+          id: job.id,
+        })
+        
+        const templateGen = latestJob.templateGeneration || {}
+        if (templateGen.predictionId || templateGen.upscalePredictionId || templateGen.url) {
+          console.log('[Webhook] ⏭️ Template generation already started/completed - skipping duplicate')
+        } else {
+          console.log('[Webhook] 🎨 All images completed + has template → Starting template generation...')
+          try {
+            const enhancedImageUrls = updatedUrls
+              ?.filter(img => img.status === 'completed' && img.url)
+              .map(img => img.url as string) || []
             
-            if (templateRes.ok) {
-              const { predictionId } = await templateRes.json()
-              console.log('[Webhook] ✅ Template generation started:', predictionId)
-            } else {
-              console.error('[Webhook] ❌ Failed to start template generation:', await templateRes.text())
+            if (enhancedImageUrls.length > 0) {
+              const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
+              const templateRes = await fetch(`${baseUrl}/api/generate/create-template`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  enhancedImageUrls,
+                  templateUrl: job.templateUrl,
+                  jobId: job.id,
+                  outputSize: job.outputSize, // ✅ ส่ง outputSize ไปด้วยเพื่อป้องกัน race condition
+                }),
+              })
+              
+              if (templateRes.ok) {
+                const { predictionId } = await templateRes.json()
+                console.log('[Webhook] ✅ Template generation started:', predictionId)
+              } else {
+                console.error('[Webhook] ❌ Failed to start template generation:', await templateRes.text())
+              }
             }
+          } catch (templateError) {
+            console.error('[Webhook] ❌ Template generation error:', templateError)
           }
-        } catch (templateError) {
-          console.error('[Webhook] ❌ Template generation error:', templateError)
         }
       }
     } else if (hasPending) {
