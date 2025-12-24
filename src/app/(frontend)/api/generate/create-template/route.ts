@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
     const input = {
       prompt: "ใช้ภาพต้นฉบับนี้เป็น Template อ้างอิง โดยต้องรักษาตำแหน่งเลเยอร์ กราฟิคและกรอบดีไซน์ทั้งหมดไว้เหมือนเดิมห้ามแก้ไข คำสั่ง: ให้เปลี่ยนเฉพาะส่วนที่เป็น 'ภาพถ่ายสถานที่' ใน Template นี้ทั้งหมด (รวมถึงภาพพื้นหลังและรูปเล็ก) ให้เป็นไฟล์ภาพใหม่ที่แนบมานี้ โดยให้ภาพแรกเป็นภาพหลัก แทนที่ลงไปตามตำแหน่งที่เหมาะสม โดยให้ภาพใหม่อยู่ในเลเยอร์ด้านหลังข้อความและกรอบอย่างสมบูรณ์",
       image_input: imageInputs,
-      resolution: sizeConfig.resolution === '2K' ? '1K' : '1K',  // nano-banana-pro ใช้ 1K
+      resolution: sizeConfig.resolution,  // ✅ ส่งตรงตาม outputSize (1K หรือ 2K)
       aspect_ratio: sizeConfig.aspect_ratio,  // ✅ ใช้จาก job.outputSize
       output_format: "png",
       safety_filter_level: "block_only_high",
