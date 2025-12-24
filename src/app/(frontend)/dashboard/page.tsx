@@ -336,11 +336,22 @@ export default function DashboardPage() {
           console.log(`🔍 Template upscale in progress`)
           setProcessingStatus(`🎨 กำลัง Upscale Template เป็น 2048x2048...`)
           
-          // ✅ เช็คอีกครั้งว่า upscale เสร็จหรือยัง
-          if (templateGen.url && templateGen.status === 'succeeded') {
+          // ✅ เช็คว่า upscale เสร็จและ job status = completed
+          if (templateGen.url && templateGen.status === 'succeeded' && statusData.jobStatus === 'completed') {
             console.log('✅ Template upscale completed!')
             setGeneratedTemplateUrl(templateGen.url)
             setProcessingStatus('✅ Template พร้อมแล้ว!')
+            
+            // ✅ แสดงรูป + template
+            if (statusData.images && statusData.images.length > 0) {
+              setEnhancedImages(statusData.images)
+              setCurrentJobId(jobId)
+              setReviewMode(true)
+              console.log('✅ Review mode activated with template')
+            }
+            
+            // Refresh dashboard
+            fetchDashboardData(true)
             break
           }
           
