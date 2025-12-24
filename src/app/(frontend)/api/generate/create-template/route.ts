@@ -156,6 +156,7 @@ export async function POST(request: NextRequest) {
     console.log(`   Status: ${prediction.status}`)
 
     // ✅ บันทึก templateGeneration object ลง MongoDB (เหมือน enhancedImageUrls)
+    // ⚠️ Save ทั้ง nested และ top-level เพื่อให้ webhook หาเจอแน่นอน
     try {
       await payload.update({
         collection: 'jobs',
@@ -167,6 +168,7 @@ export async function POST(request: NextRequest) {
             url: null,
             upscalePredictionId: null,
           },
+          templatePredictionId: prediction.id, // ✅ Top-level สำรอง
         },
       })
       console.log(`✅ Saved templateGeneration to job ${jobId}`)
