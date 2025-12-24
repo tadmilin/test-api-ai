@@ -244,6 +244,12 @@ export async function POST(req: Request) {
     if (isTemplateUpscale) {
       console.log('[Webhook] 🎨 Processing template upscale')
       
+      // ⚠️ GUARD: Template upscale ควรทำงานเฉพาะ 1:1-2K เท่านั้น
+      if (job.outputSize !== '1:1-2K') {
+        console.error(`[Webhook] ❌ Template upscale called but outputSize is ${job.outputSize}, not 1:1-2K - skipping`)
+        return NextResponse.json({ received: true, error: 'Invalid upscale for non-1:1 job' })
+      }
+      
       if (status === 'succeeded' && output) {
         const replicateUrl = Array.isArray(output) ? output[0] : output
         
