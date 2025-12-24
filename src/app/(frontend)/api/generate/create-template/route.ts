@@ -83,6 +83,19 @@ export async function POST(request: NextRequest) {
     console.log(`📋 Template URL: ${templateUrl}`)
     console.log(`📸 Enhanced images: ${enhancedImageUrls.length}`)
 
+    // ✅ Fetch job to get outputSize
+    const { getPayload } = await import('payload')
+    const configPromise = await import('@payload-config')
+    const payload = await getPayload({ config: configPromise.default })
+    
+    const job = await payload.findByID({
+      collection: 'jobs',
+      id: jobId,
+    })
+    
+    const outputSize = job.outputSize || '1:1-2K'
+    console.log(`📐 Output size from job: ${outputSize}`)
+
     // Step 1: Convert all URLs to direct image URLs (Google Drive → Blob)
     console.log(`\n🔄 Step 1: Ensuring all URLs are direct images...`)
     
@@ -112,11 +125,22 @@ export async function POST(request: NextRequest) {
     
     console.log(`📡 Webhook URL: ${webhookUrl}`)
     
+    // ✅ Map outputSize to aspect_ratio
+    const OUTPUT_SIZE_MAP: Record<string, { aspect_ratio: string; resolution: string }> = {
+      '1:1-2K': { aspect_ratio: '1:1', resolution: '2K' },
+      '4:5-2K': { aspect_ratio: '3:4', resolution: '2K' },
+      '3:4-2K': { aspect_ratio: '3:4', resolution: '2K' },
+      '9:16-2K': { aspect_ratio: '9:16', resolution: '2K' },
+    }
+    
+    const sizeConfig = OUTPUT_SIZE_MAP[outputSize] || { aspect_ratio: '1:1', resolution: '1K' }
+    console.log(`🎯 Using aspect_ratio: ${sizeConfig.aspect_ratio}, resolution: ${sizeConfig.resolution}`)
+    
     const input = {
       prompt: "ใช้ภาพต้นฉบับนี้เป็น Template อ้างอิง โดยต้องรักษาตำแหน่งเลเยอร์ กราฟิคและกรอบดีไซน์ทั้งหมดไว้เหมือนเดิมห้ามแก้ไข คำสั่ง: ให้เปลี่ยนเฉพาะส่วนที่เป็น 'ภาพถ่ายสถานที่' ใน Template นี้ทั้งหมด (รวมถึงภาพพื้นหลังและรูปเล็ก) ให้เป็นไฟล์ภาพใหม่ที่แนบมานี้ โดยให้ภาพแรกเป็นภาพหลัก แทนที่ลงไปตามตำแหน่งที่เหมาะสม โดยให้ภาพใหม่อยู่ในเลเยอร์ด้านหลังข้อความและกรอบอย่างสมบูรณ์",
       image_input: imageInputs,
-      resolution: "1K",
-      aspect_ratio: "1:1",
+      resolution: sizeConfig.resolution === '2K' ? '1K' : '1K',  // nano-banana-pro ใช้ 1K
+      aspect_ratio: sizeConfig.aspect_ratio,  // ✅ ใช้จาก job.outputSize
       output_format: "png",
       safety_filter_level: "block_only_high",
       webhook: webhookUrl, // ✅ ใช้ webhook แทน polling
@@ -133,10 +157,6 @@ export async function POST(request: NextRequest) {
 
     // ✅ บันทึก templateGeneration object ลง MongoDB (เหมือน enhancedImageUrls)
     try {
-      const { getPayload } = await import('payload')
-      const configPromise = await import('@payload-config')
-      const payload = await getPayload({ config: configPromise.default })
-      
       await payload.update({
         collection: 'jobs',
         id: jobId,
