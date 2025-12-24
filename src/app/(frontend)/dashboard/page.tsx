@@ -524,17 +524,28 @@ export default function DashboardPage() {
                   setGeneratedTemplateUrl(pollData.imageUrl)
                   console.log('✅ Template URL set:', pollData.imageUrl)
                   
-                  // Wait 3s to show success message before clearing
-                  await new Promise(resolve => setTimeout(resolve, 3000))
+                  // ✅ CRITICAL: Fetch enhanced images to display with template
+                  try {
+                    const statusRes = await fetch(`/api/generate/process/status?jobId=${jobId}`)
+                    if (statusRes.ok) {
+                      const statusData = await statusRes.json()
+                      if (statusData.images && statusData.images.length > 0) {
+                        setEnhancedImages(statusData.images)
+                        setCurrentJobId(jobId)
+                        setReviewMode(true)
+                        console.log('✅ Enhanced images displayed with template')
+                      }
+                    }
+                  } catch (err) {
+                    console.error('Failed to fetch enhanced images:', err)
+                  }
                   
-                  // Clear banner and refresh dashboard (force to bypass cache)
-                  setProcessingStatus('')
-                  setProcessingJobId(null)
+                  // Refresh dashboard to update job list (force to bypass cache)
                   fetchDashboardData(true)
                   
                   // localStorage already cleared after prediction started
                   
-                  return  // Exit function completely (don't fall through to cleanup code)
+                  break  // ✅ Use break instead of return to let finally block clear banner
                 } else if (pollData.status === 'failed' || pollData.status === 'canceled') {
                   // localStorage already cleared
                   
