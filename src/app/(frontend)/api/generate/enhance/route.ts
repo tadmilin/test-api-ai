@@ -229,7 +229,7 @@ export async function POST(request: NextRequest) {
     // ✅ Output size configuration
     const OUTPUT_SIZE_CONFIG: Record<string, { aspect_ratio: string; resolution: string }> = {
       '1:1-2K': { aspect_ratio: '1:1', resolution: '2K' },
-      '4:5-2K': { aspect_ratio: '4:5', resolution: '2K' },
+      '4:5-2K': { aspect_ratio: '3:4', resolution: '2K' }, // ✅ ส่ง 3:4 ไป nano-banana-pro แล้ว webhook จะ resize เป็น 1080×1350 (4:5)
       '9:16-2K': { aspect_ratio: '9:16', resolution: '2K' },
     }
     

@@ -366,8 +366,8 @@ export async function POST(req: Request) {
           // Custom-Prompt: รูปแต่ละรูป → ไม่ upscale (เก็บไว้สร้าง template)
           // Text-to-Image: 1:1 → upscale เป็น 2048×2048, อื่นๆ → resize
           const isImagenModel = body.model?.includes('imagen') || false
-          // ✅ เช็คจาก contentTopic แทน customPrompt เพราะ text-to-image ก็ใช้ customPrompt field
-          const isCustomPrompt = job.contentTopic && !job.contentTopic.includes('Text-to-Image')
+          // ✅ FIXED: เช็คจาก customPrompt field + templateUrl (custom-prompt จะมี customPrompt + อาจมี templateUrl)
+          const isCustomPrompt = !!(job.customPrompt || job.templateUrl)
           
           // ✅ Upscale เฉพาะ text-to-image (ไม่ใช่ custom-prompt) + outputSize มี 1:1
           const shouldUpscale = isMainPrediction && !isCustomPrompt && job.outputSize && (job.outputSize.includes('1:1') || job.outputSize.startsWith('1:1'))
@@ -554,6 +554,38 @@ export async function POST(req: Request) {
     if (allDone) {
       // ถ้ามีรูป failed แม้แค่รูปเดียว → job failed
       newJobStatus = hasFailed ? 'failed' : 'completed'
+      
+      // ✅ CRITICAL: Auto-start template generation for custom-prompt jobs
+      if (!hasFailed && job.customPrompt && job.templateUrl) {
+        console.log('[Webhook] 🎨 All images completed + has template → Starting template generation...')
+        try {
+          const enhancedImageUrls = updatedUrls
+            ?.filter(img => img.status === 'completed' && img.url)
+            .map(img => img.url as string) || []
+          
+          if (enhancedImageUrls.length > 0) {
+            const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
+            const templateRes = await fetch(`${baseUrl}/api/generate/create-template`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                enhancedImageUrls,
+                templateUrl: job.templateUrl,
+                jobId: job.id,
+              }),
+            })
+            
+            if (templateRes.ok) {
+              const { predictionId } = await templateRes.json()
+              console.log('[Webhook] ✅ Template generation started:', predictionId)
+            } else {
+              console.error('[Webhook] ❌ Failed to start template generation:', await templateRes.text())
+            }
+          }
+        } catch (templateError) {
+          console.error('[Webhook] ❌ Template generation error:', templateError)
+        }
+      }
     } else if (hasPending) {
       // มีรูปยัง pending (รออัปโหลด/กำลัง persist)
       newJobStatus = 'enhancing' // หรือ 'persisting' ถ้ามี status นี้
