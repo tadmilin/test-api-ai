@@ -3,6 +3,7 @@ import { getPayload } from 'payload'
 import configPromise from '@payload-config'
 import sharp from 'sharp'
 import { uploadBufferToCloudinary } from '@/utilities/cloudinaryUpload'
+import { retryWithExponentialBackoff } from '@/utilities/retryWithExponentialBackoff'
 
 // ✅ Force Node.js runtime
 export const runtime = 'nodejs'
@@ -559,12 +560,8 @@ export async function POST(req: Request) {
     }
 
     // อัปเดต Job ใน Database (with exponential backoff for production)
-    let retries = 5 // เพิ่มเป็น 5 ครั้งสำหรับ concurrent users
-    let updateSuccess = false
-    let attempt = 0
-    
-    while (retries > 0 && !updateSuccess) {
-      try {
+    await retryWithExponentialBackoff(
+      async () => {
         await payload.update({
           collection: 'jobs',
           id: job.id,
@@ -573,29 +570,13 @@ export async function POST(req: Request) {
             status: newJobStatus,
           },
         })
-        updateSuccess = true
         console.log('[Webhook] ✅ Job updated successfully')
-      } catch (updateError: any) {
-        retries--
-        attempt++
-        if (updateError.code === 112 || updateError.codeName === 'WriteConflict') {
-          // Exponential backoff: 200ms, 400ms, 800ms, 1600ms, 2000ms (max)
-          const baseDelay = Math.pow(2, attempt) * 100
-          const jitter = Math.random() * 100 // Random 0-100ms
-          const delay = Math.min(baseDelay + jitter, 2000)
-          console.log(`[Webhook] ⚠️ WriteConflict (attempt ${attempt}), retry in ${delay.toFixed(0)}ms... (${retries} left)`)
-          await new Promise(resolve => setTimeout(resolve, delay))
-        } else {
-          // Other error, throw
-          throw updateError
-        }
+      },
+      {
+        maxRetries: 5,
+        context: 'Webhook',
       }
-    }
-    
-    if (!updateSuccess) {
-      console.error('[Webhook] ❌ Failed to update job after retries')
-      return NextResponse.json({ error: 'Failed to update job' }, { status: 500 })
-    }
+    )
 
     console.log('[Webhook] Updated job:', job.id, 'Status:', newJobStatus)
 

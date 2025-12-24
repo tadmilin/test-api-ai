@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPayload } from 'payload'
 import config from '@payload-config'
+import { retryWithExponentialBackoff } from '@/utilities/retryWithExponentialBackoff'
 
 // ✅ Force Node.js runtime (Payload CMS)
 export const runtime = 'nodejs'
@@ -294,10 +295,9 @@ export async function GET(request: NextRequest) {
         upscalePredictionId: img.upscalePredictionId ? img.upscalePredictionId.substring(0, 15) + '...' : null
       })), null, 2))
       
-      // Retry logic for MongoDB write conflicts
-      let retries = 3
-      while (retries > 0) {
-        try {
+      // Update with exponential backoff retry logic
+      await retryWithExponentialBackoff(
+        async () => {
           await payload.update({
             collection: 'jobs',
             id: jobId,
@@ -306,17 +306,12 @@ export async function GET(request: NextRequest) {
             },
           })
           console.log(`✅ Job updated successfully`)
-          break
-        } catch (err: any) {
-          if (err.code === 112 && retries > 1) {
-            console.log(`⚠️ Write conflict, retrying... (${retries - 1} attempts left)`)
-            retries--
-            await new Promise(resolve => setTimeout(resolve, 100 * (4 - retries))) // Exponential backoff
-          } else {
-            throw err
-          }
+        },
+        {
+          maxRetries: 5,
+          context: 'Status Route (update images)',
         }
-      }
+      )
     } else {
       console.log(`⏭️ No changes detected, skipping job update`)
       console.log('📋 Current state:', JSON.stringify(updatedImages.map((img, i) => ({
@@ -371,10 +366,9 @@ export async function GET(request: NextRequest) {
     if (allComplete && (job.status === 'enhancing' || job.status === 'processing')) {
       console.log(`🎉 All images complete! Updating job to completed`)
       
-      // Retry logic for MongoDB write conflicts
-      let retries = 3
-      while (retries > 0) {
-        try {
+      // Update with exponential backoff retry logic
+      await retryWithExponentialBackoff(
+        async () => {
           await payload.update({
             collection: 'jobs',
             id: jobId,
@@ -392,18 +386,13 @@ export async function GET(request: NextRequest) {
               timestamp: new Date().toISOString(),
             },
           })
-          break
-        } catch (err: any) {
-          if (err.code === 112 && retries > 1) {
-            console.log(`⚠️ Write conflict on status update, retrying... (${retries - 1} attempts left)`)
-            retries--
-            await new Promise(resolve => setTimeout(resolve, 100 * (4 - retries))) // Exponential backoff
-          } else {
-            console.warn('⚠️ Failed to update job status:', err.message)
-            break // Don't fail entire request
-          }
+        },
+        {
+          maxRetries: 5,
+          context: 'Status Route (update status)',
+          throwOnFailure: false, // Don't fail entire request
         }
-      }
+      )
     }
 
     console.log(`===== END STATUS CHECK =====\n`)
