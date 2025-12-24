@@ -155,6 +155,7 @@ export async function POST(req: Request) {
               '4:5-2K': { width: 1080, height: 1350 },
               '4:3': { width: 1080, height: 1350 },
               '3:4': { width: 1080, height: 1350 },
+              '3:4-2K': { width: 1080, height: 1350 },
               '9:16': { width: 1080, height: 1920 },
               '9:16-2K': { width: 1080, height: 1920 },
             }
@@ -444,6 +445,7 @@ export async function POST(req: Request) {
               '4:5-2K': { width: 1080, height: 1350 },
               '4:3': { width: 1080, height: 1350 },
               '3:4': { width: 1080, height: 1350 },
+              '3:4-2K': { width: 1080, height: 1350 },
               '9:16': { width: 1080, height: 1920 },
               '9:16-2K': { width: 1080, height: 1920 },
             }
