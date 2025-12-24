@@ -741,12 +741,17 @@ export default function DashboardPage() {
     const initDashboard = async () => {
       if (!mounted) return
       
+      // ✅ CRITICAL: Fetch dashboard data FIRST, then check for processing jobs
       await fetchDashboardData()
-      await fetchSpreadsheets()
-      await fetchDriveFolders()
       
-      // Auto-resume processing jobs (หลังจาก fetch data เสร็จแล้ว)
+      // ✅ Now recentJobs is populated, safe to check for resume
       if (mounted) resumeProcessingJobs()
+      
+      // ✅ Fetch other data in parallel (non-critical)
+      await Promise.all([
+        fetchSpreadsheets(),
+        fetchDriveFolders(),
+      ])
     }
     
     initDashboard()
