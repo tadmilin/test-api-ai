@@ -283,20 +283,99 @@ export default function CustomPromptPage() {
         throw new Error(errorMsg)
       }
 
-      // ✅ Redirect ทันที (เหมือน text-to-image) - ไม่รอรูปเสร็จ
-      console.log('✅ Processing started, redirecting to dashboard...')
+      // ✅ CRITICAL FIX: รอรูปเสร็จ + เรียก create-template ก่อน redirect
+      setProcessingStatus('✅ เริ่มประมวลผลสำเร็จ! กำลังรอรูป...')
       
-      // Save to localStorage for dashboard polling
+      // Poll จนกว่ารูปจะเสร็จทุกรูป
+      const maxPolls = 60 // 2 minutes
+      let polls = 0
+      
+      while (polls < maxPolls) {
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        polls++
+        
+        const statusRes = await fetch(`/api/generate/process/status?jobId=${jobId}`)
+        if (!statusRes.ok) {
+          console.error('Failed to fetch status')
+          continue
+        }
+        
+        const statusData = await statusRes.json()
+        const completed = statusData.completed || 0
+        const total = statusData.total || selectedImagesMap.size
+        
+        setProcessingStatus(`⏳ ประมวลผลแล้ว ${completed}/${total} รูป...`)
+        
+        if (statusData.allComplete) {
+          console.log('✅ All images completed!')
+          
+          // ถ้ามี template → เรียก create-template ทันที
+          if (enableTemplate && selectedTemplate) {
+            setProcessingStatus('🎨 กำลังสร้าง Template...')
+            
+            try {
+              // Get enhanced image URLs
+              const enhancedImageUrls = (statusData.images || [])
+                .filter((img: { status?: string; url?: string }) => img.status === 'completed' && img.url)
+                .map((img: { url: string }) => img.url)
+              
+              if (enhancedImageUrls.length === 0) {
+                throw new Error('No completed images found')
+              }
+              
+              // Start template generation
+              const templateRes = await fetch('/api/generate/create-template', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  enhancedImageUrls,
+                  templateUrl: selectedTemplate,
+                  jobId: jobId,
+                }),
+              })
+              
+              if (!templateRes.ok) {
+                const errorData = await templateRes.json().catch(() => ({ error: 'Unknown error' }))
+                throw new Error(errorData.error || 'Failed to start template generation')
+              }
+              
+              const { predictionId } = await templateRes.json()
+              console.log('✅ Template started:', predictionId)
+              
+              // Store in localStorage for dashboard to monitor
+              localStorage.setItem('pendingTemplateUrl', selectedTemplate)
+              localStorage.setItem('pendingTemplateJobId', jobId)
+              
+            } catch (templateError) {
+              console.error('❌ Template creation failed:', templateError)
+              setProcessingError(`❌ Template error: ${templateError}`)
+              setProcessingStatus('')
+              setCreating(false)
+              return
+            }
+          }
+          
+          // Redirect to dashboard
+          setProcessingStatus('✅ เสร็จแล้ว! กำลังเปลี่ยนหน้า...')
+          localStorage.setItem('fromCustomPrompt', 'true')
+          localStorage.setItem('processingJobId', jobId)
+          
+          setTimeout(() => {
+            router.push('/dashboard')
+          }, 1500)
+          
+          return
+        }
+      }
+      
+      // Timeout
+      setProcessingError('⏰ Timeout - กรุณาตรวจสอบที่หน้า Dashboard')
       localStorage.setItem('fromCustomPrompt', 'true')
       localStorage.setItem('processingJobId', jobId)
       
-      // ✅ Webhook จะ auto-start template เมื่อรูปเสร็จ - dashboard แค่ poll รอ
-      if (enableTemplate && selectedTemplate) {
-        console.log('✅ Template will be auto-started by webhook after images complete')
-      }
-      
-      // Redirect to dashboard immediately
-      router.push('/dashboard')
+      setTimeout(() => {
+        router.push('/dashboard')
+      }, 2000)
 
     } catch (error) {
       console.error('Error:', error)

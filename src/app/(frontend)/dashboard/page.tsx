@@ -419,41 +419,173 @@ export default function DashboardPage() {
         if (allComplete) {
           console.log(`✅ All images complete for job ${jobId}`)
           
-          // ✅ Check if template generation is in progress (from webhook auto-start)
-          const hasTemplateInProgress = jobData && (
-            (jobData.templateGeneration?.predictionId && jobData.templateGeneration?.status !== 'succeeded') ||
-            (jobData.templatePredictionId && !jobData.templateUrl)
-          )
+          // ✅ Check if template generation is pending (from custom-prompt)
+          let pendingTemplateUrl = localStorage.getItem('pendingTemplateUrl')
+          let pendingTemplateJobId = localStorage.getItem('pendingTemplateJobId')
           
-          if (hasTemplateInProgress) {
-            console.log('🎨 Template generation in progress, continuing to poll...')
+          console.log('🔍 Template check:', {
+            hasPendingUrl: !!pendingTemplateUrl,
+            pendingTemplateJobId,
+            currentJobId: jobId,
+            match: pendingTemplateJobId === jobId,
+          })
+          
+          // ⚠️ ถ้า job นี้ไม่ตรงกับ pendingTemplateJobId → clear localStorage ทันที
+          if (pendingTemplateJobId && pendingTemplateJobId !== jobId) {
+            console.log('⚠️ Clearing stale localStorage (different job)')
+            localStorage.removeItem('pendingTemplateUrl')
+            localStorage.removeItem('pendingTemplateJobId')
+            // Re-fetch after clearing
+            pendingTemplateUrl = null
+            pendingTemplateJobId = null
+          }
+          
+          if (pendingTemplateUrl && pendingTemplateJobId === jobId) {
+            // ✅ FIRST: Clear localStorage to prevent race condition
+            localStorage.removeItem('pendingTemplateUrl')
+            localStorage.removeItem('pendingTemplateJobId')
+            
+            console.log('🎨 Starting template generation...')
             setProcessingStatus('🎨 กำลังสร้าง Template...')
-            continue  // Keep polling until template completes
-          }
-          
-          // ✅ Check if template just completed (has templateUrl but not displayed yet)
-          const hasNewTemplate = jobData?.templateUrl && jobData.templateUrl !== generatedTemplateUrl
-          
-          if (hasNewTemplate && jobData) {
-            console.log('✅ Template completed - showing images + template')
-            setGeneratedTemplateUrl(jobData.templateUrl || null)
-            setProcessingStatus('✅ Template สำเร็จ!')
+            
+            try {
+              // ✅ Fetch job status to get enhanced image URLs (different API than process/status)
+              console.log('📡 Fetching job status for image URLs...')
+              const jobStatusRes = await fetch(`/api/jobs/${jobId}/status`)
+              
+              if (!jobStatusRes.ok) {
+                throw new Error(`Failed to fetch job status: ${jobStatusRes.status}`)
+              }
+              
+              const jobStatusData = await jobStatusRes.json()
+              console.log('📋 Job status response:', jobStatusData)
+              
+              // Get enhanced image URLs from job status API
+              const enhancedImageUrls = (jobStatusData.images || [])
+                .filter((img: { status?: string; url?: string }) => {
+                  console.log(`   Image filter: status=${img.status}, hasUrl=${!!img.url}`)
+                  return img.status === 'completed' && img.url
+                })
+                .map((img: { url: string }) => img.url)
+              
+              console.log(`   ✅ Found ${enhancedImageUrls.length} completed images`)
+              
+              if (enhancedImageUrls.length === 0) {
+                throw new Error('No completed images found with URLs')
+              }
+
+              // Start template generation (async)
+              console.log('🚀 Starting async template generation...')
+              const templateRes = await fetch('/api/generate/create-template', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  enhancedImageUrls,
+                  templateUrl: pendingTemplateUrl,
+                  jobId: jobId,  // ✅ ส่ง jobId เพื่อบันทึก upscale prediction
+                }),
+              })
+
+              if (!templateRes.ok) {
+                const errorData = await templateRes.json().catch(() => ({ error: 'Unknown error' }))
+                throw new Error(errorData.error || 'Failed to start template generation')
+              }
+
+              const { predictionId } = await templateRes.json()
+              console.log(`✅ Template prediction started: ${predictionId}`)
+
+              // localStorage already cleared at the top (before starting)
+
+              // Poll for completion
+              setProcessingStatus('🎨 กำลังสร้าง Template (รอ 30-60 วิ)...')
+              
+              for (let pollCount = 0; pollCount < 60; pollCount++) {
+                await new Promise(resolve => setTimeout(resolve, 2000)) // 2s interval
+                
+                const pollRes = await fetch(`/api/generate/create-template?predictionId=${predictionId}&jobId=${jobId}`) // ✅ ส่ง jobId ด้วย
+                const pollData = await pollRes.json()
+                
+                console.log(`📊 Template poll ${pollCount + 1}: ${pollData.status}`)
+                
+                if (pollData.status === 'succeeded') {
+                  // Save template URL to job
+                  await fetch(`/api/jobs/${jobId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      templateUrl: pollData.imageUrl,
+                    }),
+                  })
+
+                  console.log('✅ Template generated successfully')
+                  setProcessingStatus('✅ Template สำเร็จ!')
+                  
+                  // Set template URL
+                  setGeneratedTemplateUrl(pollData.imageUrl)
+                  console.log('✅ Template URL set:', pollData.imageUrl)
+                  
+                  // Wait 3s to show success message before clearing
+                  await new Promise(resolve => setTimeout(resolve, 3000))
+                  
+                  // Clear banner and refresh dashboard (force to bypass cache)
+                  setProcessingStatus('')
+                  setProcessingJobId(null)
+                  fetchDashboardData(true)
+                  
+                  // localStorage already cleared after prediction started
+                  
+                  return  // Exit function completely (don't fall through to cleanup code)
+                } else if (pollData.status === 'failed' || pollData.status === 'canceled') {
+                  // localStorage already cleared
+                  
+                  throw new Error(pollData.error || 'Template generation failed')
+                }
+                
+                // Update status with progress
+                setProcessingStatus(`🎨 กำลังสร้าง Template (${pollCount * 2}s)...`)
+              }
+              
+            } catch (error) {
+              console.error('❌ Template error:', error)
+              setProcessingStatus(`❌ Template error: ${error} - กดรีเฟรชหรือเจนใหม่`)
+              
+              // DON'T auto-clear - let user refresh or retry
+              // Keep banner visible with error message
+              
+              // localStorage already cleared at prediction start (or never started)
+              // Only clear if prediction never started (error before POST)
+              localStorage.removeItem('pendingTemplateUrl')
+              localStorage.removeItem('pendingTemplateJobId')
+              
+              // Refresh to show failed status in job list (force)
+              fetchDashboardData(true)
+              break
+            }
+            
+            // ✅ Success cases already returned above
+            // If we reach here, it's an error case that broke from catch block
+            // Error banner should remain visible (already set in catch)
+            break
           } else {
-            console.log('✅ Images completed - showing images')
+            // ✅ Stop polling after allComplete (if no template was needed)
+            console.log('✅ Text-to-Image completed - showing images')
+            
+            // ✅ CRITICAL: Set images and reviewMode FIRST
+            if (statusData.images && statusData.images.length > 0) {
+              setEnhancedImages(statusData.images)
+              setCurrentJobId(jobId)
+              setReviewMode(true)  // ✅ แสดงรูปทันที
+            }
+            
+            // ✅ Update job list to show "completed" status (force refresh to bypass cache)
+            fetchDashboardData(true).catch(err => console.error('Failed to refresh dashboard:', err))
+            
+            // ✅ Mark as successful completion (for finally block)
             setProcessingStatus('✅ ประมวลผลสำเร็จ!')
+            
+            // ✅ Break immediately to stop polling
+            break
           }
-          
-          // ✅ Always display enhanced images when allComplete
-          if (statusData.images && statusData.images.length > 0) {
-            setEnhancedImages(statusData.images)
-            setCurrentJobId(jobId)
-            setReviewMode(true)
-          }
-          
-          // Update job list (force refresh to bypass cache)
-          fetchDashboardData(true).catch(err => console.error('Failed to refresh dashboard:', err))
-          
-          break  // Stop polling
         }
       } catch (error) {
         console.error('Poll error:', error)
