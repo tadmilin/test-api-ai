@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { put, del } from '@vercel/blob'
 import Replicate from 'replicate'
 import { downloadDriveFile, extractDriveFileId } from '@/utilities/downloadDriveFile'
+import { uploadBufferToCloudinary } from '@/utilities/cloudinaryUpload'
 
 // ✅ Force Node.js runtime
 export const runtime = 'nodejs'
@@ -15,35 +15,32 @@ const replicate = new Replicate({
 
 /**
  * Convert any URL to a stable direct image URL
- * - Google Drive URLs → Download and upload to Blob
- * - Vercel Blob URLs → Use as-is
+ * - Google Drive URLs → Download and upload to Cloudinary
+ * - Cloudinary URLs → Use as-is
  * - Other URLs → Use as-is (assume direct)
  */
 async function ensureDirectImageUrl(url: string, label: string): Promise<string> {
   const driveFileId = extractDriveFileId(url)
   
   if (driveFileId) {
-    console.log(`   📂 ${label} is Google Drive → Converting to Blob...`)
+    console.log(`   📂 ${label} is Google Drive → Converting to Cloudinary...`)
     
     // Download from Drive
     const buffer = await downloadDriveFile(driveFileId)
     console.log(`      Downloaded ${Math.round(buffer.length / 1024)}KB`)
     
-    // Upload to Vercel Blob (temporary, public access)
-    const blob = await put(
-      `temp-${label.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}.png`,
+    // Upload to Cloudinary (permanent, public access)
+    const cloudinaryUrl = await uploadBufferToCloudinary(
       buffer,
-      {
-        access: 'public',
-        contentType: 'image/png',
-      }
+      'template-sources',
+      `temp-${label.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`
     )
     
-    console.log(`      ✅ Converted to Blob: ${blob.url.substring(0, 60)}...`)
-    return blob.url
+    console.log(`      ✅ Converted to Cloudinary: ${cloudinaryUrl.substring(0, 60)}...`)
+    return cloudinaryUrl
   }
   
-  // Already a direct URL (Vercel Blob, Replicate, etc.)
+  // Already a direct URL (Cloudinary, Replicate, etc.)
   console.log(`   ✅ ${label} is already direct URL`)
   return url
 }
@@ -211,11 +208,12 @@ export async function GET(request: NextRequest) {
       const buffer = await response.arrayBuffer()
       console.log(`   Downloaded ${Math.round(buffer.byteLength / 1024)}KB`)
 
-      // Upload temp blob
-      const tempBlob = await put(`template-temp-${Date.now()}.png`, buffer, {
-        access: 'public',
-        contentType: 'image/png',
-      })
+      // Upload to Cloudinary
+      const cloudinaryUrl = await uploadBufferToCloudinary(
+        Buffer.from(buffer),
+        'template-temp',
+        `template-temp-${Date.now()}`
+      )
 
       console.log(`📤 Starting upscale...`)
 
@@ -225,7 +223,7 @@ export async function GET(request: NextRequest) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          imageUrl: tempBlob.url,
+          imageUrl: cloudinaryUrl, // ✅ Use Cloudinary URL
           scale: 2,
         }),
       })
@@ -234,7 +232,7 @@ export async function GET(request: NextRequest) {
         console.error('❌ Upscale failed, using original')
         return NextResponse.json({
           status: 'succeeded',
-          imageUrl: tempBlob.url,
+          imageUrl: cloudinaryUrl, // ✅ Return Cloudinary URL
         })
       }
 
@@ -306,12 +304,7 @@ export async function GET(request: NextRequest) {
               }
             }
             
-            // Delete temp
-            try {
-              await del(tempBlob.url)
-            } catch (delError) {
-              console.warn(`⚠️ Failed to delete temp:`, delError)
-            }
+            // ✅ Cloudinary handles cleanup automatically
             
             return NextResponse.json({
               status: 'succeeded',
@@ -323,7 +316,7 @@ export async function GET(request: NextRequest) {
             console.error('❌ Upscale failed')
             return NextResponse.json({
               status: 'succeeded',
-              imageUrl: tempBlob.url,
+              imageUrl: cloudinaryUrl, // ✅ Use Cloudinary URL
             })
           }
         }
@@ -333,7 +326,7 @@ export async function GET(request: NextRequest) {
       console.warn('⚠️ Upscale timeout')
       return NextResponse.json({
         status: 'succeeded',
-        imageUrl: tempBlob.url,
+        imageUrl: cloudinaryUrl, // ✅ Use Cloudinary URL
       })
     }
 
