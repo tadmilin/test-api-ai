@@ -569,28 +569,19 @@ export default function DashboardPage() {
           } else {
             // ✅ Stop polling after allComplete (if no template was needed)
             console.log('✅ Text-to-Image completed - showing images')
-            setProcessingStatus('✅ ประมวลผลสำเร็จ!')
             
-            // ✅ CRITICAL: Break loop immediately to stop polling
-            break
-            
-            // Set images to display
+            // ✅ CRITICAL: Set images and reviewMode FIRST
             if (statusData.images && statusData.images.length > 0) {
               setEnhancedImages(statusData.images)
               setCurrentJobId(jobId)
-              setReviewMode(true)  // ✅ แสดงรูป
+              setReviewMode(true)  // ✅ แสดงรูปทันที
             }
             
-            // Wait 3s to show success message before clearing banner
-            await new Promise(resolve => setTimeout(resolve, 3000))
+            // ✅ Mark as successful completion (for finally block)
+            setProcessingStatus('✅ ประมวลผลสำเร็จ!')
             
-            setProcessingStatus('')
-            setProcessingJobId(null)
-            
-            // ✅ Refresh dashboard to update job list (but reviewMode stays true)
-            fetchDashboardData()
-            
-            return  // Exit function completely
+            // ✅ Break immediately to stop polling
+            break
           }
         }
       } catch (error) {
@@ -616,10 +607,16 @@ export default function DashboardPage() {
         setProcessingStatus('❌ เกิดข้อผิดพลาด - กดรีเฟรชหน้า')
       }
     } finally {
-      // ✅ CRITICAL: Always cleanup and reset state
+      // ✅ Cleanup polling state
       abortController.abort() // Cancel any pending fetches
       isPollingRef.current = false
       console.log(`✅ Polling cleanup completed for job ${jobId}`)
+      
+      // ✅ Clear banner after delay (only if success)
+      setTimeout(() => {
+        setProcessingStatus('')
+        setProcessingJobId(null)
+      }, 3000)
     }
   }, [generatedTemplateUrl, fetchDashboardData]) // ✅ Dependencies for useCallback
 
