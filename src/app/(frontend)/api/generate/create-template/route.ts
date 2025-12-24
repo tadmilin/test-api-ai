@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Replicate from 'replicate'
+import sharp from 'sharp'
 import { downloadDriveFile, extractDriveFileId } from '@/utilities/downloadDriveFile'
 import { uploadBufferToCloudinary } from '@/utilities/cloudinaryUpload'
 
@@ -212,22 +213,127 @@ export async function GET(request: NextRequest) {
     
     console.log(`📊 Template prediction ${predictionId}: ${prediction.status}`)
 
-    // ⚠️ DEPRECATED: This polling path should not be used anymore
-    // Webhook handles everything now. This is kept for backward compatibility only.
+    // ✅ FALLBACK: Polling path handles resize/upscale if webhook fails
     if (prediction.status === 'succeeded' && prediction.output) {
-      console.warn('⚠️ WARNING: Using deprecated polling path - webhook should handle this!')
-      console.warn('⚠️ This path will be removed in future versions')
+      console.log('📦 Polling detected completion - processing template...')
       
-      // Just return the output URL without processing
       const imageUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
       
-      return NextResponse.json({
-        status: 'succeeded',
-        imageUrl: imageUrl,
-        warning: 'Processed by deprecated polling path - use webhook instead'
+      if (!imageUrl) {
+        throw new Error('No output from prediction')
+      }
+
+      // Fetch job to get outputSize
+      const { getPayload } = await import('payload')
+      const configPromise = await import('@payload-config')
+      const payload = await getPayload({ config: configPromise.default })
+      
+      const job = await payload.findByID({
+        collection: 'jobs',
+        id: jobId || '',
       })
       
-      /* REMOVED: Upscale logic moved to webhook
+      const outputSize = job.outputSize || '1:1-2K'
+      console.log(`📐 Template outputSize: ${outputSize}`)
+      
+      // Download template
+      console.log(`📥 Downloading template from Replicate...`)
+      const imageResponse = await fetch(imageUrl as string)
+      const imageBuffer = await imageResponse.arrayBuffer()
+      
+      // ✅ Check outputSize - upscale if 1:1, resize otherwise
+      if (outputSize === '1:1-2K') {
+        console.log('[Polling] 🔍 1:1-2K detected - starting upscale...')
+        
+        const tempUrl = await uploadBufferToCloudinary(
+          Buffer.from(imageBuffer),
+          `jobs/${job.id}`,
+          `template-temp-${Date.now()}`
+        )
+        
+        const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
+        const upscaleRes = await fetch(`${baseUrl}/api/generate/upscale`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageUrl: tempUrl,
+            scale: 2,
+          }),
+        })
+        
+        if (!upscaleRes.ok) {
+          throw new Error('Failed to start upscale')
+        }
+        
+        const upscaleData = await upscaleRes.json()
+        console.log('[Polling] ✅ Upscale started:', upscaleData.predictionId)
+        
+        await payload.update({
+          collection: 'jobs',
+          id: job.id,
+          data: {
+            templateGeneration: {
+              predictionId: null,
+              upscalePredictionId: upscaleData.predictionId,
+              status: 'processing',
+              url: null,
+            },
+          },
+        })
+        
+        return NextResponse.json({
+          status: 'processing',
+          message: 'Upscale started',
+          upscalePredictionId: upscaleData.predictionId,
+        })
+        
+      } else {
+        // ✅ Resize for 3:4 or 9:16
+        const OUTPUT_SIZE_MAP: Record<string, { width: number; height: number }> = {
+          '3:4': { width: 1080, height: 1350 },
+          '3:4-2K': { width: 1080, height: 1350 },
+          '9:16': { width: 1080, height: 1920 },
+          '9:16-2K': { width: 1080, height: 1920 },
+        }
+        
+        const targetSize = OUTPUT_SIZE_MAP[outputSize] || { width: 1080, height: 1350 }
+        console.log(`[Polling] 📐 Resizing to ${targetSize.width}×${targetSize.height}`)
+        
+        const resizedBuffer = await sharp(Buffer.from(imageBuffer))
+          .resize(targetSize.width, targetSize.height, { fit: 'cover' })
+          .jpeg({ quality: 90, mozjpeg: true })
+          .toBuffer()
+        
+        const cloudinaryUrl = await uploadBufferToCloudinary(
+          resizedBuffer,
+          `jobs/${job.id}`,
+          `template-${targetSize.width}x${targetSize.height}`
+        )
+        
+        console.log('[Polling] ✅ Template uploaded:', cloudinaryUrl)
+        
+        await payload.update({
+          collection: 'jobs',
+          id: job.id,
+          data: {
+            templateGeneration: {
+              predictionId: null,
+              upscalePredictionId: null,
+              status: 'succeeded',
+              url: cloudinaryUrl,
+            },
+            templateUrl: cloudinaryUrl,
+          },
+        })
+        
+        console.log('[Polling] ✅ Template completed')
+        return NextResponse.json({
+          status: 'succeeded',
+          imageUrl: cloudinaryUrl,
+        })
+      }
+      
+      /* OLD CODE REMOVED:
       const imageUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
       
       if (!imageUrl) {
