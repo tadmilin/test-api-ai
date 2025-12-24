@@ -100,6 +100,9 @@ export async function POST(req: Request) {
           const imageResponse = await fetch(replicateUrl)
           const imageBuffer = await imageResponse.arrayBuffer()
           
+          // ✅ DEBUG: Check outputSize
+          console.log(`[Webhook] 📐 job.outputSize = "${job.outputSize}" (type: ${typeof job.outputSize})`)
+          
           // ✅ ถ้า 1:1 → upscale, ถ้าอื่น → resize
           if (job.outputSize === '1:1-2K') {
             console.log('[Webhook] 🔍 Starting upscale to 2048x2048...')
@@ -458,8 +461,9 @@ export async function POST(req: Request) {
             
             console.log(`[Webhook] 🔍 Debug resize: jobId=${job.id}, outputSize=${job.outputSize}, targetSize=${JSON.stringify(targetSize)}, isMainPrediction=${isMainPrediction}, shouldUpscale=${shouldUpscale}, isCustomPrompt=${isCustomPrompt}`)
             
-            if (targetSize) {
-              // Resize to target dimensions (ทำทั้ง main และ upscale prediction)
+            // ✅ Skip resize for custom-prompt (will resize template instead)
+            if (targetSize && !isCustomPrompt) {
+              // Resize to target dimensions (เฉพาะ text-to-image)
               console.log(`[Webhook] 📐 RESIZING to ${targetSize.width}×${targetSize.height}...`)
               optimizedBuffer = await sharp(Buffer.from(imageBuffer))
                 .resize(targetSize.width, targetSize.height, { fit: 'cover' })
