@@ -334,6 +334,7 @@ export async function GET(request: NextRequest) {
               url: cloudinaryUrl,
             },
             templateUrl: cloudinaryUrl,
+            status: 'completed', // ✅ Mark job as completed
           },
         })
         

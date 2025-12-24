@@ -185,7 +185,7 @@ export async function POST(req: Request) {
             
             console.log('[Webhook] ✅ Template uploaded:', cloudinaryUrl)
             
-            // Update job with template URL
+            // Update job with template URL and mark as completed
             await payload.update({
               collection: 'jobs',
               id: job.id,
@@ -197,6 +197,7 @@ export async function POST(req: Request) {
                   url: cloudinaryUrl,
                 },
                 templateUrl: cloudinaryUrl,
+                status: 'completed', // ✅ Mark job as completed
               },
             })
             
@@ -277,7 +278,7 @@ export async function POST(req: Request) {
           
           console.log('[Webhook] ✅ Template uploaded:', cloudinaryUrl)
           
-          // Update job with template URL
+          // Update job with template URL and mark as completed
           await payload.update({
             collection: 'jobs',
             id: job.id,
@@ -289,6 +290,7 @@ export async function POST(req: Request) {
                 url: cloudinaryUrl,
               },
               templateUrl: cloudinaryUrl,
+              status: 'completed', // ✅ Mark job as completed
             },
           })
           
