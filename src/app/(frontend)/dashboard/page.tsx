@@ -99,6 +99,7 @@ export default function DashboardPage() {
   // Auth state
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
+  const [dashboardDataCache, setDashboardDataCache] = useState<{ timestamp: number; data?: any } | null>(null)
   
   // Stats & Jobs
   const [stats, setStats] = useState<JobStats>({
@@ -625,6 +626,18 @@ export default function DashboardPage() {
   // Resume processing for any jobs stuck in processing/enhancing state
   const resumeProcessingJobs = useCallback(async () => {
     try {
+      // ✅ OPTIMIZATION: Check recentJobs first to avoid unnecessary queries
+      const hasProcessingJobs = recentJobs.some((j: Job) => 
+        j.status === 'processing' || j.status === 'enhancing'
+      )
+      
+      if (!hasProcessingJobs) {
+        console.log('⚡ No processing jobs found in cache, skipping resume check')
+        return
+      }
+      
+      console.log('🔍 Found processing jobs, checking status...')
+      
       // Check BOTH 'processing' AND 'enhancing' status AND active template jobs
       const [processingRes, enhancingRes, completedRes] = await Promise.all([
         fetch('/api/jobs?status=processing'),
@@ -717,7 +730,7 @@ export default function DashboardPage() {
     } catch (error) {
       console.error('Error resuming jobs:', error)
     }
-  }, [pollJobStatus]) // ✅ Now pollJobStatus is defined above
+  }, [pollJobStatus, recentJobs]) // ✅ Add recentJobs dependency
 
   useEffect(() => {
     if (!currentUser) return
@@ -780,9 +793,13 @@ export default function DashboardPage() {
   // ✅ Poll storage status every 60 seconds (ลดเหลือ 1 นาที)
   useEffect(() => {
     if (currentUser) {
-      fetchStorageStatus()
+      // ✅ Debounce initial fetch by 5 seconds to reduce load spike
+      const initialTimer = setTimeout(fetchStorageStatus, 5000)
       const interval = setInterval(fetchStorageStatus, 60000)  // ✅ เปลี่ยนเป็น 60 วินาที
-      return () => clearInterval(interval)
+      return () => {
+        clearTimeout(initialTimer)
+        clearInterval(interval)
+      }
     }
   }, [currentUser, fetchStorageStatus])
 
@@ -818,11 +835,21 @@ export default function DashboardPage() {
   
   async function fetchDashboardData() {
     try {
+      // ✅ Cache: Skip if fetched within last 10 seconds
+      const now = Date.now()
+      if (dashboardDataCache && (now - dashboardDataCache.timestamp) < 10000) {
+        console.log('⚡ Using cached dashboard data')
+        return
+      }
+      
       setLoading(true)
 
       const jobsRes = await fetch('/api/jobs?limit=100')
       const jobsData = await jobsRes.json()
       const jobs = jobsData.jobs || []
+      
+      // ✅ Update cache
+      setDashboardDataCache({ timestamp: now, data: jobsData })
 
       // Calculate stats (รวม enhancing เข้ากับ processing)
       const newStats: JobStats = {
