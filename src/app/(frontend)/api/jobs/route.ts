@@ -78,6 +78,9 @@ export async function POST(request: NextRequest) {
       targetPlatforms,
       referenceImageUrls,
       customPrompt,
+      outputSize,
+      templateUrl,
+      templateType,
       status = 'pending',
     } = body
 
@@ -125,7 +128,9 @@ export async function POST(request: NextRequest) {
         customPrompt: customPrompt || undefined,
         targetPlatforms: targetPlatforms || ['facebook', 'instagram_feed'],
         referenceImageUrls: referenceImageUrls || [],
-        outputSize: '1:1-2K', // Default output size
+        outputSize: outputSize || '1:1-2K',
+        templateUrl: templateUrl || undefined,
+        templateType: templateType || undefined,
         status: status as 'pending' | 'processing' | 'enhancing' | 'review_pending' | 'style_selection' | 'generating_template' | 'completed' | 'failed' | 'approved' | 'rejected',
         createdBy: currentUser?.id || undefined,
       },
