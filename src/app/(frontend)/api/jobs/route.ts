@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
         targetPlatforms: targetPlatforms || ['facebook', 'instagram_feed'],
         referenceImageUrls: referenceImageUrls || [],
         outputSize: outputSize || '1:1-2K',
-        templateUrl: templateUrl || undefined,
+        // Don't save templateUrl here - will be set after template generation
         status: status as 'pending' | 'processing' | 'enhancing' | 'review_pending' | 'style_selection' | 'generating_template' | 'completed' | 'failed' | 'approved' | 'rejected',
         createdBy: currentUser?.id || undefined,
       },
