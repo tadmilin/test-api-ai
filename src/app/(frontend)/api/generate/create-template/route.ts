@@ -243,8 +243,15 @@ export async function GET(request: NextRequest) {
       
       // ✅ Check outputSize - upscale if 1:1, resize otherwise
       if (outputSize === '1:1-2K') {
-        // ⚠️ Guard: ถ้า upscale ยิงไปแล้ว → skip ไม่งั้นจะยิงซ้ำทุกครั้งที่ frontend poll!
-        const templateGen = job.templateGeneration || {}
+        // ⚠️ Guard: Refetch job ก่อนเช็ค (ป้องกัน race condition)
+        if (!jobId) throw new Error('jobId is required')
+        
+        const latestJob = await payload.findByID({
+          collection: 'jobs',
+          id: jobId,
+        })
+        const templateGen = latestJob.templateGeneration || {}
+        
         if (templateGen.upscalePredictionId) {
           console.log('[Polling] ⏭️ Upscale already in progress - skipping duplicate')
           return NextResponse.json({
@@ -256,9 +263,23 @@ export async function GET(request: NextRequest) {
         
         console.log('[Polling] 🔍 1:1-2K detected - starting upscale...')
         
+        // ✅ ATOMIC LOCK: บันทึก placeholder ก่อนเรียก API
+        const placeholderPredictionId = `pending-${Date.now()}`
+        await payload.update({
+          collection: 'jobs',
+          id: jobId,
+          data: {
+            templateGeneration: {
+              ...templateGen,
+              upscalePredictionId: placeholderPredictionId,
+            },
+          },
+        })
+        console.log(`[Polling] 🔒 Locked with placeholder: ${placeholderPredictionId}`)
+        
         const tempUrl = await uploadBufferToCloudinary(
           Buffer.from(imageBuffer),
-          `jobs/${job.id}`,
+          `jobs/${jobId}`,
           `template-temp-${Date.now()}`
         )
         
@@ -279,13 +300,14 @@ export async function GET(request: NextRequest) {
         const upscaleData = await upscaleRes.json()
         console.log('[Polling] ✅ Upscale started:', upscaleData.predictionId)
         
+        // ✅ Update: replace placeholder with real predictionId
         await payload.update({
           collection: 'jobs',
-          id: job.id,
+          id: jobId,
           data: {
             templateGeneration: {
               predictionId: null,
-              upscalePredictionId: upscaleData.predictionId,
+              upscalePredictionId: upscaleData.predictionId, // แทนที่ placeholder
               status: 'processing',
               url: null,
             },

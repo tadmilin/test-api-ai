@@ -38,18 +38,39 @@ export async function POST(request: NextRequest) {
     console.log(`🔍 Starting upscale for: ${imageUrl.substring(0, 80)}...`)
     console.log(`   Scale factor: ${finalScale}x`)
 
-    // ⚠️ FAST PATH: ส่ง URL ตรงไปเลย ไม่ต้อง normalize (ให้เร็ว)
-    // Normalization ไม่จำเป็นถ้า input มาจาก nano-banana-pro แล้ว (เป็น 2K อยู่แล้ว)
+    // ⚠️ MUST NORMALIZE: GPU รองรับแค่ 2.09M pixels (1447x1447)
+    // Nano-banana output = 2048x2048 (4.19M pixels) → เกิน!
+    // Solution: Resize to 1024x1024 → scale 2x → 2048x2048 final
+    console.log(`📥 Downloading and normalizing to 1024x1024...`)
+    
+    const res = await fetch(imageUrl)
+    if (!res.ok) throw new Error(`Download failed: ${res.status}`)
+    
+    const inBuf = Buffer.from(await res.arrayBuffer())
+    
+    // Resize to 1024x1024 (เร็วสุด ไม่ต้องเช็คอะไร)
+    const normalized = await sharp(inBuf)
+      .resize(1024, 1024, { fit: 'cover' })
+      .jpeg({ quality: 95, mozjpeg: true })
+      .toBuffer()
+
+    // Upload ไว้ชั่วคราว
+    const normalizedUrl = await uploadBufferToCloudinary(
+      normalized,
+      'temp-normalize',
+      `norm-${Date.now()}`
+    )
+    
+    console.log(`✅ Normalized → ${normalizedUrl}`)
+
     const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
     const webhookUrl = `${baseUrl}/api/webhooks/replicate`
-    
-    console.log(`📡 Webhook URL: ${webhookUrl}`)
     
     const prediction = await replicate.predictions.create({
       model: 'nightmareai/real-esrgan',
       input: {
-        image: imageUrl, // ✅ ส่ง URL ตรงไปเลย (เร็ว!)
-        scale: finalScale,
+        image: normalizedUrl, // ✅ ส่ง URL ที่ normalize แล้ว (1024x1024)
+        scale: finalScale, // 2x → 2048x2048
         face_enhance: false,
       },
       webhook: webhookUrl,
@@ -57,9 +78,7 @@ export async function POST(request: NextRequest) {
     })
 
     console.log(`✅ Upscale prediction started: ${prediction.id}`)
-    console.log(`🔔 Webhook URL: ${webhookUrl}`)
 
-    // ✅ ตอบกลับทันที!
     return NextResponse.json({
       predictionId: prediction.id,
       status: prediction.status,

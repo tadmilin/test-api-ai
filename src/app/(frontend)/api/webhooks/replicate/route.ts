@@ -119,6 +119,20 @@ export async function POST(req: Request) {
             
             console.log('[Webhook] 🔍 Starting upscale to 2048x2048...')
             
+            // ✅ ATOMIC LOCK: บันทึก placeholder ก่อนเรียก API (ป้องกัน race condition)
+            const placeholderPredictionId = `pending-${Date.now()}`
+            await payload.update({
+              collection: 'jobs',
+              id: job.id,
+              data: {
+                templateGeneration: {
+                  ...latestTemplateGen,
+                  upscalePredictionId: placeholderPredictionId,
+                },
+              },
+            })
+            console.log(`[Webhook] 🔒 Locked with placeholder: ${placeholderPredictionId}`)
+            
             // Upload temp to Cloudinary for upscale
             const tempUrl = await uploadBufferToCloudinary(
               Buffer.from(imageBuffer),
@@ -144,14 +158,14 @@ export async function POST(req: Request) {
             const upscaleData = await upscaleRes.json()
             console.log('[Webhook] ✅ Upscale started:', upscaleData.predictionId)
             
-            // Update job: set upscalePredictionId
+            // ✅ Update job: replace placeholder with real predictionId
             await payload.update({
               collection: 'jobs',
               id: job.id,
               data: {
                 templateGeneration: {
                   predictionId: null,
-                  upscalePredictionId: upscaleData.predictionId,
+                  upscalePredictionId: upscaleData.predictionId, // แทนที่ placeholder
                   status: 'processing',
                   url: null,
                 },
