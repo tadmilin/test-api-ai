@@ -584,6 +584,7 @@ export async function POST(req: Request) {
                 enhancedImageUrls,
                 templateUrl: job.templateUrl,
                 jobId: job.id,
+                outputSize: job.outputSize, // ✅ ส่ง outputSize ไปด้วยเพื่อป้องกัน race condition
               }),
             })
             

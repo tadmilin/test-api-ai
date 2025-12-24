@@ -212,8 +212,22 @@ export async function GET(request: NextRequest) {
     
     console.log(`📊 Template prediction ${predictionId}: ${prediction.status}`)
 
-    // If succeeded, download + upscale
+    // ⚠️ DEPRECATED: This polling path should not be used anymore
+    // Webhook handles everything now. This is kept for backward compatibility only.
     if (prediction.status === 'succeeded' && prediction.output) {
+      console.warn('⚠️ WARNING: Using deprecated polling path - webhook should handle this!')
+      console.warn('⚠️ This path will be removed in future versions')
+      
+      // Just return the output URL without processing
+      const imageUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
+      
+      return NextResponse.json({
+        status: 'succeeded',
+        imageUrl: imageUrl,
+        warning: 'Processed by deprecated polling path - use webhook instead'
+      })
+      
+      /* REMOVED: Upscale logic moved to webhook
       const imageUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
       
       if (!imageUrl) {
@@ -239,117 +253,7 @@ export async function GET(request: NextRequest) {
 
       console.log(`📤 Starting upscale...`)
 
-      // Start upscale
-      const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
-      const upscaleRes = await fetch(`${baseUrl}/api/generate/upscale`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageUrl: cloudinaryUrl, // ✅ Use Cloudinary URL
-          scale: 2,
-        }),
-      })
-
-      if (!upscaleRes.ok) {
-        console.error('❌ Upscale failed, using original')
-        return NextResponse.json({
-          status: 'succeeded',
-          imageUrl: cloudinaryUrl, // ✅ Return Cloudinary URL
-        })
-      }
-
-      const upscaleData = await upscaleRes.json()
-      const upscalePredictionId = upscaleData.predictionId
-      console.log(`✅ Upscale started: ${upscalePredictionId}`)
-
-      // Save upscale prediction ID
-      if (jobId) {
-        try {
-          const { getPayload } = await import('payload')
-          const configPromise = await import('@payload-config')
-          const payload = await getPayload({ config: configPromise.default })
-          
-          await payload.update({
-            collection: 'jobs',
-            id: jobId,
-            data: {
-              templateGeneration: {
-                predictionId: null,
-                upscalePredictionId: upscalePredictionId,
-                status: 'processing',
-                url: null,
-              },
-            },
-          })
-          console.log(`✅ Saved upscale prediction ID`)
-        } catch (dbError) {
-          console.warn('⚠️ Failed to save:', dbError)
-        }
-      }
-
-      // Poll upscale
-      for (let i = 0; i < 30; i++) {
-        await new Promise(resolve => setTimeout(resolve, 2000))
-        
-        const upscalePollRes = await fetch(`${baseUrl}/api/generate/upscale?predictionId=${upscalePredictionId}`)
-        
-        if (upscalePollRes.ok) {
-          const upscalePollData = await upscalePollRes.json()
-          console.log(`📊 Upscale poll ${i + 1}: ${upscalePollData.status}`)
-          
-          if (upscalePollData.status === 'succeeded' && upscalePollData.imageUrl) {
-            console.log(`✅ Template complete: ${upscalePollData.imageUrl}`)
-            
-            // Save final URL
-            if (jobId) {
-              try {
-                const { getPayload } = await import('payload')
-                const configPromise = await import('@payload-config')
-                const payload = await getPayload({ config: configPromise.default })
-                
-                await payload.update({
-                  collection: 'jobs',
-                  id: jobId,
-                  data: {
-                    templateGeneration: {
-                      predictionId: null,
-                      upscalePredictionId: null,
-                      status: 'succeeded',
-                      url: upscalePollData.imageUrl,
-                    },
-                    templateUrl: upscalePollData.imageUrl, // legacy compatibility
-                  },
-                })
-                console.log(`✅ Saved final template URL`)
-              } catch (dbError) {
-                console.warn('⚠️ Failed to save:', dbError)
-              }
-            }
-            
-            // ✅ Cloudinary handles cleanup automatically
-            
-            return NextResponse.json({
-              status: 'succeeded',
-              imageUrl: upscalePollData.imageUrl,
-            })
-          }
-          
-          if (upscalePollData.status === 'failed') {
-            console.error('❌ Upscale failed')
-            return NextResponse.json({
-              status: 'succeeded',
-              imageUrl: cloudinaryUrl, // ✅ Use Cloudinary URL
-            })
-          }
-        }
-      }
-
-      // Timeout
-      console.warn('⚠️ Upscale timeout')
-      return NextResponse.json({
-        status: 'succeeded',
-        imageUrl: cloudinaryUrl, // ✅ Use Cloudinary URL
-      })
+      */
     }
 
     // Return current status
