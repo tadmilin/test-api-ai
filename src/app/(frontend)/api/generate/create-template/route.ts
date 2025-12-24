@@ -243,6 +243,17 @@ export async function GET(request: NextRequest) {
       
       // ✅ Check outputSize - upscale if 1:1, resize otherwise
       if (outputSize === '1:1-2K') {
+        // ⚠️ Guard: ถ้า upscale ยิงไปแล้ว → skip ไม่งั้นจะยิงซ้ำทุกครั้งที่ frontend poll!
+        const templateGen = job.templateGeneration || {}
+        if (templateGen.upscalePredictionId) {
+          console.log('[Polling] ⏭️ Upscale already in progress - skipping duplicate')
+          return NextResponse.json({
+            status: 'processing',
+            message: 'Upscale already in progress',
+            upscalePredictionId: templateGen.upscalePredictionId,
+          })
+        }
+        
         console.log('[Polling] 🔍 1:1-2K detected - starting upscale...')
         
         const tempUrl = await uploadBufferToCloudinary(

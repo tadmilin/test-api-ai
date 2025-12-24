@@ -105,6 +105,12 @@ export async function POST(req: Request) {
           
           // ✅ ถ้า 1:1 → upscale, ถ้าอื่น → resize
           if (job.outputSize === '1:1-2K') {
+            // ⚠️ Guard: ถ้า polling path ยิง upscale ไปแล้ว → skip
+            if (templateGen.upscalePredictionId) {
+              console.log('[Webhook] ⏭️ Upscale already started by polling - skipping duplicate')
+              return NextResponse.json({ received: true, jobId: job.id, message: 'Upscale already in progress' })
+            }
+            
             console.log('[Webhook] 🔍 Starting upscale to 2048x2048...')
             
             // Upload temp to Cloudinary for upscale
