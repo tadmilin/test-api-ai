@@ -210,21 +210,39 @@ export default function DashboardPage() {
     isPollingRef.current = true
     console.log(`🔄 Starting polling for job ${jobId}`)
     
-    const maxPolls = 60  // ✅ ลดเหลือ 2 นาที (60 * 2s = 120s)
+    // ✅ AbortController for cleanup
+    const abortController = new AbortController()
+    
+    const maxPolls = 60  // 2 นาที (60 * 2s = 120s)
     let polls = 0
+    let consecutiveErrors = 0
     
     try {
-    while (polls < maxPolls) {
-      await new Promise(resolve => setTimeout(resolve, 2000)) // ลดเหลือ 2 วินาที
+    while (polls < maxPolls && !abortController.signal.aborted) {
+      await new Promise(resolve => setTimeout(resolve, 2000))
       polls++
       
+      // ✅ Check if component unmounted
+      if (abortController.signal.aborted) {
+        console.log('⚠️ Polling aborted (component unmounted)')
+        break
+      }
+      
       try {
-        const statusRes = await fetch(`/api/generate/process/status?jobId=${jobId}`)
+        const statusRes = await fetch(`/api/generate/process/status?jobId=${jobId}`, {
+          signal: abortController.signal
+        })
         if (!statusRes.ok) {
           console.error(`❌ Fetch failed: ${statusRes.status}`)
+          consecutiveErrors++
+          if (consecutiveErrors >= 3) {
+            console.error('❌ Too many errors, stopping poll')
+            break
+          }
           continue
         }
         
+        consecutiveErrors = 0 // Reset on success
         const statusData = await statusRes.json()
         console.log(`✅ Fetch success:`, statusData)
         
@@ -276,7 +294,9 @@ export default function DashboardPage() {
         let templateGen: { predictionId?: string; upscalePredictionId?: string; status?: string; url?: string } = {}
         
         try {
-          const jobRes = await fetch(`/api/jobs/${jobId}`)
+          const jobRes = await fetch(`/api/jobs/${jobId}`, {
+            signal: abortController.signal,
+          })
           if (jobRes.ok) {
             jobData = await jobRes.json()
             if (jobData) {
@@ -304,7 +324,9 @@ export default function DashboardPage() {
           setProcessingStatus(`🎨 กำลังสร้าง Template (รอ 30-60 วิ)...`)
           
           try {
-            const templateRes = await fetch(`/api/generate/create-template?predictionId=${templatePredictionId}&jobId=${jobId}`)
+            const templateRes = await fetch(`/api/generate/create-template?predictionId=${templatePredictionId}&jobId=${jobId}`, {
+              signal: abortController.signal,
+            })
             if (templateRes.ok) {
               const templateData = await templateRes.json()
               console.log(`📊 Template status: ${templateData.status}`)
@@ -548,6 +570,9 @@ export default function DashboardPage() {
             console.log('✅ Text-to-Image completed - showing images')
             setProcessingStatus('✅ ประมวลผลสำเร็จ!')
             
+            // ✅ CRITICAL: Break loop immediately to stop polling
+            break
+            
             // Set images to display
             if (statusData.images && statusData.images.length > 0) {
               setEnhancedImages(statusData.images)
@@ -581,10 +606,19 @@ export default function DashboardPage() {
       fetchDashboardData()  // Refresh to show current status in job list
     }
     
+    } catch (error) {
+      // ✅ Handle AbortError gracefully
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.log('🛑 Polling aborted (component unmounted)')
+      } else {
+        console.error('❌ Fatal polling error:', error)
+        setProcessingStatus('❌ เกิดข้อผิดพลาด - กดรีเฟรชหน้า')
+      }
     } finally {
-      // ✅ Always clear polling flag when done
+      // ✅ CRITICAL: Always cleanup and reset state
+      abortController.abort() // Cancel any pending fetches
       isPollingRef.current = false
-      console.log(`✅ Polling completed for job ${jobId}`)
+      console.log(`✅ Polling cleanup completed for job ${jobId}`)
     }
   }, [generatedTemplateUrl, fetchDashboardData]) // ✅ Dependencies for useCallback
 
