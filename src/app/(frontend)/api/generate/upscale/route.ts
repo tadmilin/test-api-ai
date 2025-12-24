@@ -38,35 +38,8 @@ export async function POST(request: NextRequest) {
     console.log(`🔍 Starting upscale for: ${imageUrl.substring(0, 80)}...`)
     console.log(`   Scale factor: ${finalScale}x`)
 
-    // ⭐ Normalize to 1024x1024 first (ensures 2048x2048 output)
-    const res = await fetch(imageUrl)
-    if (!res.ok) throw new Error(`Failed to fetch input image: ${res.status}`)
-    const inputBuf = Buffer.from(await res.arrayBuffer())
-
-    // Log input metadata
-    const metaIn = await sharp(inputBuf).metadata()
-    console.log(`🧩 INPUT size: ${metaIn.width}x${metaIn.height}`)
-
-    // Resize to 1024x1024 (cover = crop to fill frame)
-    const normalizedBuf = await sharp(inputBuf)
-      .resize(1024, 1024, { fit: 'cover' })
-      .png()
-      .toBuffer()
-
-    // Verify normalized size
-    const metaNorm = await sharp(normalizedBuf).metadata()
-    console.log(`📐 NORMALIZED size: ${metaNorm.width}x${metaNorm.height}`) // Must be 1024x1024
-
-    // Upload normalized image to Cloudinary
-    const normalizedUrl = await uploadBufferToCloudinary(
-      normalizedBuf,
-      'preupscale',
-      `preupscale-${Date.now()}`
-    )
-
-    console.log(`   ✅ Normalized: ${normalizedUrl}`)
-
-    // Start Real-ESRGAN upscaling with normalized image
+    // ⚠️ FAST PATH: ส่ง URL ตรงไปเลย ไม่ต้อง normalize (ให้เร็ว)
+    // Normalization ไม่จำเป็นถ้า input มาจาก nano-banana-pro แล้ว (เป็น 2K อยู่แล้ว)
     const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
     const webhookUrl = `${baseUrl}/api/webhooks/replicate`
     
@@ -75,8 +48,8 @@ export async function POST(request: NextRequest) {
     const prediction = await replicate.predictions.create({
       model: 'nightmareai/real-esrgan',
       input: {
-        image: normalizedUrl,
-        scale: finalScale, // 2x upscale (1024 → 2048)
+        image: imageUrl, // ✅ ส่ง URL ตรงไปเลย (เร็ว!)
+        scale: finalScale,
         face_enhance: false,
       },
       webhook: webhookUrl,
@@ -84,8 +57,9 @@ export async function POST(request: NextRequest) {
     })
 
     console.log(`✅ Upscale prediction started: ${prediction.id}`)
-    console.log(`🔔 Webhook URL: ${webhookUrl || 'NONE (will use polling)'}`)
+    console.log(`🔔 Webhook URL: ${webhookUrl}`)
 
+    // ✅ ตอบกลับทันที!
     return NextResponse.json({
       predictionId: prediction.id,
       status: prediction.status,
