@@ -287,36 +287,17 @@ export default function DashboardPage() {
         const progress = `${statusData.completed}/${statusData.total}`
         const processingCount = statusData.processing || 0
         
-        // ✅ เช็ค template generation และ upscale
-        let isTemplateGenerating = false
-        let isTemplateUpscaling = false
-        let templatePredictionId: string | null = null
-        let jobData: Job & { templateGeneration?: { predictionId?: string; upscalePredictionId?: string; status?: string; url?: string }; templatePredictionId?: string; templateUpscalePredictionId?: string; templateUrl?: string } | null = null
-        let templateGen: { predictionId?: string; upscalePredictionId?: string; status?: string; url?: string } = {}
+        // ✅ เช็ค template generation และ upscale จาก statusData (ไม่ต้อง fetch /api/jobs อีก)
+        const templateGen = statusData.templateGeneration || {}
+        const templatePredictionId = templateGen.predictionId || null
+        const isTemplateGenerating = !!templatePredictionId && templateGen.status !== 'succeeded'
+        const isTemplateUpscaling = !!templateGen.upscalePredictionId
         
-        try {
-          const jobRes = await fetch(`/api/jobs/${jobId}`, {
-            signal: abortController.signal,
-          })
-          if (jobRes.ok) {
-            jobData = await jobRes.json()
-            if (jobData) {
-              // ✅ อ่านจาก templateGeneration object (ใหม่) หรือ legacy fields
-              templateGen = jobData.templateGeneration || {}
-              templatePredictionId = templateGen.predictionId || jobData.templatePredictionId || null
-              isTemplateGenerating = !!templatePredictionId && templateGen.status !== 'succeeded'
-              isTemplateUpscaling = !!templateGen.upscalePredictionId || !!jobData.templateUpscalePredictionId
-              
-              // Update template URL if available
-              const templateUrl = templateGen.url || jobData.templateUrl
-              if (templateUrl && templateUrl !== generatedTemplateUrl) {
-                setGeneratedTemplateUrl(templateUrl)
-                console.log('✅ Template URL updated:', templateUrl)
-              }
-            }
-          }
-        } catch (error) {
-          console.warn('⚠️ Failed to fetch job for template check:', error)
+        // Update template URL if available
+        const templateUrl = templateGen.url || null
+        if (templateUrl && templateUrl !== generatedTemplateUrl) {
+          setGeneratedTemplateUrl(templateUrl)
+          console.log('✅ Template URL updated:', templateUrl)
         }
 
         // ✅ ถ้ากำลังเจน template → poll create-template API

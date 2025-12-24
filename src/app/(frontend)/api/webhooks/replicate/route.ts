@@ -133,6 +133,21 @@ export async function POST(req: Request) {
             })
             console.log(`[Webhook] 🔒 Locked with placeholder: ${placeholderPredictionId}`)
             
+            // ✅ DOUBLE-CHECK: Refetch เพื่อยืนยันว่าเรา win the race
+            await new Promise(resolve => setTimeout(resolve, 50)) // รอ 50ms ให้ duplicate write ก่อน
+            const verifyJob = await payload.findByID({
+              collection: 'jobs',
+              id: job.id,
+            })
+            const currentPredictionId = verifyJob.templateGeneration?.upscalePredictionId
+            
+            if (currentPredictionId !== placeholderPredictionId) {
+              console.log(`[Webhook] ⏭️ Lost race - another thread won (${currentPredictionId}). Skipping.`)
+              return NextResponse.json({ received: true, jobId: job.id, message: 'Lost race, duplicate prevented' })
+            }
+            
+            console.log('[Webhook] ✅ Won race - proceeding with upscale')
+            
             // Upload temp to Cloudinary for upscale
             const tempUrl = await uploadBufferToCloudinary(
               Buffer.from(imageBuffer),

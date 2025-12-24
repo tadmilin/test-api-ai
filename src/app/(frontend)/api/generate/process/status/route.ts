@@ -408,6 +408,7 @@ export async function GET(request: NextRequest) {
       failed,
       allComplete,
       images: updatedImages,
+      templateGeneration: job.templateGeneration || null, // ✅ Add for polling to check template upscale status
     })
 
   } catch (error: unknown) {

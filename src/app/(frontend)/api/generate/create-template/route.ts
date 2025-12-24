@@ -277,6 +277,25 @@ export async function GET(request: NextRequest) {
         })
         console.log(`[Polling] 🔒 Locked with placeholder: ${placeholderPredictionId}`)
         
+        // ✅ DOUBLE-CHECK: Refetch เพื่อยืนยันว่าเรา win the race
+        await new Promise(resolve => setTimeout(resolve, 50)) // รอ 50ms ให้ duplicate write ก่อน
+        const verifyJob = await payload.findByID({
+          collection: 'jobs',
+          id: jobId,
+        })
+        const currentPredictionId = verifyJob.templateGeneration?.upscalePredictionId
+        
+        if (currentPredictionId !== placeholderPredictionId) {
+          console.log(`[Polling] ⏭️ Lost race - another thread won (${currentPredictionId}). Skipping.`)
+          return NextResponse.json({
+            status: 'processing',
+            message: 'Lost race, duplicate prevented',
+            upscalePredictionId: currentPredictionId,
+          })
+        }
+        
+        console.log('[Polling] ✅ Won race - proceeding with upscale')
+        
         const tempUrl = await uploadBufferToCloudinary(
           Buffer.from(imageBuffer),
           `jobs/${jobId}`,
