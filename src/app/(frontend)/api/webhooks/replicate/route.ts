@@ -105,9 +105,15 @@ export async function POST(req: Request) {
           
           // ✅ ถ้า 1:1 → upscale, ถ้าอื่น → resize
           if (job.outputSize === '1:1-2K') {
-            // ⚠️ Guard: ถ้า polling path ยิง upscale ไปแล้ว → skip
-            if (templateGen.upscalePredictionId) {
-              console.log('[Webhook] ⏭️ Upscale already started by polling - skipping duplicate')
+            // ⚠️ Guard: Refetch job เพื่อเช็คสถานะล่าสุด (ป้องกัน race condition)
+            const latestJob = await payload.findByID({
+              collection: 'jobs',
+              id: job.id,
+            })
+            
+            const latestTemplateGen = latestJob.templateGeneration || {}
+            if (latestTemplateGen.upscalePredictionId) {
+              console.log('[Webhook] ✋ Template Upscale already triggered. Skipping duplicate call.')
               return NextResponse.json({ received: true, jobId: job.id, message: 'Upscale already in progress' })
             }
             
