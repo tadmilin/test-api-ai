@@ -236,12 +236,26 @@ export async function GET(request: NextRequest) {
     // อัพเดท DB ถ้ามีการเปลี่ยนแปลง
     if (hasChanges) {
       console.log(`\n💾 Updating job with changes...`)
+      
+      // Check if all images are complete
+      const allImagesComplete = updatedImages.every(
+        img => img.status === 'completed' || img.status === 'failed'
+      )
+      
+      const updateData: any = {
+        enhancedImageUrls: updatedImages as typeof job.enhancedImageUrls,
+      }
+      
+      // Update job status if all complete
+      if (allImagesComplete && job.status !== 'completed') {
+        updateData.status = 'completed'
+        console.log(`   🎉 All images complete - updating job status to 'completed'`)
+      }
+      
       await payload.update({
         collection: 'jobs',
         id: jobId,
-        data: {
-          enhancedImageUrls: updatedImages as typeof job.enhancedImageUrls,
-        },
+        data: updateData,
       })
     }
 
