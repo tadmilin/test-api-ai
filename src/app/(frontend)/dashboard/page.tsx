@@ -218,6 +218,24 @@ export default function DashboardPage() {
     let polls = 0
     let consecutiveErrors = 0
     
+    // ✅ Fetch job data to determine which API to use
+    let useTextToImageAPI = false
+    try {
+      const jobRes = await fetch(`/api/jobs/${jobId}`)
+      if (jobRes.ok) {
+        const jobData = await jobRes.json()
+        const hasCustomPrompt = !!jobData.customPrompt
+        const hasTemplate = !!jobData.templateUrl
+        const isTextToImage = jobData.contentTopic?.includes('Text-to-Image')
+        
+        // Use new API for: Text-to-Image OR Custom Prompt without Template
+        useTextToImageAPI = isTextToImage || (hasCustomPrompt && !hasTemplate)
+        console.log(`📍 API Selection: ${useTextToImageAPI ? '/status-text-to-image' : '/status'} (isTextToImage: ${isTextToImage}, hasCustomPrompt: ${hasCustomPrompt}, hasTemplate: ${hasTemplate})`)
+      }
+    } catch (err) {
+      console.error('Failed to fetch job data:', err)
+    }
+    
     try {
     while (polls < maxPolls && !abortController.signal.aborted) {
       await new Promise(resolve => setTimeout(resolve, 2000))
@@ -230,7 +248,11 @@ export default function DashboardPage() {
       }
       
       try {
-        const statusRes = await fetch(`/api/generate/process/status?jobId=${jobId}`, {
+        const statusEndpoint = useTextToImageAPI 
+          ? `/api/generate/process/status-text-to-image?jobId=${jobId}`
+          : `/api/generate/process/status?jobId=${jobId}`
+        
+        const statusRes = await fetch(statusEndpoint, {
           signal: abortController.signal
         })
         if (!statusRes.ok) {
@@ -526,6 +548,7 @@ export default function DashboardPage() {
                   
                   // ✅ CRITICAL: Fetch enhanced images to display with template
                   try {
+                    // Always use /status for template jobs (Custom Prompt + Template)
                     const statusRes = await fetch(`/api/generate/process/status?jobId=${jobId}`)
                     if (statusRes.ok) {
                       const statusData = await statusRes.json()
@@ -1260,6 +1283,7 @@ export default function DashboardPage() {
           polls++
           
           try {
+            // Bulk processing always uses default /status API
             const statusRes = await fetch(`/api/generate/process/status?jobId=${jobId}`)
             if (!statusRes.ok) continue
             
