@@ -447,16 +447,25 @@ export async function POST(req: Request) {
           }
           
           // ✅ Upscale logic:
-          // Custom-Prompt: รูปแต่ละรูป → ไม่ upscale (เก็บไว้สร้าง template)
-          // Text-to-Image: 1:1 → upscale เป็น 2048×2048, อื่นๆ → resize
+          // 🔒 GUARD: Custom Prompt + Template → ข้ามทั้งหมด (ใช้งานได้อยู่แล้ว)
+          const hasCustomPrompt = !!job.customPrompt
+          const hasTemplate = !!job.templateUrl
+          const isCustomPromptWithTemplate = hasCustomPrompt && hasTemplate
+          
+          // 🔒 CRITICAL: ถ้าเป็น Custom Prompt + Template → ไม่ resize/upscale รูป (จะทำที่ template)
+          if (isCustomPromptWithTemplate) {
+            console.log('[Webhook] 🔒 Custom Prompt + Template detected - skipping image resize/upscale (will process template instead)')
+            // ไม่ทำอะไรกับรูป - ปล่อยให้ไปทำ template
+            // ใช้ logic เดิมต่อไป (จะข้าม shouldUpscale และ resize)
+          }
+          
+          // 📊 จาก if นี้เป็นต้นไป = Text-to-Image หรือ Custom Prompt Only
           const isImagenModel = body.model?.includes('imagen') || false
-          // ✅ FIXED: เช็คจาก customPrompt field + templateUrl (custom-prompt จะมี customPrompt + อาจมี templateUrl)
-          const isCustomPrompt = !!(job.customPrompt || job.templateUrl)
           
-          // ✅ Upscale เฉพาะ text-to-image (ไม่ใช่ custom-prompt) + outputSize มี 1:1
-          const shouldUpscale = isMainPrediction && !isCustomPrompt && job.outputSize && (job.outputSize.includes('1:1') || job.outputSize.startsWith('1:1'))
+          // ✅ Text-to-Image และ Custom Prompt Only ต้อง upscale/resize
+          const shouldUpscale = isMainPrediction && !isCustomPromptWithTemplate && job.outputSize && (job.outputSize.includes('1:1') || job.outputSize.startsWith('1:1'))
           
-          console.log(`[Webhook] Model: ${body.model || 'unknown'}, isImagen: ${isImagenModel}, isCustomPrompt: ${isCustomPrompt}, outputSize: ${job.outputSize}, shouldUpscale: ${shouldUpscale}`)
+          console.log(`[Webhook] Model: ${body.model || 'unknown'}, hasCustomPrompt: ${hasCustomPrompt}, hasTemplate: ${hasTemplate}, isCustomPromptWithTemplate: ${isCustomPromptWithTemplate}, outputSize: ${job.outputSize}, shouldUpscale: ${shouldUpscale}`)
           
           if (shouldUpscale) {
             // Idempotency: ถ้าเคยตั้ง upscalePredictionId แล้วหรือ pending อยู่ ให้ข้าม
@@ -549,11 +558,12 @@ export async function POST(req: Request) {
               ? OUTPUT_SIZE_MAP[job.outputSize || ''] 
               : { width: 1080, height: 1350 }
             
-            console.log(`[Webhook] 🔍 Debug resize: jobId=${job.id}, outputSize=${job.outputSize}, targetSize=${JSON.stringify(targetSize)}, isMainPrediction=${isMainPrediction}, shouldUpscale=${shouldUpscale}, isCustomPrompt=${isCustomPrompt}`)
+            console.log(`[Webhook] 🔍 Debug resize: jobId=${job.id}, outputSize=${job.outputSize}, targetSize=${JSON.stringify(targetSize)}, isMainPrediction=${isMainPrediction}, shouldUpscale=${shouldUpscale}, isCustomPromptWithTemplate=${isCustomPromptWithTemplate}`)
             
-            // ✅ Skip resize for custom-prompt (will resize template instead)
-            if (targetSize && !isCustomPrompt) {
-              // Resize to target dimensions (เฉพาะ text-to-image)
+            // 🔒 GUARD: Skip resize เฉพาะ Custom Prompt + Template
+            // Text-to-Image และ Custom Prompt Only ต้อง resize
+            if (targetSize && !isCustomPromptWithTemplate) {
+              // Resize to target dimensions (Text-to-Image + Custom Prompt Only)
               console.log(`[Webhook] 📐 RESIZING to ${targetSize.width}×${targetSize.height}...`)
               optimizedBuffer = await sharp(Buffer.from(imageBuffer))
                 .resize(targetSize.width, targetSize.height, { fit: 'cover' })
