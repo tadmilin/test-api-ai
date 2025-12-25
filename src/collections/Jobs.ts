@@ -610,15 +610,15 @@ export const Jobs: CollectionConfig = {
           try {
             // Debug: เช็คข้อมูลที่จะส่ง
             console.log('📊 Preparing to send to Google Sheets...')
-            console.log('   User object:', doc.user)
-            console.log('   User email:', getUserEmail(doc.user))
+            console.log('   CreatedBy:', doc.createdBy)
+            console.log('   User email:', getUserEmail(doc.createdBy))
             console.log('   Mode:', getModeDescription(doc))
             console.log('   Prompt:', doc.customPrompt)
             
             // 1. Log to Google Sheets
             await sendToGoogleSheets({
               timestamp: new Date(doc.createdAt),
-              userEmail: getUserEmail(doc.user),
+              userEmail: getUserEmail(doc.createdBy), // ✅ ใช้ createdBy แทน user
               userName: doc.productName || '-',
               mode: getModeDescription(doc),
               customPrompt: doc.customPrompt || '-',

@@ -95,9 +95,9 @@ export function getUserEmail(user: any): string {
     return user.email
   }
   
-  // If it's just an ID string
+  // If it's just an ID string (return as-is for now)
   if (typeof user === 'string') {
-    return user
+    return user // จะเป็น ID แต่ยังดีกว่า unknown
   }
   
   return 'unknown'
@@ -108,6 +108,11 @@ export function getUserEmail(user: any): string {
  * Helper function to format mode for logging
  */
 export function getModeDescription(doc: any): string {
+  // Check contentTopic for Text-to-Image
+  if (doc.contentTopic && doc.contentTopic.includes('Text-to-Image')) {
+    return 'Text-to-Image'
+  }
+  
   const hasCustomPrompt = doc.customPrompt && doc.customPrompt.trim() !== ''
   const hasTemplate = doc.templateId
   const isTextToImage = doc.mode === 'text-to-image'
