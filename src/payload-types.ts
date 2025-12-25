@@ -756,7 +756,7 @@ export interface Job {
   /**
    * Output image dimensions - 1:1 will be upscaled, others will be resized
    */
-  outputSize: '1:1-2K' | '4:5-2K' | '9:16-2K';
+  outputSize: string;
   productName: string;
   productDescription?: string | null;
   /**
@@ -857,7 +857,7 @@ export interface Job {
          */
         tempOutputUrl?: string | null;
         /**
-         * Vercel Blob storage URL (permanent) - final output only
+         * Cloudinary or storage URL (permanent) - final output
          */
         url?: string | null;
         /**

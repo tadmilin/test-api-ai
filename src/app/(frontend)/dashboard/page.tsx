@@ -238,7 +238,7 @@ export default function DashboardPage() {
     
     try {
     while (polls < maxPolls && !abortController.signal.aborted) {
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      await new Promise(resolve => setTimeout(resolve, 3000))
       polls++
       
       // ✅ Check if component unmounted
@@ -519,7 +519,7 @@ export default function DashboardPage() {
               setProcessingStatus('🎨 กำลังสร้าง Template (รอ 30-60 วิ)...')
               
               for (let pollCount = 0; pollCount < 60; pollCount++) {
-                await new Promise(resolve => setTimeout(resolve, 2000)) // 2s interval
+                await new Promise(resolve => setTimeout(resolve, 3000)) // 3s interval
                 
                 const pollRes = await fetch(`/api/generate/create-template?predictionId=${predictionId}&jobId=${jobId}`) // ✅ ส่ง jobId ด้วย
                 const pollData = await pollRes.json()
