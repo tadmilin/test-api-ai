@@ -287,15 +287,17 @@ export default function DashboardPage() {
               const prevImg = prevImages[index] || {}
               const merged = {
                 ...prevImg,
-                url: newImg.url || prevImg.url,
-                status: newImg.status || prevImg.status,
-                predictionId: newImg.predictionId || prevImg.predictionId,
-                originalUrl: newImg.originalUrl || prevImg.originalUrl,
+                // Always use new values if available (for updated URLs after resize/upscale)
+                url: newImg.url !== undefined ? newImg.url : prevImg.url,
+                status: newImg.status !== undefined ? newImg.status : prevImg.status,
+                predictionId: newImg.predictionId !== undefined ? newImg.predictionId : prevImg.predictionId,
+                originalUrl: newImg.originalUrl !== undefined ? newImg.originalUrl : prevImg.originalUrl,
+                upscalePredictionId: newImg.upscalePredictionId !== undefined ? newImg.upscalePredictionId : prevImg.upscalePredictionId,
+                // Preserve metadata from previous state
                 photoType: newImg.photoType || prevImg.photoType,
                 contentTopic: newImg.contentTopic || prevImg.contentTopic,
                 postTitleHeadline: newImg.postTitleHeadline || prevImg.postTitleHeadline,
                 contentDescription: newImg.contentDescription || prevImg.contentDescription,
-                upscalePredictionId: newImg.upscalePredictionId || prevImg.upscalePredictionId,
               }
               // Debug log to check photoType preservation
               if (merged.photoType !== prevImg.photoType) {
