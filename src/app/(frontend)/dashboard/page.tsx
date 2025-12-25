@@ -311,11 +311,14 @@ export default function DashboardPage() {
             })
             if (templateRes.ok) {
               const templateData = await templateRes.json()
-              console.log(`📊 Template status: ${templateData.status}`)
+              console.log(`📊 Template status: ${templateData.status}`, templateData.message || '')
               
-              if (templateData.status === 'succeeded' && templateData.imageUrl) {
-                console.log('✅ Template completed!')
-                setGeneratedTemplateUrl(templateData.imageUrl)
+              // ✅ รองรับทั้ง imageUrl (polling path) และ templateUrl (webhook path)
+              const finalTemplateUrl = templateData.templateUrl || templateData.imageUrl
+              
+              if (templateData.status === 'succeeded' && finalTemplateUrl) {
+                console.log('✅ Template completed:', finalTemplateUrl)
+                setGeneratedTemplateUrl(finalTemplateUrl)
                 setProcessingStatus('✅ Template พร้อมแล้ว!')
                 break // ✅ หยุด polling เมื่อเสร็จ
               } else if (templateData.status === 'failed') {
@@ -497,15 +500,20 @@ export default function DashboardPage() {
                 const pollRes = await fetch(`/api/generate/create-template?predictionId=${predictionId}&jobId=${jobId}`) // ✅ ส่ง jobId ด้วย
                 const pollData = await pollRes.json()
                 
-                console.log(`📊 Template poll ${pollCount + 1}: ${pollData.status}`)
+                console.log(`📊 Template poll ${pollCount + 1}: ${pollData.status}`, pollData.message || '')
                 
-                if (pollData.status === 'succeeded') {
+                // ✅ รองรับทั้ง imageUrl (polling path) และ templateUrl (webhook path)
+                const finalTemplateUrl = pollData.templateUrl || pollData.imageUrl
+                
+                if (pollData.status === 'succeeded' && finalTemplateUrl) {
+                  console.log('✅ Template completed:', finalTemplateUrl)
+                  
                   // Save template URL to job
                   await fetch(`/api/jobs/${jobId}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                      templateUrl: pollData.imageUrl,
+                      templateUrl: finalTemplateUrl,
                     }),
                   })
 
@@ -513,8 +521,8 @@ export default function DashboardPage() {
                   setProcessingStatus('✅ Template สำเร็จ!')
                   
                   // Set template URL
-                  setGeneratedTemplateUrl(pollData.imageUrl)
-                  console.log('✅ Template URL set:', pollData.imageUrl)
+                  setGeneratedTemplateUrl(finalTemplateUrl)
+                  console.log('✅ Template URL set:', finalTemplateUrl)
                   
                   // ✅ CRITICAL: Fetch enhanced images to display with template
                   try {

@@ -252,6 +252,26 @@ export async function GET(request: NextRequest) {
         })
         const templateGen = latestJob.templateGeneration || {}
         
+        // ✅ CRITICAL: ถ้า webhook ทำงานเสร็จแล้ว (มี templateUrl + completed) → return ทันที
+        if (latestJob.templateUrl && latestJob.status === 'completed') {
+          console.log('[Polling] ✅ Template already completed by webhook - skipping')
+          return NextResponse.json({
+            status: 'succeeded',
+            message: 'Template already completed',
+            templateUrl: latestJob.templateUrl,
+          })
+        }
+        
+        // ✅ เช็ค templateGeneration.status ถ้าเป็น succeeded แปลว่า webhook กำลังจัดการอยู่
+        if (templateGen.status === 'succeeded' && templateGen.url) {
+          console.log('[Polling] ✅ Template generation succeeded (webhook) - returning URL')
+          return NextResponse.json({
+            status: 'succeeded',
+            message: 'Template completed',
+            templateUrl: templateGen.url,
+          })
+        }
+        
         if (templateGen.upscalePredictionId) {
           console.log('[Polling] ⏭️ Upscale already in progress - skipping duplicate')
           return NextResponse.json({
