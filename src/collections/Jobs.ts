@@ -608,6 +608,13 @@ export const Jobs: CollectionConfig = {
         // Only for create operations
         if (operation === 'create') {
           try {
+            // Debug: เช็คข้อมูลที่จะส่ง
+            console.log('📊 Preparing to send to Google Sheets...')
+            console.log('   User object:', doc.user)
+            console.log('   User email:', getUserEmail(doc.user))
+            console.log('   Mode:', getModeDescription(doc))
+            console.log('   Prompt:', doc.customPrompt)
+            
             // 1. Log to Google Sheets
             await sendToGoogleSheets({
               timestamp: new Date(doc.createdAt),

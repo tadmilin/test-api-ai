@@ -17,11 +17,9 @@
 2. สร้าง Sheet ใหม่ ชื่อ **"Job Usage Logs"**
 3. ตั้งชื่อ columns ที่ row 1:
 
-| A | B | C | D | E | F | G | H | I | J |
-|---|---|---|---|---|---|---|---|---|---|
-| Timestamp | Date | Time | User Email | User Name | Mode | Custom Prompt | Template | Output Size | Status |
-
-(+ คอลัมน์ K: Image Count, L: Job ID ถ้าต้องการ)
+| A | B | C | D |
+|---|---|---|---|
+| วันเวลา | ชื่อ User | โหมด | Prompt |
 
 ---
 
@@ -36,25 +34,32 @@ function doPost(e) {
     // Parse JSON data
     const data = JSON.parse(e.postData.contents);
     
-    // Get active sheet
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Sheet1');
-    // หรือ ระบุชื่อ sheet เฉพาะ:
-    // const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Job Logs');
+    // Get active sheet (ใช้ active sheet แทน getSheetByName)
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = spreadsheet.getActiveSheet();
     
-    // Append new row
+    // Format วันเวลาภาษาไทย
+    const timestamp = new Date(data.timestamp);
+    const dateTimeStr = timestamp.toLocaleString('th-TH', { 
+      timeZone: 'Asia/Bangkok',
+      year: 'numeric',
+      month: '2-digit', 
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    
+    // ✅ แก้ไข: ดึงข้อมูลจาก payload ที่ถูกต้อง
+    const userEmail = data.userEmail || 'unknown';
+    const mode = data.mode || 'Unknown';
+    const prompt = data.customPrompt || '-';
+    
+    // Append new row (เฉพาะ 4 คอลัมน์)
     sheet.appendRow([
-      data.timestamp || '',
-      data.date || '',
-      data.time || '',
-      data.userEmail || '',
-      data.userName || '',
-      data.mode || '',
-      data.customPrompt || '',
-      data.templateName || '',
-      data.outputSize || '',
-      data.status || '',
-      data.imageCount || 0,
-      data.jobId || '',
+      dateTimeStr,    // วันเวลา
+      userEmail,      // ชื่อ User
+      mode,           // โหมด
+      prompt,         // Prompt
     ]);
     
     return ContentService.createTextOutput(JSON.stringify({ success: true }))
@@ -104,18 +109,10 @@ GOOGLE_SHEETS_WEBHOOK_URL=https://script.google.com/macros/s/AKfycbx.../exec
 
 ## ข้อมูลที่จะถูกเก็บ
 
-| Field | ตัวอย่าง | คำอธิบาย |
-|-------|----------|----------|
-| **timestamp** | 2025-12-26T14:30:00.000Z | เวลาสร้าง job (ISO format) |
-| **date** | 26/12/2568 | วันที่ (Thai format) |
-| **time** | 14:30:00 | เวลา (Thai format) |
-| **userEmail** | user@example.com | อีเมล user ที่สร้าง |
-| **userName** | สินค้าทดสอบ | ชื่อสินค้า |
-| **mode** | Text-to-Image | โหมดที่ใช้ |
-| **customPrompt** | สุนัขน่ารัก | Prompt ที่กรอก |
-| **templateName** | Professional | Template ที่เลือก |
-| **outputSize** | 1:1-2K | ขนาดที่ export |
-| **status** | pending | สถานะ job |
+| Fiวันเวลา** | 26/12/2568 14:30 | วันที่และเวลา (ภาษาไทย) |
+| **ชื่อ User** | user@example.com | อีเมล user ที่สร้าง job |
+| **โหมด** | Text-to-Image | โหมดที่ใช้งาน |
+| **Prompt** | สุนัขน่ารัก | คำสั่ง prompt ที่กรอก
 | **imageCount** | 5 | จำนวนรูปที่ generate |
 | **jobId** | 67abe123... | MongoDB _id |
 
@@ -133,17 +130,17 @@ GOOGLE_SHEETS_WEBHOOK_URL=https://script.google.com/macros/s/AKfycbx.../exec
 =COUNTIF(J:J, "completed") * 10
 ```
 
+### Top 5B:B, "user@example.com")
+```
+
 ### Top 5 users:
 ```
-=QUERY(D:D, "SELECT D, COUNT(D) WHERE D <> '' GROUP BY D ORDER BY COUNT(D) DESC LIMIT 5")
+=QUERY(B:B, "SELECT B, COUNT(B) WHERE B <> '' GROUP BY B ORDER BY COUNT(B) DESC LIMIT 5")
 ```
 
----
-
-## สิ่งที่เกิดขึ้นอัตโนมัติ
-
-### เมื่อสร้าง Job ใหม่:
-1. ✅ ส่งข้อมูลไป Google Sheets
+### นับโหมดที่ใช้บ่อยสุด:
+```
+=QUERY(C:C, "SELECT C, COUNT(C) WHERE C <> '' GROUP BY C ORDER BY COUNT(C) DESC
 2. ✅ ตรวจสอบจำนวน jobs ใน MongoDB
 3. ✅ ถ้าเกิน 100 jobs → ลบ job เก่าสุด + รูปใน Cloudinary
 
