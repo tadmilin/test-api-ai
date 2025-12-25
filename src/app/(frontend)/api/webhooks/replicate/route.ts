@@ -92,6 +92,12 @@ export async function POST(req: Request) {
       console.log('[Webhook] 🎨 Processing template generation')
       
       if (status === 'succeeded' && output) {
+        // Idempotency: ถ้าทำเสร็จแล้วให้ข้ามทันที (กัน webhook ซ้ำ)
+        if (templateGen.status === 'succeeded' && templateGen.url) {
+          console.log('[Webhook] ⏭️ Template already completed (idempotent guard)')
+          return NextResponse.json({ received: true, jobId: job.id, message: 'Template already completed' })
+        }
+
         const replicateUrl = Array.isArray(output) ? output[0] : output
         
         try {
@@ -112,6 +118,11 @@ export async function POST(req: Request) {
             })
             
             const latestTemplateGen = latestJob.templateGeneration || {}
+            if (latestTemplateGen.status === 'succeeded' && latestTemplateGen.url) {
+              console.log('[Webhook] ✋ Template already completed (latest). Skipping duplicate call.')
+              return NextResponse.json({ received: true, jobId: job.id, message: 'Template already completed' })
+            }
+
             if (latestTemplateGen.upscalePredictionId) {
               console.log('[Webhook] ✋ Template Upscale already triggered. Skipping duplicate call.')
               return NextResponse.json({ received: true, jobId: job.id, message: 'Upscale already in progress' })
@@ -128,6 +139,7 @@ export async function POST(req: Request) {
                 templateGeneration: {
                   ...latestTemplateGen,
                   upscalePredictionId: placeholderPredictionId,
+                  status: latestTemplateGen.status || 'processing',
                 },
               },
             })
@@ -184,6 +196,7 @@ export async function POST(req: Request) {
                   status: 'processing',
                   url: null,
                 },
+                templatePredictionId: null,
               },
             })
             
@@ -232,6 +245,8 @@ export async function POST(req: Request) {
                   url: cloudinaryUrl,
                 },
                 templateUrl: cloudinaryUrl,
+                templatePredictionId: null,
+                templateUpscalePredictionId: null,
                 status: 'completed', // ✅ Mark job as completed
               },
             })
@@ -271,6 +286,8 @@ export async function POST(req: Request) {
               status: 'failed',
               url: null,
             },
+            templatePredictionId: null,
+            templateUpscalePredictionId: null,
           },
         })
         return NextResponse.json({ received: true, error: 'Template generation failed' })
@@ -293,6 +310,12 @@ export async function POST(req: Request) {
       }
       
       if (status === 'succeeded' && output) {
+        // Idempotency: ถ้าทำเสร็จแล้วให้ข้ามทันที (กัน webhook ซ้ำ)
+        if (templateGen.status === 'succeeded' && templateGen.url) {
+          console.log('[Webhook] ⏭️ Template upscale already completed (idempotent guard)')
+          return NextResponse.json({ received: true, jobId: job.id, message: 'Template upscale already completed' })
+        }
+
         const replicateUrl = Array.isArray(output) ? output[0] : output
         
         try {
@@ -319,7 +342,7 @@ export async function POST(req: Request) {
           
           console.log('[Webhook] ✅ Template uploaded:', cloudinaryUrl)
           
-          // Update job with template URL and mark as completed
+          // Update job with template URL and mark as completed + clear legacy fields
           await payload.update({
             collection: 'jobs',
             id: job.id,
@@ -331,6 +354,8 @@ export async function POST(req: Request) {
                 url: cloudinaryUrl,
               },
               templateUrl: cloudinaryUrl,
+              templatePredictionId: null,
+              templateUpscalePredictionId: null,
               status: 'completed', // ✅ Mark job as completed
             },
           })
@@ -434,6 +459,15 @@ export async function POST(req: Request) {
           console.log(`[Webhook] Model: ${body.model || 'unknown'}, isImagen: ${isImagenModel}, isCustomPrompt: ${isCustomPrompt}, outputSize: ${job.outputSize}, shouldUpscale: ${shouldUpscale}`)
           
           if (shouldUpscale) {
+            // Idempotency: ถ้าเคยตั้ง upscalePredictionId แล้วหรือ pending อยู่ ให้ข้าม
+            if (img.upscalePredictionId || img.status === 'pending') {
+              console.log('[Webhook] ⏭️ Upscale already in progress for this image, skipping duplicate')
+              return {
+                ...img,
+                tempOutputUrl: img.tempOutputUrl || replicateUrl,
+                status: img.status || 'pending',
+              }
+            }
             console.log('[Webhook] 📐 Output size is 1:1-2K, starting upscale to 2048x2048...')
             
             try {
@@ -458,6 +492,7 @@ export async function POST(req: Request) {
                 ...img,
                 tempOutputUrl: replicateUrl,
                 upscalePredictionId: upscaleData.predictionId,
+                predictionId: null, // clear main prediction to avoid re-trigger
                 status: 'pending' as const,
               }
             } catch (upscaleError) {
