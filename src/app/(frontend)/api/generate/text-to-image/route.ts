@@ -187,10 +187,7 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ All predictions created (${predictions.length}/${numImages})`)
 
-    // ✅ Enforce job limit (FIFO cleanup) - async, don't wait
-    fetch(`${process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'}/api/cleanup/enforce-limit`, {
-      method: 'POST',
-    }).catch(err => console.warn('⚠️ Cleanup failed:', err))
+    // ✅ Auto cleanup handled by Jobs afterChange hook (100 jobs limit)
 
     return NextResponse.json({
       jobId: job.id,

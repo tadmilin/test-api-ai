@@ -161,18 +161,7 @@ export default function DashboardPage() {
   const [showSuccess, setShowSuccess] = useState<boolean>(false)
   const [processingError, setProcessingError] = useState<string>('')
   
-  // ✅ Storage Status
-  const [storageStatus, setStorageStatus] = useState<{
-    totalJobs: number
-    limit: number
-    usage: string
-    usagePercent: number
-    estimatedStorageMB: number
-    storagePercent: number
-    status: 'healthy' | 'warning' | 'critical'
-    timestamp: string
-  } | null>(null)
-  const [cleanupLoading, setCleanupLoading] = useState(false)
+  // ✅ Auto cleanup now handled by Jobs collection hook (100 jobs limit)
   
   // ✅ Polling guard: prevent multiple concurrent polling loops
   const isPollingRef = useRef(false)
@@ -818,52 +807,8 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]) // ✅ ลบ resumeProcessingJobs และ pollJobStatus ออก
 
-  // ✅ Fetch storage status
-  const fetchStorageStatus = useCallback(async () => {
-    try {
-      const res = await fetch('/api/cleanup/enforce-limit')
-      if (res.ok) {
-        const data = await res.json()
-        setStorageStatus(data)
-      }
-    } catch (error) {
-      console.error('Failed to fetch storage status:', error)
-    }
-  }, [])
-
-  // ✅ Poll storage status every 60 seconds (ลดเหลือ 1 นาที)
-  useEffect(() => {
-    if (currentUser) {
-      // ✅ Debounce initial fetch by 5 seconds to reduce load spike
-      const initialTimer = setTimeout(fetchStorageStatus, 5000)
-      const interval = setInterval(fetchStorageStatus, 60000)  // ✅ เปลี่ยนเป็น 60 วินาที
-      return () => {
-        clearTimeout(initialTimer)
-        clearInterval(interval)
-      }
-    }
-  }, [currentUser, fetchStorageStatus])
-
-  // ✅ Manual cleanup trigger
-  async function handleManualCleanup() {
-    setCleanupLoading(true)
-    try {
-      const res = await fetch('/api/cleanup/enforce-limit', { method: 'POST' })
-      const data = await res.json()
-      
-      if (data.success) {
-        alert(`✅ Cleanup success!\nDeleted: ${data.deleted} jobs\nCurrent: ${data.newTotal}/${data.limit} jobs`)
-        fetchStorageStatus()
-        fetchDashboardData()
-      } else {
-        alert(`❌ Cleanup failed: ${data.error}`)
-      }
-    } catch (error) {
-      alert(`❌ Cleanup error: ${error instanceof Error ? error.message : 'Unknown'}`)
-    } finally {
-      setCleanupLoading(false)
-    }
-  }
+  // ✅ Auto cleanup now handled by Jobs collection hook (100 jobs limit)
+  // No need for manual storage status polling or cleanup triggers
 
   async function handleLogout() {
     try {
@@ -2992,73 +2937,19 @@ export default function DashboardPage() {
         </div>
 
         {/* ========================================
-            STORAGE STATUS & CLEANUP (BOTTOM SECTION)
+            AUTO CLEANUP INFO
         ======================================== */}
         <div className="bg-white rounded-2xl shadow-2xl p-8 mt-8">
-          <div className="flex gap-4">
-            {/* Storage Status Card */}
-            {storageStatus && (
-              <div className={`flex-1 rounded-xl border-2 p-4 ${
-                storageStatus.status === 'healthy' ? 'bg-green-50 border-green-300' :
-                storageStatus.status === 'warning' ? 'bg-yellow-50 border-yellow-300' :
-                'bg-red-50 border-red-300'
-              }`}>
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="text-2xl">
-                    {storageStatus.status === 'healthy' ? '✅' :
-                     storageStatus.status === 'warning' ? '⚠️' : '🚨'}
-                  </span>
-                  <div>
-                    <h3 className="font-bold text-lg text-gray-900">Storage Status</h3>
-                    <p className="text-sm text-gray-600">
-                      Last updated: {new Date(storageStatus.timestamp).toLocaleTimeString('th-TH')}
-                    </p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-4 mt-3">
-                  <div>
-                    <p className="text-sm text-gray-600">Jobs</p>
-                    <p className="text-xl font-bold text-gray-900">{storageStatus.usage}</p>
-                    <p className="text-xs text-gray-500">({storageStatus.usagePercent}%)</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Estimated Storage</p>
-                    <p className="text-xl font-bold text-gray-900">{storageStatus.estimatedStorageMB} MB</p>
-                    <p className="text-xs text-gray-500">~{storageStatus.storagePercent}% of 1GB</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Status</p>
-                    <p className={`text-xl font-bold ${
-                      storageStatus.status === 'healthy' ? 'text-green-600' :
-                      storageStatus.status === 'warning' ? 'text-yellow-600' :
-                      'text-red-600'
-                    }`}>
-                      {storageStatus.status === 'healthy' ? 'Healthy' :
-                       storageStatus.status === 'warning' ? 'Warning' : 'Critical'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Force Cleanup Button Card */}
-            {storageStatus && (
-              <div className="flex items-center">
-                <button
-                  onClick={handleManualCleanup}
-                  disabled={cleanupLoading}
-                  className={`px-8 py-6 rounded-xl font-bold text-black transition-all border-2 shadow-lg ${
-                    cleanupLoading
-                      ? 'bg-gray-300 border-gray-400 cursor-not-allowed'
-                      : storageStatus.status === 'critical'
-                      ? 'bg-red-100 border-red-400 hover:bg-red-200'
-                      : 'bg-gray-100 border-gray-300 hover:bg-gray-200'
-                  }`}
-                >
-                  {cleanupLoading ? '🔄 Cleaning...' : '🗑️ Force Cleanup'}
-                </button>
-              </div>
-            )}
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-2xl">✅</span>
+            <h2 className="text-2xl font-bold text-gray-900">Auto Storage Management</h2>
+          </div>
+          <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-4">
+            <p className="text-gray-700">
+              <strong>Automatic Cleanup:</strong> System maintains 100 most recent jobs and automatically 
+              deletes old Cloudinary images when limit is reached. Storage is managed automatically - 
+              no manual intervention needed.
+            </p>
           </div>
         </div>
         </div>

@@ -1,6 +1,9 @@
 import type { CollectionConfig } from 'payload'
 
 import { authenticated } from '../access/authenticated'
+import { deleteJobImages } from '../utilities/deleteCloudinaryImages'
+import { sendToGoogleSheets, getUserEmail, getModeDescription, getTemplateName } from '../utilities/sendToGoogleSheets'
+import { autoDeleteOldJobs } from '../utilities/autoDeleteOldJobs'
 
 export const Jobs: CollectionConfig = {
   slug: 'jobs',
@@ -598,4 +601,55 @@ export const Jobs: CollectionConfig = {
     },
   ],
   timestamps: true,
+  hooks: {
+    // ✅ After creating a job, log to Google Sheets and auto-delete old jobs
+    afterChange: [
+      async ({ doc, operation, req }) => {
+        // Only for create operations
+        if (operation === 'create') {
+          try {
+            // 1. Log to Google Sheets
+            await sendToGoogleSheets({
+              timestamp: new Date(doc.createdAt),
+              userEmail: getUserEmail(doc.user),
+              userName: doc.productName || '-',
+              mode: getModeDescription(doc),
+              customPrompt: doc.customPrompt || '-',
+              templateName: getTemplateName(doc.templateId),
+              outputSize: doc.outputSize || '-',
+              status: doc.status || 'pending',
+              imageCount: doc.enhancedImageUrls?.length || 0,
+              jobId: doc.id,
+            })
+
+            // 2. Auto-delete old jobs if over limit (100 jobs)
+            if (req.payload) {
+              await autoDeleteOldJobs(req.payload, doc.id)
+            }
+          } catch (error: any) {
+            console.error('❌ Hook error (non-critical):', error.message)
+            // Don't throw - these are non-critical operations
+          }
+        }
+      },
+    ],
+    // ✅ After deleting a job, clean up Cloudinary images
+    afterDelete: [
+      async ({ doc }) => {
+        try {
+          console.log(`🗑️ Cleaning up Cloudinary images for job: ${doc.id}`)
+          
+          if (doc.enhancedImageUrls && doc.enhancedImageUrls.length > 0) {
+            const deleted = await deleteJobImages(doc.enhancedImageUrls)
+            console.log(`✅ Deleted ${deleted} images from Cloudinary for job: ${doc.id}`)
+          } else {
+            console.log(`⚠️ No images to delete for job: ${doc.id}`)
+          }
+        } catch (error: any) {
+          console.error('❌ Cloudinary cleanup error:', error.message)
+          // Don't throw - we don't want to prevent job deletion if image cleanup fails
+        }
+      },
+    ],
+  },
 }
