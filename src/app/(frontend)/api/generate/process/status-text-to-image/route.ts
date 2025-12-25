@@ -44,10 +44,12 @@ export async function GET(request: NextRequest) {
     // 🔒 GUARD: ถ้าเป็น Custom Prompt + Template → ไม่ใช้ API นี้
     const hasCustomPrompt = !!job.customPrompt
     const hasTemplate = !!job.templateUrl
+    const isCustomPromptWithTemplate = hasCustomPrompt && hasTemplate
     
-    if (hasCustomPrompt || hasTemplate) {
+    // 🔒 GUARD: Only reject Custom Prompt + Template (they use /status API)
+    if (isCustomPromptWithTemplate) {
       return NextResponse.json(
-        { error: 'This API is for Text-to-Image only. Use /status for Custom Prompt.' },
+        { error: 'Custom Prompt with Template should use /status API instead.' },
         { status: 400 }
       )
     }
