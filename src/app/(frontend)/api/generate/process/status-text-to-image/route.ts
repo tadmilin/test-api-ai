@@ -255,17 +255,24 @@ export async function GET(request: NextRequest) {
     console.log(`   ❌ Failed: ${failed}/${updatedImages.length}`)
     console.log(`   🎯 All Complete: ${allComplete}`)
 
+    // Refetch job to get latest status
+    const latestJob = await payload.findByID({
+      collection: 'jobs',
+      id: jobId,
+    })
+
     return NextResponse.json({
+      success: true,
       jobId: job.id,
-      jobStatus: allComplete ? 'completed' : 'processing',
+      jobStatus: allComplete ? 'completed' : latestJob.status,
+      status: allComplete ? 'completed' : 'enhancing',
+      total: updatedImages.length,
+      processing,
+      completed,
+      failed,
+      allComplete,
       images: updatedImages,
-      stats: {
-        total: updatedImages.length,
-        completed,
-        processing,
-        failed,
-        allComplete,
-      },
+      templateGeneration: latestJob.templateGeneration || null,
     })
 
   } catch (error) {
