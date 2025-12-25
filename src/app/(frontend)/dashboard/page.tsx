@@ -2946,9 +2946,7 @@ export default function DashboardPage() {
           </div>
           <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-4">
             <p className="text-gray-700">
-              <strong>Automatic Cleanup:</strong> System maintains 100 most recent jobs and automatically 
-              deletes old Cloudinary images when limit is reached. Storage is managed automatically - 
-              no manual intervention needed.
+              <strong>Automatic Cleanup:</strong> การจัดการลบอัตโนมัติ:ระบบจะเก็บงานล่าสุดไว้ 100 งาน และจะทำการลบรูปภาพบน Cloudinary ที่เก่ากว่านั้นโดยอัตโนมัติเมื่อถึงขีดจำกัดการจัดการพื้นที่จัดเก็บเป็นแบบอัตโนมัติทั้งหมด ไม่จำเป็นต้องดำเนินการใด ๆ ด้วยตนเอง
             </p>
           </div>
         </div>
