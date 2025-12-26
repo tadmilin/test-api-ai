@@ -103,6 +103,7 @@ export async function POST(request: NextRequest) {
 
     // Create image placeholders
     const imageUrls: Array<{
+      index?: number | null
       status: 'pending' | 'completed' | 'failed' | 'approved' | 'regenerating' | null
       photoType?: string | null
       contentTopic?: string | null
@@ -113,6 +114,7 @@ export async function POST(request: NextRequest) {
     
     for (let i = 0; i < numImages; i++) {
       imageUrls.push({
+        index: i,
         status: 'pending',
         photoType: 'text-to-image',
         contentTopic: prompt.substring(0, 100),

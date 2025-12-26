@@ -1,11 +1,18 @@
 # Get Replicate Webhook Secret
 # Windows PowerShell
 
-# 1. Set your API token (replace with your actual token)
-$REPLICATE_API_TOKEN = "your_token_here"
+# 1. Load from .env file
+$envContent = Get-Content .env -Raw
+$envContent -split "`n" | ForEach-Object {
+    if ($_ -match '^REPLICATE_API_TOKEN=(.+)$') {
+        $REPLICATE_API_TOKEN = $matches[1].Trim()
+    }
+}
 
-# If you have .env file, you can load it
-# Or just copy from .env manually
+if (-not $REPLICATE_API_TOKEN) {
+    Write-Host "❌ REPLICATE_API_TOKEN not found in .env" -ForegroundColor Red
+    exit 1
+}
 
 # 2. Fetch the webhook secret
 Write-Host "🔍 Fetching webhook secret from Replicate..." -ForegroundColor Cyan
