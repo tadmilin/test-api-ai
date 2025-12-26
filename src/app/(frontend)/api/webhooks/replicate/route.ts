@@ -40,6 +40,13 @@ async function processWebhook(rawBody: string, predictionId: string) {
           { 'templatePredictionId': { equals: predictionId } }, // ✅ Top-level fallback
         ],
       },
+      limit: 1,
+    })
+    
+    console.log('[Webhook] 📊 Query result:', {
+      found: jobs.docs.length,
+      totalDocs: jobs.totalDocs,
+      predictionId,
     })
 
     // If not found, search in enhancing/processing jobs manually
@@ -57,6 +64,21 @@ async function processWebhook(rawBody: string, predictionId: string) {
       })
 
       console.log('[Webhook] 🔍 Found', enhancingJobs.docs.length, 'jobs with status enhancing/processing/generating_template')
+      
+      // Debug: แสดงทุก job ที่เจอ
+      if (enhancingJobs.docs.length > 0) {
+        console.log('[Webhook] 🔍 Checking jobs:')
+        enhancingJobs.docs.forEach((j: any, idx: number) => {
+          console.log(`[Webhook]   [${idx}] Job ${j.id}:`)
+          console.log(`[Webhook]       status: ${j.status}`)
+          console.log(`[Webhook]       jobType: ${j.jobType}`)
+          console.log(`[Webhook]       templateGeneration:`, {
+            predictionId: j.templateGeneration?.predictionId || 'none',
+            upscalePredictionId: j.templateGeneration?.upscalePredictionId || 'none',
+          })
+          console.log(`[Webhook]       looking for: ${predictionId}`)
+        })
+      }
       
       const found = enhancingJobs.docs.find((job: any) => {
         // Check enhancedImageUrls
