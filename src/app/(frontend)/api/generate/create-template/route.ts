@@ -180,7 +180,7 @@ export async function POST(request: NextRequest) {
     console.log(`✅ Template generation started: ${prediction.id}`)
     console.log(`   Status: ${prediction.status}`)
 
-    // ✅ บันทึก templateGeneration object ลง MongoDB (เหมือน enhancedImageUrls)
+    // ✅ บันทึก real predictionId ทันที
     // ⚠️ Save ทั้ง nested และ top-level เพื่อให้ webhook หาเจอแน่นอน
     try {
       await payload.update({
@@ -196,7 +196,7 @@ export async function POST(request: NextRequest) {
           templatePredictionId: prediction.id, // ✅ Top-level สำรอง
         },
       })
-      console.log(`✅ Saved templateGeneration to job ${jobId}`)
+      console.log(`✅ Saved predictionId to job: ${prediction.id}`)
     } catch (dbError) {
       console.warn('⚠️ Failed to save templateGeneration:', dbError)
       // Don't fail - webhook can still handle

@@ -663,6 +663,10 @@ export async function POST(req: Request) {
       
       // ✅ CRITICAL: Auto-start template generation for custom-prompt jobs
       if (!hasFailed && job.customPrompt && job.selectedTemplateUrl) { // ✅ ใช้ selectedTemplateUrl (input) แทน templateUrl (output)
+        // ⚠️ Guard: เพิ่ม delay 2000ms (2s) ก่อน refetch 
+        // → ให้ request อื่นมีเวลาแปลง URL + เรียก Replicate + บันทึก DB (ใช้เวลา ~3-8s)
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        
         // ⚠️ Guard: Refetch job เพื่อดูสถานะล่าสุด (ป้องกัน race condition)
         const latestJob = await payload.findByID({
           collection: 'jobs',

@@ -300,17 +300,23 @@ export default function DashboardPage() {
         const progress = `${statusData.completed}/${statusData.total}`
         const processingCount = statusData.processing || 0
         
+        // ✅ อัพเดท templateUrl ถ้ามี (จาก status API response)
+        if (statusData.templateUrl && statusData.templateUrl !== generatedTemplateUrl) {
+          console.log(`✅ Template URL from status API: ${statusData.templateUrl}`)
+          setGeneratedTemplateUrl(statusData.templateUrl)
+        }
+        
         // ✅ เช็ค template generation และ upscale จาก statusData (ไม่ต้อง fetch /api/jobs อีก)
         const templateGen = statusData.templateGeneration || {}
         const templatePredictionId = templateGen.predictionId || null
         const isTemplateGenerating = !!templatePredictionId && templateGen.status !== 'succeeded'
         const isTemplateUpscaling = !!templateGen.upscalePredictionId
         
-        // Update template URL if available
+        // Update template URL if available (จาก templateGeneration)
         const templateUrl = templateGen.url || null
         if (templateUrl && templateUrl !== generatedTemplateUrl) {
           setGeneratedTemplateUrl(templateUrl)
-          console.log('✅ Template URL updated:', templateUrl)
+          console.log('✅ Template URL updated from templateGeneration:', templateUrl)
         }
 
         // ✅ ถ้ากำลังเจน template → poll create-template API
@@ -730,18 +736,21 @@ export default function DashboardPage() {
             setEnhancedImages(job.enhancedImageUrls)
             setReviewMode(true)
             
+            // ✅ CRITICAL: Set template URL FIRST ก่อน set status เพื่อให้แสดงทันที
+            if (job.templateUrl) {
+              console.log(`✅ [IMMEDIATE] Setting template from job.templateUrl: ${job.templateUrl}`)
+              setGeneratedTemplateUrl(job.templateUrl)
+            } else if (job.templateGeneration?.url) {
+              console.log(`✅ [IMMEDIATE] Setting template from templateGeneration.url: ${job.templateGeneration.url}`)
+              setGeneratedTemplateUrl(job.templateGeneration.url)
+            }
+            
             if (hasIncomplete) {
               setProcessingStatus(`🔄 กำลังประมวลผล ${job.enhancedImageUrls.length} รูป...`)
             } else if (hasTemplateProcessing) {
               setProcessingStatus(`🎨 กำลังสร้าง Template...`)
             } else if (hasCompletedTemplate) {
-              setProcessingStatus(`✅ Template พร้อมแล้ว!`) // ✅ แสดงสถานะเสร็จแล้ว
-            }
-            
-            // ✅ Set template URL if exists (กรณี refresh หลัง template เสร็จ)
-            if (job.templateUrl) {
-              console.log(`✅ Found existing template: ${job.templateUrl}`)
-              setGeneratedTemplateUrl(job.templateUrl)
+              setProcessingStatus(`✅ Template พร้อมแล้ว!`)
             }
             
             // ✅ Poll if incomplete OR template processing
