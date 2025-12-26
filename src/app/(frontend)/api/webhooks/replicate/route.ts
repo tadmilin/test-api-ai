@@ -116,12 +116,18 @@ export async function POST(req: Request) {
     // 1. Get raw body for signature verification
     const rawBody = await req.text()
     
+    console.log('[Webhook] 📥 Received webhook request')
+    console.log('[Webhook] 🔍 Body length:', rawBody.length)
+    console.log('[Webhook] 🔍 All headers:', Object.fromEntries(req.headers.entries()))
+    
     // 2. Verify webhook signature (security)
     const headers = {
       'webhook-id': req.headers.get('webhook-id') || undefined,
       'webhook-timestamp': req.headers.get('webhook-timestamp') || undefined,
       'webhook-signature': req.headers.get('webhook-signature') || undefined,
     }
+
+    console.log('[Webhook] 🔍 Extracted headers:', headers)
 
     const verification = await verifyWebhookSignature(rawBody, headers)
     

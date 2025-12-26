@@ -56,6 +56,9 @@ export async function verifyWebhookSignature(
 
   // 3. Get signing secret from environment
   const webhookSecret = process.env.REPLICATE_WEBHOOK_SECRET
+  console.log('[Webhook] 🔍 Secret exists:', !!webhookSecret)
+  console.log('[Webhook] 🔍 Secret prefix:', webhookSecret?.substring(0, 7))
+  
   if (!webhookSecret) {
     console.warn('[Webhook] ⚠️ REPLICATE_WEBHOOK_SECRET not configured, skipping verification')
     return { isValid: true } // Allow webhooks if secret not configured (dev mode)
@@ -63,13 +66,19 @@ export async function verifyWebhookSignature(
 
   // 4. Construct signed content: id.timestamp.body
   const signedContent = `${webhookId}.${webhookTimestamp}.${body}`
+  console.log('[Webhook] 🔍 Signed content length:', signedContent.length)
+  console.log('[Webhook] 🔍 Webhook ID:', webhookId)
+  console.log('[Webhook] 🔍 Webhook timestamp:', webhookTimestamp)
 
   // 5. Extract secret key (remove 'whsec_' prefix)
   const secretKey = webhookSecret.startsWith('whsec_')
     ? webhookSecret.split('_')[1]
     : webhookSecret
 
+  console.log('[Webhook] 🔍 Secret key length after prefix removal:', secretKey.length)
+
   const secretBytes = Buffer.from(secretKey, 'base64')
+  console.log('[Webhook] 🔍 Secret bytes length:', secretBytes.length)
 
   // 6. Calculate HMAC SHA-256 signature
   const computedSignature = crypto
@@ -77,11 +86,16 @@ export async function verifyWebhookSignature(
     .update(signedContent, 'utf8')
     .digest('base64')
 
+  console.log('[Webhook] 🔍 Computed signature:', computedSignature)
+  console.log('[Webhook] 🔍 Expected signature header:', webhookSignature)
+
   // 7. Parse webhook signatures (format: "v1,signature1 v1,signature2")
   const expectedSignatures = webhookSignature
     .split(' ')
     .map(sig => sig.split(',')[1])
     .filter(Boolean)
+
+  console.log('[Webhook] 🔍 Parsed signatures:', expectedSignatures)
 
   if (expectedSignatures.length === 0) {
     return {
@@ -93,6 +107,7 @@ export async function verifyWebhookSignature(
   // 8. Use constant-time comparison to prevent timing attacks
   let isValid = false
   for (const expectedSig of expectedSignatures) {
+    console.log('[Webhook] 🔍 Comparing:', expectedSig, '===', computedSignature, '?', expectedSig === computedSignature)
     if (expectedSig === computedSignature) {
       isValid = true
       break
@@ -100,6 +115,9 @@ export async function verifyWebhookSignature(
   }
 
   if (!isValid) {
+    console.error('[Webhook] ❌ Signature mismatch!')
+    console.error('[Webhook] Expected one of:', expectedSignatures)
+    console.error('[Webhook] Computed:', computedSignature)
     return {
       isValid: false,
       error: 'Invalid webhook signature',
