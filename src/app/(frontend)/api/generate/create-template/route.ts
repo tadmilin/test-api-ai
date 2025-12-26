@@ -168,13 +168,14 @@ export async function POST(request: NextRequest) {
       aspect_ratio: sizeConfig.aspect_ratio,  // ✅ ใช้จาก job.outputSize
       output_format: "png",
       safety_filter_level: "block_only_high",
-      webhook: webhookUrl,
-      webhook_events_filter: ["start", "completed"], // ✅ รับทั้ง start และ completed
     }
 
+    // ✅ webhook และ webhook_events_filter ต้องอยู่ TOP-LEVEL ไม่ใช่ใน input
     const prediction = await replicate.predictions.create({
       model: "google/nano-banana-pro",
       input,
+      webhook: webhookUrl,
+      webhook_events_filter: ["start", "completed"],
     })
 
     console.log(`✅ Template generation started: ${prediction.id}`)
