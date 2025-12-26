@@ -168,8 +168,8 @@ export async function POST(request: NextRequest) {
       aspect_ratio: sizeConfig.aspect_ratio,  // ✅ ใช้จาก job.outputSize
       output_format: "png",
       safety_filter_level: "block_only_high",
-      webhook: webhookUrl, // ✅ ใช้ webhook แทน polling
-      webhook_events_filter: ["completed"], // ✅ เฉพาะเมื่อเสร็จ
+      webhook: webhookUrl,
+      webhook_events_filter: ["start", "completed"], // ✅ รับทั้ง start และ completed
     }
 
     const prediction = await replicate.predictions.create({
