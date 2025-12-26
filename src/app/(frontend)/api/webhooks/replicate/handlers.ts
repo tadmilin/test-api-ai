@@ -523,7 +523,12 @@ async function handleTemplateGeneration(job: Job, predictionId: string, status: 
       }
     } else {
       // Template generated → start upscale if 1:1
+      console.log('[Webhook] 🔍 Template generation completed')
+      console.log('[Webhook]    Job outputSize:', job.outputSize)
+      console.log('[Webhook]    Replicate URL:', replicateUrl.substring(0, 80))
+      
       const shouldUpscale = job.outputSize?.includes('1:1')
+      console.log('[Webhook]    Should upscale (1:1):', shouldUpscale)
       
       if (shouldUpscale) {
         console.log('[Webhook] 📐 Template 1:1 → Starting upscale...')
