@@ -114,12 +114,14 @@ export async function POST(request: NextRequest) {
     const finalMB = processedBuffer.length / 1024 / 1024
     console.log(`✅ Optimized: ${originalMB.toFixed(2)} MB → ${finalMB.toFixed(2)} MB (${newWidth}x${newHeight}, Q${quality})`)
 
-    // Upload to Cloudinary
+    // Upload to Cloudinary with unique filename
     console.log(`📤 Uploading to Cloudinary (folder: ${folder})...`)
+    // ✅ Add timestamp to ensure unique filename (prevent duplicate images)
+    const uniqueFilename = `drive-${fileId}-${Date.now()}`
     const cloudinaryUrl = await uploadBufferToCloudinary(
       processedBuffer,
       folder,
-      `drive-${fileId}`
+      uniqueFilename
     )
 
     console.log(`✅ Cloudinary URL: ${cloudinaryUrl}`)

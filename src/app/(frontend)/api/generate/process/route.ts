@@ -6,6 +6,10 @@ import type { Job } from '@/payload-types'
 // ✅ Force Node.js runtime
 export const runtime = 'nodejs'
 
+// ⚡ Increase timeout for multiple image uploads + processing
+// 10 images × 10s upload + 5s stagger = ~105s
+export const maxDuration = 180 // 3 minutes
+
 /**
  * SIMPLIFIED Process API - enhance images with Nano-Banana Pro
  * Clean, fast, no complex logic
