@@ -362,37 +362,61 @@ export async function GET(request: NextRequest) {
     // Use existing job object (already fetched at line 36)
     console.log(`📌 Current job status: ${job.status}`)
     
+    // ✅ CRITICAL: เช็คว่ามี template generation หรือไม่
+    const hasSelectedTemplate = !!job.selectedTemplateUrl
+    const templateGen = job.templateGeneration || {}
+    const templateInProgress = hasSelectedTemplate && (
+      templateGen.predictionId || 
+      templateGen.upscalePredictionId ||
+      (templateGen.status && templateGen.status !== 'succeeded' && templateGen.status !== 'failed')
+    )
+    const templateCompleted = hasSelectedTemplate && templateGen.status === 'succeeded' && templateGen.url
+    
+    console.log(`🎯 Template check:`, {
+      hasSelectedTemplate,
+      templateStatus: templateGen.status || 'none',
+      templateInProgress,
+      templateCompleted,
+      hasPredictionId: !!templateGen.predictionId,
+      hasUpscalePredictionId: !!templateGen.upscalePredictionId,
+    })
+    
     // Update job status if all complete
     if (allComplete && (job.status === 'enhancing' || job.status === 'processing')) {
-      console.log(`🎉 All images complete! Updating job to completed`)
-      
-      // Update with exponential backoff retry logic
-      await retryWithExponentialBackoff(
-        async () => {
-          await payload.update({
-            collection: 'jobs',
-            id: jobId,
-            data: {
-              status: 'completed',
-            },
-          })
-          
-          await payload.create({
-            collection: 'job-logs',
-            data: {
-              jobId,
-              level: 'info',
-              message: `Job completed: ${completed} succeeded, ${failed} failed`,
-              timestamp: new Date().toISOString(),
-            },
-          })
-        },
-        {
-          maxRetries: 5,
-          context: 'Status Route (update status)',
-          throwOnFailure: false, // Don't fail entire request
-        }
-      )
+      // ✅ ถ้ามี template และยังไม่เสร็จ → ไม่อัพเดท completed เพื่อรอ template ก่อน
+      if (hasSelectedTemplate && !templateCompleted) {
+        console.log(`⏸️ Images complete but waiting for template generation - NOT marking as completed yet`)
+      } else {
+        console.log(`🎉 All images complete! Updating job to completed`)
+        
+        // Update with exponential backoff retry logic
+        await retryWithExponentialBackoff(
+          async () => {
+            await payload.update({
+              collection: 'jobs',
+              id: jobId,
+              data: {
+                status: 'completed',
+              },
+            })
+            
+            await payload.create({
+              collection: 'job-logs',
+              data: {
+                jobId,
+                level: 'info',
+                message: `Job completed: ${completed} succeeded, ${failed} failed`,
+                timestamp: new Date().toISOString(),
+              },
+            })
+          },
+          {
+            maxRetries: 5,
+            context: 'Status Route (update status)',
+            throwOnFailure: false, // Don't fail entire request
+          }
+        )
+      }
     }
 
     console.log(`===== END STATUS CHECK =====\n`)
@@ -415,6 +439,7 @@ export async function GET(request: NextRequest) {
       allComplete,
       images: updatedImages,
       templateGeneration: latestJob.templateGeneration || null, // ✅ Use latest templateGeneration
+      templateUrl: latestJob.templateUrl || null, // ✅ เพิ่ม templateUrl เพื่อให้ dashboard แสดงได้
     })
 
   } catch (error: unknown) {
