@@ -275,6 +275,13 @@ export default function CustomPromptPage() {
         const errorData = await processRes.json().catch(() => ({ error: 'Unknown error' }))
         const errorMsg = errorData.error || 'Processing failed'
         
+        // ✅ Handle 429 - System busy
+        if (processRes.status === 429) {
+          setProcessingError(`⏳ ระบบกำลังประมวลผลงานอื่นอยู่\n${errorData.message || 'กรุณารอสักครู่แล้วลองใหม่'}`)
+          setIsProcessing(false)
+          return
+        }
+        
         if (errorMsg.includes('402') || errorMsg.includes('Payment Required') || errorMsg.includes('Insufficient credit')) {
           setProcessingError('⚠️ Replicate หมดเครดิต - กรุณาเติมเครดิตที่ https://replicate.com/account/billing')
         } else {

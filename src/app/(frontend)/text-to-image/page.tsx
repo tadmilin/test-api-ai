@@ -42,6 +42,12 @@ export default function TextToImagePage() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: 'Unknown error' }))
+        
+        // ✅ Handle 429 - System busy
+        if (res.status === 429) {
+          throw new Error(data.message || 'ระบบกำลังประมวลผลงานอื่นอยู่ กรุณารอสักครู่แล้วลองใหม่')
+        }
+        
         throw new Error(data.error || 'Failed to generate image')
       }
 

@@ -351,10 +351,18 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
       
       if (allDone && !hasFailed && job.selectedTemplateUrl) {
         console.log('[Webhook] 🎨 All images done → Starting template generation...')
-        console.log('[Webhook]    Enhanced URLs:', updated.filter((img: any) => img.status === 'completed').map((img: any) => img.url.substring(0, 60)))
         
-        // Wait 2s to prevent race condition
-        await new Promise(resolve => setTimeout(resolve, 2000))
+        // ✅ Log full URLs (not truncated)
+        const completedUrls = updated.filter((img: any) => img.status === 'completed').map((img: any) => img.url)
+        console.log('[Webhook]    Enhanced URLs count:', completedUrls.length)
+        completedUrls.forEach((url: string, i: number) => {
+          console.log(`[Webhook]       [${i}] ${url}`)
+        })
+        
+        // Wait 3s + random(0-1s) to prevent race condition
+        const delay = 3000 + Math.floor(Math.random() * 1000)
+        console.log(`[Webhook] ⏱️  Waiting ${delay}ms to prevent race condition...`)
+        await new Promise(resolve => setTimeout(resolve, delay))
         
         // Refetch to check if template already started
         const { getPayload } = await import('payload')
@@ -372,6 +380,35 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
           console.log('[Webhook]    predictionId:', latestTemplateGen.predictionId)
           console.log('[Webhook]    url:', latestTemplateGen.url)
         } else {
+          // ✅ CRITICAL: Double-check with fresh DB query (race condition protection)
+          const freshJob = await payload.findByID({
+            collection: 'jobs',
+            id: job.id,
+          })
+          
+          const freshTemplateGen = freshJob.templateGeneration || {}
+          if (freshTemplateGen.predictionId && freshTemplateGen.predictionId !== 'PENDING_START') {
+            console.log('[Webhook] ⏭️ Template generation started by another webhook')
+            console.log('[Webhook]    predictionId:', freshTemplateGen.predictionId)
+            return { updatedUrls: updated, newJobStatus: 'generating_template' }
+          }
+          
+          // Mark as starting (optimistic locking)
+          await payload.update({
+            collection: 'jobs',
+            id: job.id,
+            data: {
+              templateGeneration: {
+                predictionId: 'PENDING_START', // Temporary marker
+                status: 'starting',
+                url: null,
+                upscalePredictionId: null,
+              },
+            },
+          })
+          
+          console.log('[Webhook] ✅ Marked as PENDING_START - proceeding with template generation')
+          
           // Start template generation
           const enhancedImageUrls = updated
             .filter((img: any) => img.status === 'completed' && img.url)
@@ -382,6 +419,12 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
             templateUrl: job.selectedTemplateUrl?.substring(0, 60),
             jobId: job.id,
             outputSize: job.outputSize,
+          })
+          
+          // ✅ Log each URL for debugging
+          console.log('[Webhook] 📸 Enhanced image URLs to send:')
+          enhancedImageUrls.forEach((url: string, i: number) => {
+            console.log(`[Webhook]    [${i}] ${url}`)
           })
           
           const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'

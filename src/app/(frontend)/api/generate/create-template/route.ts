@@ -83,8 +83,9 @@ export async function POST(request: NextRequest) {
     console.log(`🎨 Starting Nano Banana Pro template generation`)
     console.log(`📋 Template URL: ${templateUrl}`)
     console.log(`📸 Enhanced images: ${enhancedImageUrls.length}`)
+    console.log(`✅ Enhanced image URLs received:`)
     enhancedImageUrls.forEach((url: string, i: number) => {
-      console.log(`   [${i}] ${url.substring(0, 80)}...`)
+      console.log(`   [${i}] ${url}`)
     })
 
     // ✅ Fetch job to get outputSize
@@ -136,10 +137,10 @@ export async function POST(request: NextRequest) {
 
     // Step 2: Prepare image_input (template first, then enhanced images)
     const imageInputs = [directTemplateUrl, ...directEnhancedUrls]
-    console.log(`\n📦 Step 2: Image inputs order:`)
-    console.log(`   [0] Template: ${directTemplateUrl.substring(0, 60)}...`)
+    console.log(`\n📦 Step 2: Image inputs order (full URLs):`)
+    console.log(`   [0] Template: ${directTemplateUrl}`)
     directEnhancedUrls.forEach((url: string, i: number) => {
-      console.log(`   [${i + 1}] Enhanced image ${i + 1}: ${url.substring(0, 60)}...`)
+      console.log(`   [${i + 1}] Enhanced image ${i + 1}: ${url}`)
     })
 
     // Step 3: Start Nano Banana Pro (async, return predictionId)

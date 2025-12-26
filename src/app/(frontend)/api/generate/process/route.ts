@@ -44,6 +44,27 @@ export async function POST(request: NextRequest) {
       }, { status: 409 })
     }
 
+    // ✅ GUARD: Limit concurrent jobs (Free Plan protection)
+    const processingCount = await payload.find({
+      collection: 'jobs',
+      where: {
+        status: {
+          in: ['processing', 'enhancing', 'generating_template'],
+        },
+      },
+    })
+    
+    const MAX_CONCURRENT_JOBS = 3  // ✅ จำกัดไม่เกิน 3 jobs พร้อมกัน (Free Plan)
+    
+    if (processingCount.totalDocs >= MAX_CONCURRENT_JOBS) {
+      console.log(`⚠️ Too many concurrent jobs (${processingCount.totalDocs}/${MAX_CONCURRENT_JOBS})`)
+      return NextResponse.json({
+        error: 'System is busy',
+        message: `ระบบกำลังประมวลผล ${processingCount.totalDocs} งาน กรุณารอสักครู่ (โดยปกติใช้เวลา 2-3 นาที)`,
+        retryAfter: 30,  // แนะนำให้ลองใหม่ใน 30 วินาที
+      }, { status: 429 })  // 429 Too Many Requests
+    }
+
     console.log(`🚀 Starting job ${jobId}`)
     console.log(`📋 Job Type: ${job.jobType || 'unknown (legacy)'}`)
     console.log(`📐 Output Size: ${job.outputSize || '1:1-2K'}`)
@@ -134,8 +155,9 @@ export async function POST(request: NextRequest) {
       const localEnhanced: EnhancedImage[] = [...placeholders]
 
       // ✅ STEP 3: Process images sequentially with stagger delay
-      // ⚡ Reduced from 2s → 500ms (Replicate can handle concurrent requests)
-      const STAGGER_DELAY_MS = 500
+      // ⚡ Increased to 2s (from 500ms) to prevent hitting Vercel function limit
+      // 6 users × 5 images = 30 functions spread over 60s instead of 15s
+      const STAGGER_DELAY_MS = 2000  // ✅ 2 วินาที (ป้องกันเกิน concurrent limit)
       const predictionIds: string[] = []
       const imageMetadata: Array<{
         photoType: string

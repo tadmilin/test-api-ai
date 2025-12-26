@@ -126,6 +126,12 @@ export default function DashboardPage() {
       setLoading(true)
       const res = await fetch('/api/jobs?limit=20')
       
+      // ✅ Handle rate limit / server busy
+      if (res.status === 503 || res.status === 429) {
+        console.warn('⚠️ Server busy, will retry...')
+        return // Skip this refresh, wait for next interval
+      }
+      
       if (!res.ok) throw new Error('Failed to fetch jobs')
       
       const data = await res.json()
@@ -160,6 +166,33 @@ export default function DashboardPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser])  // ✅ Only re-run when currentUser changes
+
+  // ✅ Auto-refresh สำหรับ jobs ที่กำลังประมวลผล
+  // ⚠️ ปิดไว้เพื่อประหยัด DB - ให้ user กด refresh เอง
+  /*
+  useEffect(() => {
+    if (!currentUser || jobs.length === 0) return
+
+    // หา jobs ที่ยังไม่เสร็จ
+    const processingJobs = jobs.filter(job => 
+      job.status === 'processing' || 
+      job.status === 'enhancing' || 
+      job.status === 'generating_template'
+    )
+
+    if (processingJobs.length === 0) return
+
+    console.log(`🔄 Auto-refresh: ${processingJobs.length} jobs in progress`)
+
+    // ✅ Refresh ทุก 15 วินาที (balance ระหว่างความเร็วกับประหยัด DB)
+    // 6 users × 15s = 4 queries/min/user = รวม 24 queries/min
+    const interval = setInterval(() => {
+      fetchDashboardData()
+    }, 15000)
+
+    return () => clearInterval(interval)
+  }, [currentUser, jobs, fetchDashboardData])
+  */
 
   // Logout
   async function handleLogout() {
