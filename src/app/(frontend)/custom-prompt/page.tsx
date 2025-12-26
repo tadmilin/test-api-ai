@@ -36,6 +36,7 @@ export default function CustomPromptPage() {
   const [customPrompt, setCustomPrompt] = useState<string>('')
   const [outputSize, setOutputSize] = useState<string>('1:1-2K')
   const [creating, setCreating] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
   const [processingStatus, setProcessingStatus] = useState<string>('')
   const [processingError, setProcessingError] = useState<string>('')
   const [uploadingToCloudinary, setUploadingToCloudinary] = useState(false)
