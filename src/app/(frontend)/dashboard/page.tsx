@@ -203,7 +203,7 @@ export default function DashboardPage() {
     // ✅ AbortController for cleanup
     const abortController = new AbortController()
     
-    const maxPolls = 60  // 2 นาที (60 * 2s = 120s)
+    const maxPolls = 60  // 3 นาที (60 * 3s = 180s)
     let polls = 0
     let consecutiveErrors = 0
     
@@ -504,10 +504,11 @@ export default function DashboardPage() {
 
               // localStorage already cleared at the top (before starting)
 
-              // Poll for completion
-              setProcessingStatus('🎨 กำลังสร้าง Template (รอ 30-60 วิ)...')
+              // Poll for completion (increased timeout for template generation)
+              setProcessingStatus('🎨 กำลังสร้าง Template (รอ 30-90 วิ)...')
               
-              for (let pollCount = 0; pollCount < 60; pollCount++) {
+              // ⚡ Increased from 60 → 80 polls (4 minutes total) for template + upscale
+              for (let pollCount = 0; pollCount < 80; pollCount++) {
                 await new Promise(resolve => setTimeout(resolve, 3000)) // 3s interval
                 
                 const pollRes = await fetch(`/api/generate/create-template?predictionId=${predictionId}&jobId=${jobId}`) // ✅ ส่ง jobId ด้วย
@@ -678,9 +679,13 @@ export default function DashboardPage() {
         ...(processingData.jobs || []),
         ...(enhancingData.jobs || []),
         ...(completedData.jobs || []).filter((job: Job) => {
-          // ✅ เฉพาะ completed jobs ที่กำลังเจน template อยู่
+          // ✅ รวม completed jobs ที่:
+          // 1. กำลังเจน template อยู่
+          // 2. มี template URL แล้ว (สำหรับ refresh)
           const templateGen = (job as Job & { templateGeneration?: { predictionId?: string; upscalePredictionId?: string }; templatePredictionId?: string; templateUpscalePredictionId?: string }).templateGeneration || {}
-          return !!templateGen.predictionId || !!templateGen.upscalePredictionId || !!(job as typeof job & { templatePredictionId?: string }).templatePredictionId || !!(job as typeof job & { templateUpscalePredictionId?: string }).templateUpscalePredictionId
+          const hasTemplateProcessing = !!templateGen.predictionId || !!templateGen.upscalePredictionId || !!(job as typeof job & { templatePredictionId?: string }).templatePredictionId || !!(job as typeof job & { templateUpscalePredictionId?: string }).templateUpscalePredictionId
+          const hasCompletedTemplate = !!job.templateUrl
+          return hasTemplateProcessing || hasCompletedTemplate
         })
       ]
       
@@ -712,10 +717,13 @@ export default function DashboardPage() {
             job.templateUpscalePredictionId // legacy
           )
           
-          if (hasIncomplete || hasImages || hasTemplateProcessing) {
+          // ✅ CRITICAL: เช็ค templateUrl ด้วย (กรณี refresh หลัง template เสร็จแล้ว)
+          const hasCompletedTemplate = !!job.templateUrl
+          
+          if (hasIncomplete || hasImages || hasTemplateProcessing || hasCompletedTemplate) {
             const needsPolling = hasIncomplete || hasTemplateProcessing
             console.log(`🔄 ${needsPolling ? 'Resuming' : 'Loading completed'} job ${job.id} with ${job.enhancedImageUrls.length} images...`)
-            console.log(`   hasIncomplete: ${hasIncomplete}, hasTemplateProcessing: ${hasTemplateProcessing}`)
+            console.log(`   hasIncomplete: ${hasIncomplete}, hasTemplateProcessing: ${hasTemplateProcessing}, hasCompletedTemplate: ${hasCompletedTemplate}`)
             
             setProcessingJobId(needsPolling ? job.id : null)  // ✅ เสร็จแล้วไม่ต้อง set processing
             setCurrentJobId(job.id)
@@ -726,9 +734,11 @@ export default function DashboardPage() {
               setProcessingStatus(`🔄 กำลังประมวลผล ${job.enhancedImageUrls.length} รูป...`)
             } else if (hasTemplateProcessing) {
               setProcessingStatus(`🎨 กำลังสร้าง Template...`)
+            } else if (hasCompletedTemplate) {
+              setProcessingStatus(`✅ Template พร้อมแล้ว!`) // ✅ แสดงสถานะเสร็จแล้ว
             }
             
-            // ✅ Set template URL if exists
+            // ✅ Set template URL if exists (กรณี refresh หลัง template เสร็จ)
             if (job.templateUrl) {
               console.log(`✅ Found existing template: ${job.templateUrl}`)
               setGeneratedTemplateUrl(job.templateUrl)

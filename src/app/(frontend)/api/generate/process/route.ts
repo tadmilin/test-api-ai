@@ -108,7 +108,8 @@ export async function POST(request: NextRequest) {
       const localEnhanced: EnhancedImage[] = [...placeholders]
 
       // ✅ STEP 3: Process images sequentially with stagger delay
-      const STAGGER_DELAY_MS = 2000
+      // ⚡ Reduced from 2s → 500ms (Replicate can handle concurrent requests)
+      const STAGGER_DELAY_MS = 500
       const predictionIds: string[] = []
       const imageMetadata: Array<{
         photoType: string
