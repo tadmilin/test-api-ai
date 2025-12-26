@@ -742,6 +742,10 @@ export interface Form {
  */
 export interface Job {
   id: string;
+  /**
+   * Type of job to determine processing workflow
+   */
+  jobType: 'text-to-image' | 'custom-prompt' | 'template-merge';
   status:
     | 'pending'
     | 'processing'
@@ -1512,6 +1516,7 @@ export interface UsersSelect<T extends boolean = true> {
  * via the `definition` "jobs_select".
  */
 export interface JobsSelect<T extends boolean = true> {
+  jobType?: T;
   status?: T;
   outputSize?: T;
   productName?: T;

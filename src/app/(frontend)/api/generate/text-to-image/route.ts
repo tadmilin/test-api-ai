@@ -87,6 +87,7 @@ export async function POST(request: NextRequest) {
       collection: 'jobs',
       draft: false,
       data: {
+        jobType: 'text-to-image',
         productName: `Text to Image: ${prompt.substring(0, 50)}${prompt.length > 50 ? '...' : ''}`,
         status: 'processing',
         createdBy: user.id, // ✅ ใช้ createdBy แทน user

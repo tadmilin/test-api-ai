@@ -19,6 +19,21 @@ export const Jobs: CollectionConfig = {
   },
   fields: [
     {
+      name: 'jobType',
+      type: 'select',
+      required: true,
+      defaultValue: 'text-to-image',
+      options: [
+        { label: 'Text to Image', value: 'text-to-image' },
+        { label: 'Custom Prompt', value: 'custom-prompt' },
+        { label: 'Custom Prompt + Template', value: 'template-merge' },
+      ],
+      admin: {
+        position: 'sidebar',
+        description: 'Type of job to determine processing workflow',
+      },
+    },
+    {
       name: 'status',
       type: 'select',
       required: true,

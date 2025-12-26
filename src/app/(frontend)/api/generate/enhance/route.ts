@@ -433,7 +433,7 @@ export async function GET(request: NextRequest) {
 
         console.log(`📦 Uploaded to Cloudinary: ${cloudinaryUrl}`)
 
-        // ✅ CRITICAL: Update DB with Blob URL (idempotent)
+        // ✅ CRITICAL: Update DB with Cloudinary URL (idempotent - ป้องกัน webhook/polling ทำซ้ำ)
         if (jobId) {
           const payload = await getPayload({ config })
           
@@ -474,7 +474,7 @@ export async function GET(request: NextRequest) {
               data: { enhancedImageUrls: updatedImages },
             })
             
-            console.log(`💾 DB updated with Blob URL`)
+            console.log(`💾 DB updated with Cloudinary URL`)
           } catch (updateError) {
             console.error('⚠️ Failed to update DB:', updateError)
             // Don't fail the request if DB update fails

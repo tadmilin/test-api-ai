@@ -219,257 +219,33 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * GET /api/generate/create-template?predictionId=xxx&jobId=yyy
- * Poll for template generation status + handle upscale
+ * GET /api/generate/create-template?predictionId=xxx
+ * Simple status check - webhook handles all processing
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const predictionId = searchParams.get('predictionId')
-    const jobId = searchParams.get('jobId')
 
     if (!predictionId) {
       return NextResponse.json({ error: 'predictionId required' }, { status: 400 })
     }
 
-    // Get prediction status
+    // Just return prediction status - webhook handles everything else
     const prediction = await replicate.predictions.get(predictionId)
     
-    console.log(`📊 Template prediction ${predictionId}: ${prediction.status}`)
+    console.log(`📊 Template status: ${predictionId} → ${prediction.status}`)
 
-    // ✅ FALLBACK: Polling path handles resize/upscale if webhook fails
-    if (prediction.status === 'succeeded' && prediction.output) {
-      console.log('📦 Polling detected completion - processing template...')
-      
-      const imageUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
-      
-      if (!imageUrl) {
-        throw new Error('No output from prediction')
-      }
-
-      // Fetch job to get outputSize
-      const { getPayload } = await import('payload')
-      const configPromise = await import('@payload-config')
-      const payload = await getPayload({ config: configPromise.default })
-      
-      const job = await payload.findByID({
-        collection: 'jobs',
-        id: jobId || '',
-      })
-      
-      const outputSize = job.outputSize || '1:1-2K'
-      console.log(`📐 Template outputSize: ${outputSize}`)
-      
-      // Download template
-      console.log(`📥 Downloading template from Replicate...`)
-      const imageResponse = await fetch(imageUrl as string)
-      const imageBuffer = await imageResponse.arrayBuffer()
-      
-      // ✅ Check outputSize - upscale if 1:1, resize otherwise
-      if (outputSize === '1:1-2K') {
-        // ⚠️ Guard: Refetch job ก่อนเช็ค (ป้องกัน race condition)
-        if (!jobId) throw new Error('jobId is required')
-        
-        const latestJob = await payload.findByID({
-          collection: 'jobs',
-          id: jobId,
-        })
-        const templateGen = latestJob.templateGeneration || {}
-        
-        // ✅ CRITICAL: ถ้า webhook ทำงานเสร็จแล้ว (มี templateUrl + completed) → return ทันที
-        if (latestJob.templateUrl && latestJob.status === 'completed') {
-          console.log('[Polling] ✅ Template already completed by webhook - skipping')
-          return NextResponse.json({
-            status: 'succeeded',
-            message: 'Template already completed',
-            templateUrl: latestJob.templateUrl,
-          })
-        }
-        
-        // ✅ เช็ค templateGeneration.status ถ้าเป็น succeeded แปลว่า webhook กำลังจัดการอยู่
-        if (templateGen.status === 'succeeded' && templateGen.url) {
-          console.log('[Polling] ✅ Template generation succeeded (webhook) - returning URL')
-          return NextResponse.json({
-            status: 'succeeded',
-            message: 'Template completed',
-            templateUrl: templateGen.url,
-          })
-        }
-        
-        if (templateGen.upscalePredictionId) {
-          console.log('[Polling] ⏭️ Upscale already in progress - skipping duplicate')
-          return NextResponse.json({
-            status: 'processing',
-            message: 'Upscale already in progress',
-            upscalePredictionId: templateGen.upscalePredictionId,
-          })
-        }
-        
-        console.log('[Polling] 🔍 1:1-2K detected - starting upscale...')
-        
-        // ✅ ATOMIC LOCK: บันทึก placeholder ก่อนเรียก API
-        const placeholderPredictionId = `pending-${Date.now()}`
-        await payload.update({
-          collection: 'jobs',
-          id: jobId,
-          data: {
-            templateGeneration: {
-              ...templateGen,
-              upscalePredictionId: placeholderPredictionId,
-            },
-          },
-        })
-        console.log(`[Polling] 🔒 Locked with placeholder: ${placeholderPredictionId}`)
-        
-        // ✅ DOUBLE-CHECK: Refetch เพื่อยืนยันว่าเรา win the race
-        await new Promise(resolve => setTimeout(resolve, 50)) // รอ 50ms ให้ duplicate write ก่อน
-        const verifyJob = await payload.findByID({
-          collection: 'jobs',
-          id: jobId,
-        })
-        const currentPredictionId = verifyJob.templateGeneration?.upscalePredictionId
-        
-        if (currentPredictionId !== placeholderPredictionId) {
-          console.log(`[Polling] ⏭️ Lost race - another thread won (${currentPredictionId}). Skipping.`)
-          return NextResponse.json({
-            status: 'processing',
-            message: 'Lost race, duplicate prevented',
-            upscalePredictionId: currentPredictionId,
-          })
-        }
-        
-        console.log('[Polling] ✅ Won race - proceeding with upscale')
-        
-        const tempUrl = await uploadBufferToCloudinary(
-          Buffer.from(imageBuffer),
-          `jobs/${jobId}`,
-          `template-temp-${Date.now()}`
-        )
-        
-        const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
-        const upscaleRes = await fetch(`${baseUrl}/api/generate/upscale`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            imageUrl: tempUrl,
-            scale: 2,
-          }),
-        })
-        
-        if (!upscaleRes.ok) {
-          throw new Error('Failed to start upscale')
-        }
-        
-        const upscaleData = await upscaleRes.json()
-        console.log('[Polling] ✅ Upscale started:', upscaleData.predictionId)
-        
-        // ✅ Update: replace placeholder with real predictionId
-        await payload.update({
-          collection: 'jobs',
-          id: jobId,
-          data: {
-            templateGeneration: {
-              predictionId: null,
-              upscalePredictionId: upscaleData.predictionId, // แทนที่ placeholder
-              status: 'processing',
-              url: null,
-            },
-          },
-        })
-        
-        return NextResponse.json({
-          status: 'processing',
-          message: 'Upscale started',
-          upscalePredictionId: upscaleData.predictionId,
-        })
-        
-      } else {
-        // ✅ Resize for 3:4 or 9:16
-        const OUTPUT_SIZE_MAP: Record<string, { width: number; height: number }> = {
-          '3:4': { width: 1080, height: 1350 },
-          '3:4-2K': { width: 1080, height: 1350 },
-          '9:16': { width: 1080, height: 1920 },
-          '9:16-2K': { width: 1080, height: 1920 },
-        }
-        
-        const targetSize = OUTPUT_SIZE_MAP[outputSize] || { width: 1080, height: 1350 }
-        console.log(`[Polling] 📐 Resizing to ${targetSize.width}×${targetSize.height}`)
-        
-        const resizedBuffer = await sharp(Buffer.from(imageBuffer))
-          .resize(targetSize.width, targetSize.height, { fit: 'cover' })
-          .jpeg({ quality: 90, mozjpeg: true })
-          .toBuffer()
-        
-        const cloudinaryUrl = await uploadBufferToCloudinary(
-          resizedBuffer,
-          `jobs/${job.id}`,
-          `template-${targetSize.width}x${targetSize.height}`
-        )
-        
-        console.log('[Polling] ✅ Template uploaded:', cloudinaryUrl)
-        
-        await payload.update({
-          collection: 'jobs',
-          id: job.id,
-          data: {
-            templateGeneration: {
-              predictionId: null,
-              upscalePredictionId: null,
-              status: 'succeeded',
-              url: cloudinaryUrl,
-            },
-            templateUrl: cloudinaryUrl,
-            status: 'completed', // ✅ Mark job as completed
-          },
-        })
-        
-        console.log('[Polling] ✅ Template completed')
-        return NextResponse.json({
-          status: 'succeeded',
-          imageUrl: cloudinaryUrl,
-        })
-      }
-      
-      /* OLD CODE REMOVED:
-      const imageUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
-      
-      if (!imageUrl) {
-        throw new Error('No output from prediction')
-      }
-
-      console.log(`📥 Downloading template...`)
-      const response = await fetch(imageUrl as string)
-      
-      if (!response.ok) {
-        throw new Error(`Failed to download: ${response.status}`)
-      }
-
-      const buffer = await response.arrayBuffer()
-      console.log(`   Downloaded ${Math.round(buffer.byteLength / 1024)}KB`)
-
-      // Upload to Cloudinary
-      const cloudinaryUrl = await uploadBufferToCloudinary(
-        Buffer.from(buffer),
-        'template-temp',
-        `template-temp-${Date.now()}`
-      )
-
-      console.log(`📤 Starting upscale...`)
-
-      */
-    }
-
-    // Return current status
     return NextResponse.json({
       status: prediction.status,
       error: prediction.error || null,
     })
 
   } catch (error) {
-    console.error('❌ Template polling failed:', error)
+    console.error('❌ Template status check failed:', error)
     return NextResponse.json(
       { 
-        error: error instanceof Error ? error.message : 'Polling failed',
+        error: error instanceof Error ? error.message : 'Status check failed',
       },
       { status: 500 }
     )

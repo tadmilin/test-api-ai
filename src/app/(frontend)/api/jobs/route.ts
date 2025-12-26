@@ -119,6 +119,7 @@ export async function POST(request: NextRequest) {
       collection: 'jobs',
       draft: false,
       data: {
+        jobType: body.jobType || 'text-to-image', // ✅ Default to text-to-image
         productName,
         productDescription: productDescription || '',
         contentTopic: contentTopic || undefined,

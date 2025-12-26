@@ -45,6 +45,28 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`🚀 Starting job ${jobId}`)
+    console.log(`📋 Job Type: ${job.jobType || 'unknown (legacy)'}`)
+    console.log(`📐 Output Size: ${job.outputSize || '1:1-2K'}`)
+
+    // ✅ Route based on jobType
+    if (job.jobType === 'text-to-image') {
+      console.log('🎨 Text to Image workflow detected')
+      // Text to Image uses Imagen 4 Ultra - handled by text-to-image API
+      return NextResponse.json({ 
+        error: 'Text to Image jobs should use /api/generate/text-to-image',
+        message: 'Wrong API endpoint'
+      }, { status: 400 })
+    }
+
+    if (job.jobType !== 'custom-prompt' && job.jobType !== 'template-merge') {
+      console.log(`⚠️ Unknown jobType: ${job.jobType}`)
+      return NextResponse.json({ 
+        error: `Unknown jobType: ${job.jobType}`,
+        message: 'Job type must be custom-prompt or template-merge'
+      }, { status: 400 })
+    }
+
+    console.log(`✅ Custom Prompt workflow (${job.jobType})`)
 
     // Update job status
     await payload.update({

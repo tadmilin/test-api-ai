@@ -235,13 +235,15 @@ export default function CustomPromptPage() {
       console.log(`✅ All images uploaded to Cloudinary:`, cloudinaryUrls)
 
       // ✅ STEP 2: Create job with Cloudinary URLs
+      const jobType = enableTemplate ? 'template-merge' : 'custom-prompt' // ✅ Determine jobType
+      
       const jobRes = await fetch('/api/jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          jobType, // ✅ Set jobType
           productName: 'Custom Prompt Job',
           productDescription: customPrompt.trim(),
-          // contentTopic: ไม่ระบุ - เพราะ upscale จะทำที่ template แทน
           referenceImageUrls: cloudinaryUrls, // ✅ Use Cloudinary URLs
           customPrompt: customPrompt.trim(),
           templateType: 'custom',
