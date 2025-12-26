@@ -97,6 +97,27 @@ export async function POST(request: NextRequest) {
       id: jobId,
     })
     
+    // ✅ CRITICAL GUARD: ตรวจสอบว่าเคยสร้าง template prediction แล้วหรือยัง (Idempotency)
+    const templateGen = job.templateGeneration || {}
+    if (templateGen.predictionId || templateGen.upscalePredictionId) {
+      console.log(`⏭️ Template generation already in progress (predictionId: ${templateGen.predictionId || templateGen.upscalePredictionId})`)
+      return NextResponse.json({
+        predictionId: templateGen.predictionId || templateGen.upscalePredictionId,
+        status: templateGen.status || 'processing',
+        message: 'Template generation already started (idempotent)',
+      })
+    }
+    
+    if (templateGen.url && templateGen.status === 'succeeded') {
+      console.log(`✅ Template already completed: ${templateGen.url}`)
+      return NextResponse.json({
+        predictionId: null,
+        status: 'succeeded',
+        templateUrl: templateGen.url,
+        message: 'Template already completed',
+      })
+    }
+    
     const outputSize = job.outputSize || '1:1-2K'
     console.log(`📐 Output size from job: ${outputSize}`)
 
