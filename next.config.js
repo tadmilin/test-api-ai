@@ -48,6 +48,11 @@ const nextConfig = {
         hostname: '*.replicate.delivery',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'res.cloudinary.com',
+        pathname: '/**',
+      },
     ],
   },
   webpack: (webpackConfig) => {
