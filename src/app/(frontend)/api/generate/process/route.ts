@@ -128,6 +128,7 @@ export async function POST(request: NextRequest) {
       const placeholders = referenceUrls.map((url: string | null | undefined, index: number) => {
         const sheetRow = sheetRows[index] || {}
         return {
+          index: index, // ✅ เพิ่ม index เพื่อ sort ให้ถูกต้อง
           originalUrl: (url || '') as string,
           url: null, // No Blob URL yet
           tempOutputUrl: null, // No Replicate URL yet
