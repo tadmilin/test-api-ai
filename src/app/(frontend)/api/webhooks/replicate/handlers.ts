@@ -380,6 +380,12 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
           console.log('[Webhook]    predictionId:', latestTemplateGen.predictionId)
           console.log('[Webhook]    url:', latestTemplateGen.url)
         } else {
+          // ✅ Debug: Log ALL images before filtering
+          console.log('[Webhook] 🔍 DEBUG: All images in updated array:')
+          updated.forEach((img: any, i: number) => {
+            console.log(`[Webhook]       [${i}] Index=${img.index}, Status=${img.status}, URL=${img.url ? img.url.substring(0, 80) : 'null'}`)
+          })
+          
           // ✅ Sort by index to ensure correct order
           const enhancedImageUrls = updated
             .filter((img: any) => img.status === 'completed' && img.url)
