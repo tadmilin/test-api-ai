@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
 
     // 🔒 GUARD: ถ้าเป็น Custom Prompt + Template → ไม่ใช้ API นี้
     const hasCustomPrompt = !!job.customPrompt
-    const hasTemplate = !!job.templateUrl
+    const hasTemplate = !!job.selectedTemplateUrl // ✅ ใช้ selectedTemplateUrl (input) แทน templateUrl (output)
     const isCustomPromptWithTemplate = hasCustomPrompt && hasTemplate
     
     // 🔒 GUARD: Only reject Custom Prompt + Template (they use /status API)

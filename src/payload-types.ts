@@ -814,7 +814,11 @@ export interface Job {
    */
   templateType?: ('single' | 'dual' | 'triple' | 'quad') | null;
   /**
-   * Base64 data URL or blob URL of the generated template composite
+   * Template URL selected by user from Google Drive (input) - used to determine if job should generate template
+   */
+  selectedTemplateUrl?: string | null;
+  /**
+   * Final generated template URL from Replicate/Cloudinary (output) - set after template generation completes
    */
   templateUrl?: string | null;
   /**
@@ -1539,6 +1543,7 @@ export interface JobsSelect<T extends boolean = true> {
         id?: T;
       };
   templateType?: T;
+  selectedTemplateUrl?: T;
   templateUrl?: T;
   templateGeneration?:
     | T

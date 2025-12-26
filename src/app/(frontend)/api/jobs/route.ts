@@ -79,6 +79,7 @@ export async function POST(request: NextRequest) {
       referenceImageUrls,
       customPrompt,
       outputSize,
+      selectedTemplateUrl,
       templateUrl,
       status = 'pending',
     } = body
@@ -128,7 +129,8 @@ export async function POST(request: NextRequest) {
         targetPlatforms: targetPlatforms || ['facebook', 'instagram_feed'],
         referenceImageUrls: referenceImageUrls || [],
         outputSize: outputSize || '1:1-2K',
-        // Don't save templateUrl here - will be set after template generation
+        selectedTemplateUrl: selectedTemplateUrl || undefined, // ✅ Template selected by user (input)
+        templateUrl: templateUrl || undefined, // ✅ Can be set initially or after generation (output)
         status: status as 'pending' | 'processing' | 'enhancing' | 'review_pending' | 'style_selection' | 'generating_template' | 'completed' | 'failed' | 'approved' | 'rejected',
         createdBy: currentUser?.id || undefined,
       },

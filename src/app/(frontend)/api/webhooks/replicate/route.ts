@@ -449,7 +449,7 @@ export async function POST(req: Request) {
           // ✅ Upscale logic:
           // 🔒 GUARD: Custom Prompt + Template → ข้ามทั้งหมด (ใช้งานได้อยู่แล้ว)
           const hasCustomPrompt = !!job.customPrompt
-          const hasTemplate = !!job.templateUrl
+          const hasTemplate = !!job.selectedTemplateUrl // ✅ ใช้ selectedTemplateUrl (input) แทน templateUrl (output)
           const isCustomPromptWithTemplate = hasCustomPrompt && hasTemplate
           
           // 🔒 CRITICAL: ถ้าเป็น Custom Prompt + Template → ไม่ resize/upscale รูป (จะทำที่ template)
@@ -662,7 +662,7 @@ export async function POST(req: Request) {
       newJobStatus = hasFailed ? 'failed' : 'completed'
       
       // ✅ CRITICAL: Auto-start template generation for custom-prompt jobs
-      if (!hasFailed && job.customPrompt && job.templateUrl) {
+      if (!hasFailed && job.customPrompt && job.selectedTemplateUrl) { // ✅ ใช้ selectedTemplateUrl (input) แทน templateUrl (output)
         // ⚠️ Guard: Refetch job เพื่อดูสถานะล่าสุด (ป้องกัน race condition)
         const latestJob = await payload.findByID({
           collection: 'jobs',
@@ -679,6 +679,11 @@ export async function POST(req: Request) {
               ?.filter(img => img.status === 'completed' && img.url)
               .map(img => img.url as string) || []
             
+            console.log(`[Webhook] 📸 Enhanced image URLs for template (${enhancedImageUrls.length}):`)
+            enhancedImageUrls.forEach((url, i) => {
+              console.log(`   [${i}] ${url.substring(0, 80)}...`)
+            })
+            
             if (enhancedImageUrls.length > 0) {
               const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
               const templateRes = await fetch(`${baseUrl}/api/generate/create-template`, {
@@ -686,7 +691,7 @@ export async function POST(req: Request) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   enhancedImageUrls,
-                  templateUrl: job.templateUrl,
+                  templateUrl: job.selectedTemplateUrl, // ✅ ส่ง selectedTemplateUrl ไปใช้เป็น base template
                   jobId: job.id,
                   outputSize: job.outputSize, // ✅ ส่ง outputSize ไปด้วยเพื่อป้องกัน race condition
                 }),

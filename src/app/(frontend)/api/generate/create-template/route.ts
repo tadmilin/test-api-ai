@@ -83,6 +83,9 @@ export async function POST(request: NextRequest) {
     console.log(`🎨 Starting Nano Banana Pro template generation`)
     console.log(`📋 Template URL: ${templateUrl}`)
     console.log(`📸 Enhanced images: ${enhancedImageUrls.length}`)
+    enhancedImageUrls.forEach((url: string, i: number) => {
+      console.log(`   [${i}] ${url.substring(0, 80)}...`)
+    })
 
     // ✅ Fetch job to get outputSize
     const { getPayload } = await import('payload')

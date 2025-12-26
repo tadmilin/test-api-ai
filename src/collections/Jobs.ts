@@ -219,11 +219,19 @@ export const Jobs: CollectionConfig = {
               },
             },
             {
+              name: 'selectedTemplateUrl',
+              type: 'text',
+              label: 'Selected Template URL (Input)',
+              admin: {
+                description: 'Template URL selected by user from Google Drive (input) - used to determine if job should generate template',
+              },
+            },
+            {
               name: 'templateUrl',
               type: 'text',
-              label: 'Generated Template URL',
+              label: 'Generated Template URL (Output)',
               admin: {
-                description: 'Base64 data URL or blob URL of the generated template composite',
+                description: 'Final generated template URL from Replicate/Cloudinary (output) - set after template generation completes',
               },
             },
             {

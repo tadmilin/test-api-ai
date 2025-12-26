@@ -116,8 +116,9 @@ export async function POST(request: NextRequest) {
 
     // Upload to Cloudinary with unique filename
     console.log(`📤 Uploading to Cloudinary (folder: ${folder})...`)
-    // ✅ Add timestamp to ensure unique filename (prevent duplicate images)
-    const uniqueFilename = `drive-${fileId}-${Date.now()}`
+    // ✅ Add timestamp + random string to ensure 100% unique filename (prevent duplicate images)
+    const randomSuffix = Math.random().toString(36).substring(2, 8)
+    const uniqueFilename = `drive-${fileId}-${Date.now()}-${randomSuffix}`
     const cloudinaryUrl = await uploadBufferToCloudinary(
       processedBuffer,
       folder,

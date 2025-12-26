@@ -214,7 +214,7 @@ export default function DashboardPage() {
       if (jobRes.ok) {
         const jobData = await jobRes.json()
         const hasCustomPrompt = !!jobData.customPrompt
-        const hasTemplate = !!jobData.templateUrl
+        const hasTemplate = !!jobData.selectedTemplateUrl // ✅ ใช้ selectedTemplateUrl (input) แทน templateUrl (output)
         const isTextToImage = jobData.contentTopic?.includes('Text-to-Image')
         
         // Use new API for: Text-to-Image OR Custom Prompt without Template

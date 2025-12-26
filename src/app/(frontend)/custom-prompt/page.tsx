@@ -247,7 +247,7 @@ export default function CustomPromptPage() {
           templateType: 'custom',
           status: 'pending',
           outputSize: outputSize,
-          templateUrl: enableTemplate ? selectedTemplate : undefined,
+          selectedTemplateUrl: enableTemplate ? selectedTemplate : undefined, // ✅ Input: template user selected
         }),
       })
 

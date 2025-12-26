@@ -57,7 +57,7 @@ export async function uploadBufferToCloudinary(
     const options: any = {
       folder,
       resource_type: 'image',
-      overwrite: false,
+      overwrite: true, // ✅ Always upload new image (prevent reusing old uploads)
       quality: 'auto',
       fetch_format: 'auto',
     }
