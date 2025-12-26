@@ -359,9 +359,8 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
           console.log(`[Webhook]       [${i}] ${url}`)
         })
         
-        // ✅ CRITICAL: Use first completed image's predictionId as unique lock
-        const firstCompletedImg = updated.find((img: any) => img.status === 'completed')
-        const lockMarker = firstCompletedImg ? `LOCK_${firstCompletedImg.originalPredictionId || currentImg.predictionId}` : 'PENDING_START'
+        // ✅ CRITICAL: Use current webhook's predictionId as unique lock
+        const lockMarker = `LOCK_${prediction.id}`
         
         console.log('[Webhook] 🔒 Lock marker:', lockMarker)
         
