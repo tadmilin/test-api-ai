@@ -53,7 +53,7 @@ async function processWebhook(rawBody: string, predictionId: string) {
             in: ['enhancing', 'processing', 'generating_template'],
           },
         },
-        limit: 50,
+        limit: 100,  // ✅ Increased limit
       })
 
       console.log('[Webhook] 🔍 Found', enhancingJobs.docs.length, 'jobs with status enhancing/processing/generating_template')
@@ -70,17 +70,20 @@ async function processWebhook(rawBody: string, predictionId: string) {
         }
         // Check templateGeneration
         if (job.templateGeneration) {
-          console.log('[Webhook] 🔍 Checking templateGeneration:', {
-            jobId: job.id,
-            predictionId: job.templateGeneration.predictionId,
-            upscalePredictionId: job.templateGeneration.upscalePredictionId,
-            looking_for: predictionId,
-          })
           if (job.templateGeneration.predictionId === predictionId || 
               job.templateGeneration.upscalePredictionId === predictionId) {
             console.log('[Webhook] 🎯 Found match in templateGeneration for job:', job.id)
+            console.log('[Webhook]    Job status:', job.status)
+            console.log('[Webhook]    Job type:', job.jobType)
+            console.log('[Webhook]    Template predictionId:', job.templateGeneration.predictionId)
+            console.log('[Webhook]    Template upscalePredictionId:', job.templateGeneration.upscalePredictionId)
             return true
           }
+        }
+        // Check legacy templatePredictionId
+        if (job.templatePredictionId === predictionId) {
+          console.log('[Webhook] 🎯 Found match in templatePredictionId (legacy) for job:', job.id)
+          return true
         }
         return false
       })

@@ -21,12 +21,20 @@ interface CurrentUser {
 interface Job {
   id: string
   productName: string
+  jobType?: string
   status: string
   createdAt: string
   updatedAt?: string
   contentTopic?: string
   outputSize?: string
   templateUrl?: string
+  selectedTemplateUrl?: string
+  templateGeneration?: {
+    predictionId?: string
+    upscalePredictionId?: string
+    status?: string
+    url?: string
+  }
   enhancedImageUrls?: Array<{
     url?: string
     status?: string

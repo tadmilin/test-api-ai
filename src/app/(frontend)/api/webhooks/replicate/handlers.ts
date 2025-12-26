@@ -282,7 +282,13 @@ export async function handleTemplateMerge(job: Job, predictionId: string, status
  * ไม่ upscale/resize - เก็บไว้ใส่ template
  */
 async function handleEnhancedImages(job: Job, predictionId: string, status: string, output: any, body: any) {
+  console.log('[Webhook] 📸 handleEnhancedImages called')
+  console.log('[Webhook]    Job ID:', job.id)
+  console.log('[Webhook]    Status:', status)
+  console.log('[Webhook]    Prediction ID:', predictionId)
+  
   const updatedUrls = job.enhancedImageUrls || []
+  console.log('[Webhook]    Total images:', updatedUrls.length)
   
   const currentImg = updatedUrls.find((img: any) => img.predictionId === predictionId)
   
@@ -337,8 +343,15 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
       const allDone = updated.every((img: any) => img.status === 'completed' || img.status === 'failed')
       const hasFailed = updated.some((img: any) => img.status === 'failed')
       
+      console.log('[Webhook] 📊 Checking if should start template:')
+      console.log('[Webhook]    allDone:', allDone)
+      console.log('[Webhook]    hasFailed:', hasFailed)
+      console.log('[Webhook]    selectedTemplateUrl:', job.selectedTemplateUrl ? 'exists' : 'MISSING')
+      console.log('[Webhook]    Image statuses:', updated.map((img: any) => `#${img.index}: ${img.status}`))
+      
       if (allDone && !hasFailed && job.selectedTemplateUrl) {
         console.log('[Webhook] 🎨 All images done → Starting template generation...')
+        console.log('[Webhook]    Enhanced URLs:', updated.filter((img: any) => img.status === 'completed').map((img: any) => img.url.substring(0, 60)))
         
         // Wait 2s to prevent race condition
         await new Promise(resolve => setTimeout(resolve, 2000))
@@ -356,31 +369,56 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
         const latestTemplateGen = latestJob.templateGeneration || {}
         if (latestTemplateGen.predictionId || latestTemplateGen.url) {
           console.log('[Webhook] ⏭️ Template already started/completed')
+          console.log('[Webhook]    predictionId:', latestTemplateGen.predictionId)
+          console.log('[Webhook]    url:', latestTemplateGen.url)
         } else {
           // Start template generation
           const enhancedImageUrls = updated
             .filter((img: any) => img.status === 'completed' && img.url)
             .map((img: any) => img.url)
           
-          const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
-          await fetch(`${baseUrl}/api/generate/create-template`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              enhancedImageUrls,
-              templateUrl: job.selectedTemplateUrl,
-              jobId: job.id,
-              outputSize: job.outputSize,
-            }),
+          console.log('[Webhook] 🚀 Starting template with:', {
+            enhancedImageCount: enhancedImageUrls.length,
+            templateUrl: job.selectedTemplateUrl?.substring(0, 60),
+            jobId: job.id,
+            outputSize: job.outputSize,
           })
           
-          console.log('[Webhook] ✅ Template generation started')
+          const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
+          const templateUrl = `${baseUrl}/api/generate/create-template`
+          
+          try {
+            const response = await fetch(templateUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                enhancedImageUrls,
+                templateUrl: job.selectedTemplateUrl,
+                jobId: job.id,
+                outputSize: job.outputSize,
+              }),
+            })
+            
+            if (!response.ok) {
+              const errorText = await response.text()
+              console.error('[Webhook] ❌ Template generation API failed:', response.status, errorText)
+              throw new Error(`API returned ${response.status}: ${errorText}`)
+            }
+            
+            const result = await response.json()
+            console.log('[Webhook] ✅ Template generation started:', result.predictionId)
+          } catch (error) {
+            console.error('[Webhook] ❌ Failed to start template generation:', error)
+            console.error('[Webhook]    This job will remain stuck at "generating_template"')
+            console.error('[Webhook]    Please manually check the job and retry')
+            // Don't throw - let it stay as generating_template so user can see it
+          }
         }
       }
       
       return {
         updatedUrls: updated,
-        newJobStatus: allDone ? (hasFailed ? 'failed' : 'enhancing') : 'enhancing',
+        newJobStatus: allDone ? (hasFailed ? 'failed' : 'generating_template') : 'enhancing',
       }
       
     } catch (error) {
@@ -506,7 +544,7 @@ async function handleTemplateGeneration(job: Job, predictionId: string, status: 
           
           return {
             updatedUrls: job.enhancedImageUrls,
-            newJobStatus: 'generating_template',
+            newJobStatus: 'enhancing',  // ✅ Fixed: ต้องเป็น enhancing เพื่อให้ webhook หาเจอ
             templateUpdate: {
               upscalePredictionId: upscaleData.predictionId,
               predictionId: null,
@@ -527,6 +565,7 @@ async function handleTemplateGeneration(job: Job, predictionId: string, status: 
         }
       } else {
         // No upscale needed → upload directly
+        console.log('[Webhook] 📐 No upscale needed → Uploading directly...')
         return handleTemplateGeneration(job, predictionId, status, output, body, true)
       }
     }

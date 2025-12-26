@@ -9,12 +9,14 @@ import { normalizeImageUrl } from '@/utilities/googleDriveUrl'
 interface Job {
   id: string
   productName: string
+  jobType?: string
   status: string
   createdAt: string
   updatedAt?: string
   contentTopic?: string
   outputSize?: string
   templateUrl?: string
+  selectedTemplateUrl?: string
   enhancedImageUrls?: Array<{
     url?: string
     status?: string
@@ -52,13 +54,24 @@ export function JobCard({ job, onRefresh, onView, onDelete }: JobCardProps) {
     pending: 'bg-gray-100 text-gray-800',
     processing: 'bg-blue-100 text-blue-800',
     enhancing: 'bg-purple-100 text-purple-800',
+    generating_template: 'bg-indigo-100 text-indigo-800',
     completed: 'bg-green-100 text-green-800',
     failed: 'bg-red-100 text-red-800',
   }
   
-  const statusColor = statusColors[job.status] || 'bg-gray-100 text-gray-800'
+  const statusLabels: Record<string, string> = {
+    pending: 'รอดำเนินการ',
+    processing: 'กำลังสร้าง',
+    enhancing: 'กำลังปรับปรุง',
+    generating_template: 'กำลังสร้าง Template',
+    completed: 'เสร็จสิ้น',
+    failed: 'ล้มเหลว',
+  }
   
-  const isProcessing = job.status === 'processing' || job.status === 'enhancing'
+  const statusColor = statusColors[job.status] || 'bg-gray-100 text-gray-800'
+  const statusLabel = statusLabels[job.status] || job.status
+  
+  const isProcessing = job.status === 'processing' || job.status === 'enhancing' || job.status === 'generating_template'
   
   return (
     <div className="border rounded-lg p-4 hover:shadow-md transition-shadow">
@@ -83,9 +96,18 @@ export function JobCard({ job, onRefresh, onView, onDelete }: JobCardProps) {
         {job.productName}
       </h3>
       
+      {/* Job Type Badge */}
+      {job.jobType === 'template-merge' && (
+        <div className="mb-2">
+          <span className="text-xs px-2 py-0.5 rounded bg-pink-100 text-pink-800">
+            📄 มี Template
+          </span>
+        </div>
+      )}
+      
       <div className="flex items-center gap-2 mb-2">
         <span className={`text-xs px-2 py-1 rounded-full ${statusColor}`}>
-          {job.status}
+          {statusLabel}
         </span>
         {job.outputSize && (
           <span className="text-xs text-gray-600">

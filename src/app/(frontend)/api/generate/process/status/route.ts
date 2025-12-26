@@ -47,18 +47,15 @@ export async function GET(request: NextRequest) {
     const templateGeneration = job.templateGeneration || {}
     const hasTemplate = !!job.templateUrl || !!templateGeneration.url
 
-    // Determine overall status
-    const allComplete = enhancedImages.length > 0 && 
-      enhancedImages.every((img: any) => img.status === 'completed' || img.status === 'failed')
+    // ✅ ใช้ status จาก DB ตรงๆ (webhook จะ update ให้แล้ว)
+    // Don't override - webhook knows best
+    const overallStatus = job.status
     
+    // Template info
     const needsTemplate = job.jobType === 'template-merge' && !hasTemplate
+    const isGeneratingTemplate = job.status === 'generating_template'
     
-    let overallStatus = job.status
-    if (allComplete && !needsTemplate) {
-      overallStatus = failed > 0 ? 'failed' : 'completed'
-    } else if (pending > 0 || needsTemplate) {
-      overallStatus = 'enhancing'
-    }
+    console.log(`   Template: ${hasTemplate ? 'exists' : 'none'}, needsTemplate: ${needsTemplate}, isGeneratingTemplate: ${isGeneratingTemplate}`)
 
     return NextResponse.json({
       status: overallStatus,
