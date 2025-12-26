@@ -460,12 +460,11 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
           console.error('[Webhook]    Please manually check the job and retry')
           // Don't throw - let it stay as generating_template so user can see it
         }
+        
+        return { updatedUrls: updated, newJobStatus: 'generating_template' }
       }
       
-      return {
-        updatedUrls: updated,
-        newJobStatus: allDone ? (hasFailed ? 'failed' : 'generating_template') : 'enhancing',
-      }
+      return { updatedUrls: updated, newJobStatus: 'enhancing' }
       
     } catch (error) {
       console.error('[Webhook] ❌ Upload failed:', error)
