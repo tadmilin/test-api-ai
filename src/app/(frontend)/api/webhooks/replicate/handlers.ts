@@ -352,15 +352,15 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
       if (allDone && !hasFailed && job.selectedTemplateUrl) {
         console.log('[Webhook] 🎨 All images done → Starting template generation...')
         
-        // ✅ Log full URLs (not truncated)
-        const completedUrls = updated.filter((img: any) => img.status === 'completed').map((img: any) => img.url)
-        console.log('[Webhook]    Enhanced URLs count:', completedUrls.length)
-        completedUrls.forEach((url: string, i: number) => {
-          console.log(`[Webhook]       [${i}] ${url}`)
+        // ✅ Log full URLs with index
+        const completedImages = updated.filter((img: any) => img.status === 'completed')
+        console.log('[Webhook]    Enhanced URLs count:', completedImages.length)
+        completedImages.forEach((img: any) => {
+          console.log(`[Webhook]       [Index ${img.index}] ${img.url}`)
         })
         
-        // ✅ Random delay 0-3000ms to spread webhooks
-        const randomDelay = Math.floor(Math.random() * 3000)
+        // Wait 2-5s random to prevent race condition
+        const randomDelay = 2000 + Math.floor(Math.random() * 3000)
         console.log(`[Webhook] ⏱️  Waiting ${randomDelay}ms (random) to prevent race condition...`)
         await new Promise(resolve => setTimeout(resolve, randomDelay))
         
@@ -375,103 +375,66 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
         })
         
         const latestTemplateGen = latestJob.templateGeneration || {}
-        
-        // Check if already has predictionId (including lock markers)
-        if (latestTemplateGen.predictionId && latestTemplateGen.predictionId !== null && latestTemplateGen.predictionId !== '') {
-          console.log('[Webhook] ⏭️ Template already started by another webhook')
+        if (latestTemplateGen.predictionId || latestTemplateGen.url) {
+          console.log('[Webhook] ⏭️ Template already started/completed')
           console.log('[Webhook]    predictionId:', latestTemplateGen.predictionId)
-          return { updatedUrls: updated, newJobStatus: 'generating_template' }
-        }
-        
-        if (latestTemplateGen.url) {
-          console.log('[Webhook] ⏭️ Template already completed')
           console.log('[Webhook]    url:', latestTemplateGen.url)
-          return { updatedUrls: updated, newJobStatus: 'completed' }
-        }
-        
-        // Try to claim with unique lockMarker
-        const lockMarker = `LOCK_${predictionId}_${Date.now()}`
-        console.log('[Webhook] 🎯 Attempting to claim with lockMarker:', lockMarker)
-        
-        await payload.update({
-          collection: 'jobs',
-          id: job.id,
-          data: {
-            status: 'generating_template',
-            templateGeneration: {
-              predictionId: lockMarker,
-              status: 'pending',
-              url: null,
-              upscalePredictionId: null,
-            },
-          },
-        })
-        
-        // Verify we successfully claimed it (refetch again)
-        const verifyJob = await payload.findByID({
-          collection: 'jobs',
-          id: job.id,
-        })
-        
-        if (verifyJob.templateGeneration?.predictionId !== lockMarker) {
-          console.log('[Webhook] ⚠️ Lost race - another webhook claimed it first')
-          console.log('[Webhook]    Our marker:', lockMarker)
-          console.log('[Webhook]    Actual marker:', verifyJob.templateGeneration?.predictionId)
-          return { updatedUrls: updated, newJobStatus: 'generating_template' }
-        }
-        
-        console.log('[Webhook] ✅ Successfully claimed - proceeding with template generation')
-        
-        // Start template generation
-        const enhancedImageUrls = updated
-          .filter((img: any) => img.status === 'completed' && img.url)
-          .map((img: any) => img.url)
-        
-        console.log('[Webhook] 🚀 Starting template with:', {
-          enhancedImageCount: enhancedImageUrls.length,
-          templateUrl: job.selectedTemplateUrl?.substring(0, 60),
-          jobId: job.id,
-          outputSize: job.outputSize,
-        })
-        
-        // ✅ Log each URL for debugging
-        console.log('[Webhook] 📸 Enhanced image URLs to send:')
-        enhancedImageUrls.forEach((url: string, i: number) => {
-          console.log(`[Webhook]    [${i}] ${url}`)
-        })
-        
-        const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
-        const templateUrl = `${baseUrl}/api/generate/create-template`
-        
-        try {
-          const response = await fetch(templateUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              enhancedImageUrls,
-              templateUrl: job.selectedTemplateUrl,
-              jobId: job.id,
-              outputSize: job.outputSize,
-            }),
+        } else {
+          // ✅ Sort by index to ensure correct order
+          const enhancedImageUrls = updated
+            .filter((img: any) => img.status === 'completed' && img.url)
+            .sort((a: any, b: any) => a.index - b.index)
+            .map((img: any) => img.url)
+          
+          console.log('[Webhook] 🚀 Starting template with:', {
+            enhancedImageCount: enhancedImageUrls.length,
+            templateUrl: job.selectedTemplateUrl,
+            jobId: job.id,
+            outputSize: job.outputSize,
           })
           
-          if (!response.ok) {
-            const errorText = await response.text()
-            console.error('[Webhook] ❌ Template generation API failed:', response.status, errorText)
-            throw new Error(`API returned ${response.status}: ${errorText}`)
-          }
+          // ✅ Log each URL with order for debugging
+          console.log('[Webhook] 📸 Sending URLs in order:')
+          enhancedImageUrls.forEach((url: string, i: number) => {
+            console.log(`[Webhook]    Position ${i}: ${url}`)
+          })
           
-          const result = await response.json()
-          console.log('[Webhook] ✅ Template generation started:', result.predictionId)
-        } catch (error) {
-          console.error('[Webhook] ❌ Failed to start template generation:', error)
-          console.error('[Webhook]    This job will remain stuck at "generating_template"')
-          console.error('[Webhook]    Please manually check the job and retry')
-          // Don't throw - let it stay as generating_template so user can see it
+          const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
+          const templateUrl = `${baseUrl}/api/generate/create-template`
+          
+          try {
+            const response = await fetch(templateUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                enhancedImageUrls,
+                templateUrl: job.selectedTemplateUrl,
+                jobId: job.id,
+                outputSize: job.outputSize,
+              }),
+            })
+            
+            if (!response.ok) {
+              const errorText = await response.text()
+              console.error('[Webhook] ❌ Template generation API failed:', response.status, errorText)
+              throw new Error(`API returned ${response.status}: ${errorText}`)
+            }
+            
+            const result = await response.json()
+            console.log('[Webhook] ✅ Template generation started:', result.predictionId)
+          } catch (error) {
+            console.error('[Webhook] ❌ Failed to start template generation:', error)
+            console.error('[Webhook]    This job will remain stuck at "generating_template"')
+            console.error('[Webhook]    Please manually check the job and retry')
+            // Don't throw - let it stay as generating_template so user can see it
+          }
         }
       }
       
-      return { updatedUrls: updated, newJobStatus: 'enhancing' }
+      return {
+        updatedUrls: updated,
+        newJobStatus: allDone ? (hasFailed ? 'failed' : 'generating_template') : 'enhancing',
+      }
       
     } catch (error) {
       console.error('[Webhook] ❌ Upload failed:', error)
@@ -575,12 +538,7 @@ async function handleTemplateGeneration(job: Job, predictionId: string, status: 
       }
     } else {
       // Template generated → start upscale if 1:1
-      console.log('[Webhook] 🔍 Template generation completed')
-      console.log('[Webhook]    Job outputSize:', job.outputSize)
-      console.log('[Webhook]    Replicate URL:', replicateUrl.substring(0, 80))
-      
       const shouldUpscale = job.outputSize?.includes('1:1')
-      console.log('[Webhook]    Should upscale (1:1):', shouldUpscale)
       
       if (shouldUpscale) {
         console.log('[Webhook] 📐 Template 1:1 → Starting upscale...')
