@@ -359,17 +359,12 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
           console.log(`[Webhook]       [${i}] ${url}`)
         })
         
-        // ✅ CRITICAL: Use current webhook's predictionId as unique lock
-        const lockMarker = `LOCK_${predictionId}`
+        // ✅ Random delay 0-3000ms to spread webhooks
+        const randomDelay = Math.floor(Math.random() * 3000)
+        console.log(`[Webhook] ⏱️  Waiting ${randomDelay}ms (random) to prevent race condition...`)
+        await new Promise(resolve => setTimeout(resolve, randomDelay))
         
-        console.log('[Webhook] 🔒 Lock marker:', lockMarker)
-        
-        // Wait 2s + random(0-500ms) to spread webhook processing
-        const delay = 2000 + Math.floor(Math.random() * 500)
-        console.log(`[Webhook] ⏱️  Waiting ${delay}ms to prevent race condition...`)
-        await new Promise(resolve => setTimeout(resolve, delay))
-        
-        // Refetch and try to claim the lock in one go
+        // Refetch to check if template already started
         const { getPayload } = await import('payload')
         const configPromise = await import('@payload-config')
         const payload = await getPayload({ config: configPromise.default })
@@ -381,11 +376,10 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
         
         const latestTemplateGen = latestJob.templateGeneration || {}
         
-        // Check if already started (any predictionId that's not empty/null)
-        if (latestTemplateGen.predictionId && latestTemplateGen.predictionId !== '' && latestTemplateGen.predictionId !== null) {
+        // Check if already has predictionId (including lock markers)
+        if (latestTemplateGen.predictionId && latestTemplateGen.predictionId !== null && latestTemplateGen.predictionId !== '') {
           console.log('[Webhook] ⏭️ Template already started by another webhook')
           console.log('[Webhook]    predictionId:', latestTemplateGen.predictionId)
-          console.log('[Webhook]    status:', latestTemplateGen.status)
           return { updatedUrls: updated, newJobStatus: 'generating_template' }
         }
         
@@ -395,21 +389,36 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
           return { updatedUrls: updated, newJobStatus: 'completed' }
         }
         
-        // Try to claim the lock
-        console.log('[Webhook] 🎯 Attempting to claim template generation rights...')
+        // Try to claim with unique lockMarker
+        const lockMarker = `LOCK_${predictionId}_${Date.now()}`
+        console.log('[Webhook] 🎯 Attempting to claim with lockMarker:', lockMarker)
+        
         await payload.update({
           collection: 'jobs',
           id: job.id,
           data: {
-            status: 'generating_template', // ✅ Change job status immediately
+            status: 'generating_template',
             templateGeneration: {
-              predictionId: lockMarker, // Unique marker
+              predictionId: lockMarker,
               status: 'pending',
               url: null,
               upscalePredictionId: null,
             },
           },
         })
+        
+        // Verify we successfully claimed it (refetch again)
+        const verifyJob = await payload.findByID({
+          collection: 'jobs',
+          id: job.id,
+        })
+        
+        if (verifyJob.templateGeneration?.predictionId !== lockMarker) {
+          console.log('[Webhook] ⚠️ Lost race - another webhook claimed it first')
+          console.log('[Webhook]    Our marker:', lockMarker)
+          console.log('[Webhook]    Actual marker:', verifyJob.templateGeneration?.predictionId)
+          return { updatedUrls: updated, newJobStatus: 'generating_template' }
+        }
         
         console.log('[Webhook] ✅ Successfully claimed - proceeding with template generation')
         
@@ -460,8 +469,6 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
           console.error('[Webhook]    Please manually check the job and retry')
           // Don't throw - let it stay as generating_template so user can see it
         }
-        
-        return { updatedUrls: updated, newJobStatus: 'generating_template' }
       }
       
       return { updatedUrls: updated, newJobStatus: 'enhancing' }
