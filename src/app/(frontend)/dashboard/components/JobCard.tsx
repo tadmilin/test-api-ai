@@ -63,16 +63,13 @@ export function JobCard({ job, onRefresh, onView, onDelete }: JobCardProps) {
   return (
     <div className="border rounded-lg p-4 hover:shadow-md transition-shadow">
       {/* Preview Image */}
-      {hasValidImage ? (
+      {hasValidImage && !imageError ? (
         <div className="relative w-full h-40 mb-3 bg-gray-100 rounded overflow-hidden">
           <img
             src={normalizedUrl}
             alt={job.productName}
             className="w-full h-full object-cover"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none'
-              setImageError(true)
-            }}
+            onError={() => setImageError(true)}
           />
         </div>
       ) : (
