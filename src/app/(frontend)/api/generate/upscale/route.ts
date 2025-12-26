@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
         face_enhance: false,
       },
       webhook: webhookUrl,
-      webhook_events_filter: ['completed'],
+      webhook_events_filter: ['start', 'completed'],
     })
 
     console.log(`✅ Upscale prediction started: ${prediction.id}`)
