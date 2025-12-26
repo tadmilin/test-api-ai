@@ -26,6 +26,7 @@ async function processWebhook(rawBody: string, predictionId: string) {
     console.log('[Webhook] =============================================')
 
     //  Find Job
+    console.log('[Webhook] 🔍 Searching for job with prediction:', predictionId)
     const jobs = await payload.find({
       collection: 'jobs',
       where: {
@@ -38,8 +39,33 @@ async function processWebhook(rawBody: string, predictionId: string) {
       },
     })
 
+    console.log('[Webhook] 🔍 Jobs found:', jobs.docs.length)
+    if (jobs.docs.length > 0) {
+      console.log('[Webhook] 🔍 First job:', {
+        id: jobs.docs[0].id,
+        jobType: jobs.docs[0].jobType,
+        imageCount: jobs.docs[0].enhancedImageUrls?.length || 0,
+      })
+    }
+
     if (jobs.docs.length === 0) {
       console.log('[Webhook] ⚠️ No job found for prediction:', predictionId)
+      console.log('[Webhook] 💡 This might be an upscale webhook - checking all jobs...')
+      
+      // Debug: ดูทุก job ที่มี enhancing status
+      const allEnhancing = await payload.find({
+        collection: 'jobs',
+        where: { status: { equals: 'enhancing' } },
+        limit: 5,
+      })
+      console.log('[Webhook] 🔍 All enhancing jobs:', allEnhancing.docs.map((j: any) => ({
+        id: j.id,
+        images: j.enhancedImageUrls?.map((img: any) => ({
+          predictionId: img.predictionId,
+          upscalePredictionId: img.upscalePredictionId,
+        }))
+      })))
+      
       return
     }
 
