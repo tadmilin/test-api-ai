@@ -128,18 +128,22 @@ export async function handleTextToImage(job: Job, predictionId: string, status: 
           
           const upscaleData = await upscaleRes.json()
           console.log('[Webhook] ✅ Upscale started:', upscaleData.predictionId)
+          console.log('[Webhook] 🔍 Current image predictionId:', currentImg.predictionId)
+          console.log('[Webhook] 🔍 Saving upscalePredictionId to DB...')
           
           const updated = updatedUrls.map((img: any) =>
-            img.index === currentImg.index
+            img.predictionId === predictionId  // ✅ ใช้ predictionId แทน index
               ? {
                   ...img,
                   tempOutputUrl: replicateUrl,
                   upscalePredictionId: upscaleData.predictionId,
-                  predictionId: null,
+                  predictionId: null,  // ✅ ลบ predictionId เดิม
                   status: 'pending',
                 }
               : img
           )
+          
+          console.log('[Webhook] 🔍 Updated image:', updated.find((img: any) => img.upscalePredictionId === upscaleData.predictionId))
           
           return { updatedUrls: updated, newJobStatus: 'enhancing' }
         } catch (error) {
