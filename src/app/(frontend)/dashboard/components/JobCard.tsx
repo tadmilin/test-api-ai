@@ -4,7 +4,6 @@
  */
 
 import { useState } from 'react'
-import Image from 'next/image'
 import { normalizeImageUrl } from '@/utilities/googleDriveUrl'
 
 interface Job {
@@ -35,12 +34,19 @@ interface JobCardProps {
 export function JobCard({ job, onRefresh, onView, onDelete }: JobCardProps) {
   const [imageError, setImageError] = useState(false)
   
+  // ✅ Filter only Cloudinary images (skip replicate.delivery - expired)
   const completedImages = (job.enhancedImageUrls || []).filter(
-    (img) => img.status === 'completed' && img.url
+    (img) => img.status === 'completed' && img.url && 
+    (img.url.includes('cloudinary.com') || img.url.includes('blob.vercel-storage.com'))
   )
   
   const firstImageUrl = completedImages[0]?.url
   const normalizedUrl = firstImageUrl ? normalizeImageUrl(firstImageUrl) : null
+  
+  // ✅ Validate URL before rendering Image component
+  const hasValidImage = normalizedUrl && 
+    !imageError && 
+    (normalizedUrl.includes('cloudinary.com') || normalizedUrl.includes('blob.vercel-storage.com'))
   
   const statusColors: Record<string, string> = {
     pending: 'bg-gray-100 text-gray-800',
@@ -57,14 +63,16 @@ export function JobCard({ job, onRefresh, onView, onDelete }: JobCardProps) {
   return (
     <div className="border rounded-lg p-4 hover:shadow-md transition-shadow">
       {/* Preview Image */}
-      {normalizedUrl && !imageError ? (
+      {hasValidImage ? (
         <div className="relative w-full h-40 mb-3 bg-gray-100 rounded overflow-hidden">
-          <Image
+          <img
             src={normalizedUrl}
             alt={job.productName}
-            fill
-            className="object-cover"
-            onError={() => setImageError(true)}
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none'
+              setImageError(true)
+            }}
           />
         </div>
       ) : (
