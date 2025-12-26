@@ -187,6 +187,7 @@ export async function POST(request: NextRequest) {
         collection: 'jobs',
         id: jobId,
         data: {
+          status: 'generating_template', // ✅ เปลี่ยน status
           templateGeneration: {
             predictionId: prediction.id,
             status: 'processing',

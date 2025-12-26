@@ -37,35 +37,48 @@ async function processWebhook(rawBody: string, predictionId: string) {
           { 'enhancedImageUrls.upscalePredictionId': { equals: predictionId } },
           { 'templateGeneration.predictionId': { equals: predictionId } },
           { 'templateGeneration.upscalePredictionId': { equals: predictionId } },
+          { 'templatePredictionId': { equals: predictionId } }, // ✅ Top-level fallback
         ],
       },
     })
 
     // If not found, search in enhancing/processing jobs manually
     if (jobs.docs.length === 0) {
+      console.log('[Webhook] 🔍 Standard query failed, trying manual search...')
+      
       const enhancingJobs = await payload.find({
         collection: 'jobs',
         where: {
           status: {
-            in: ['enhancing', 'processing'],
+            in: ['enhancing', 'processing', 'generating_template'],
           },
         },
         limit: 50,
       })
 
+      console.log('[Webhook] 🔍 Found', enhancingJobs.docs.length, 'jobs with status enhancing/processing/generating_template')
+      
       const found = enhancingJobs.docs.find((job: any) => {
         // Check enhancedImageUrls
         if (job.enhancedImageUrls) {
           for (const img of job.enhancedImageUrls) {
             if (img.predictionId === predictionId || img.upscalePredictionId === predictionId) {
+              console.log('[Webhook] 🎯 Found match in enhancedImageUrls for job:', job.id)
               return true
             }
           }
         }
         // Check templateGeneration
         if (job.templateGeneration) {
+          console.log('[Webhook] 🔍 Checking templateGeneration:', {
+            jobId: job.id,
+            predictionId: job.templateGeneration.predictionId,
+            upscalePredictionId: job.templateGeneration.upscalePredictionId,
+            looking_for: predictionId,
+          })
           if (job.templateGeneration.predictionId === predictionId || 
               job.templateGeneration.upscalePredictionId === predictionId) {
+            console.log('[Webhook] 🎯 Found match in templateGeneration for job:', job.id)
             return true
           }
         }
@@ -73,7 +86,10 @@ async function processWebhook(rawBody: string, predictionId: string) {
       })
 
       if (found) {
+        console.log('[Webhook] ✅ Manual search found job:', found.id)
         jobs = { docs: [found] } as any
+      } else {
+        console.log('[Webhook] ❌ Manual search failed')
       }
     }
 
