@@ -27,7 +27,9 @@ async function processWebhook(rawBody: string, predictionId: string) {
 
     //  Find Job
     console.log('[Webhook] 🔍 Searching for job with prediction:', predictionId)
-    const jobs = await payload.find({
+    
+    // Try standard query first
+    let jobs = await payload.find({
       collection: 'jobs',
       where: {
         or: [
@@ -38,6 +40,42 @@ async function processWebhook(rawBody: string, predictionId: string) {
         ],
       },
     })
+
+    // If not found, search in enhancing/processing jobs manually
+    if (jobs.docs.length === 0) {
+      const enhancingJobs = await payload.find({
+        collection: 'jobs',
+        where: {
+          status: {
+            in: ['enhancing', 'processing'],
+          },
+        },
+        limit: 50,
+      })
+
+      const found = enhancingJobs.docs.find((job: any) => {
+        // Check enhancedImageUrls
+        if (job.enhancedImageUrls) {
+          for (const img of job.enhancedImageUrls) {
+            if (img.predictionId === predictionId || img.upscalePredictionId === predictionId) {
+              return true
+            }
+          }
+        }
+        // Check templateGeneration
+        if (job.templateGeneration) {
+          if (job.templateGeneration.predictionId === predictionId || 
+              job.templateGeneration.upscalePredictionId === predictionId) {
+            return true
+          }
+        }
+        return false
+      })
+
+      if (found) {
+        jobs = { docs: [found] } as any
+      }
+    }
 
     console.log('[Webhook] 🔍 Jobs found:', jobs.docs.length)
     if (jobs.docs.length > 0) {
@@ -178,11 +216,8 @@ export async function POST(req: Request) {
       )
     }
 
-    // 4. Respond immediately (Replicate expects fast response)
-    // Process webhook in background without awaiting
-    processWebhook(rawBody, predictionId).catch(error => {
-      console.error('[Webhook] ❌ Background processing failed:', error)
-    })
+    // 4. Process webhook and wait for completion
+    await processWebhook(rawBody, predictionId)
 
     return NextResponse.json({ received: true, id: predictionId })
 
