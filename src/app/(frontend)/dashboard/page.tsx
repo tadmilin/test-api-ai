@@ -150,7 +150,8 @@ export default function DashboardPage() {
     if (currentUser) {
       fetchDashboardData()
     }
-  }, [currentUser, fetchDashboardData])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser])  // ✅ Only re-run when currentUser changes
 
   // Logout
   async function handleLogout() {
