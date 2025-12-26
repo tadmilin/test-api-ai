@@ -279,6 +279,7 @@ export const Jobs: CollectionConfig = {
                   label: 'Status',
                   options: [
                     { label: 'Pending', value: 'pending' },
+                    { label: 'Locking', value: 'locking' },
                     { label: 'Processing', value: 'processing' },
                     { label: 'Succeeded', value: 'succeeded' },
                     { label: 'Failed', value: 'failed' },
@@ -291,6 +292,14 @@ export const Jobs: CollectionConfig = {
                   label: 'Final Template URL',
                   admin: {
                     description: 'Final upscaled template URL',
+                  },
+                },
+                {
+                  name: 'lockMarker',
+                  type: 'text',
+                  label: 'Lock Marker',
+                  admin: {
+                    description: 'Atomic lock marker to prevent race condition (multiple webhooks starting template)',
                   },
                 },
               ],

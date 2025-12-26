@@ -837,11 +837,15 @@ export interface Job {
      * Replicate prediction ID for upscaling
      */
     upscalePredictionId?: string | null;
-    status?: ('pending' | 'processing' | 'succeeded' | 'failed') | null;
+    status?: ('pending' | 'locking' | 'processing' | 'succeeded' | 'failed') | null;
     /**
      * Final upscaled template URL
      */
     url?: string | null;
+    /**
+     * Atomic lock marker to prevent race condition (multiple webhooks starting template)
+     */
+    lockMarker?: string | null;
   };
   /**
    * DEPRECATED: Use templateGeneration.predictionId instead
@@ -1557,6 +1561,7 @@ export interface JobsSelect<T extends boolean = true> {
         upscalePredictionId?: T;
         status?: T;
         url?: T;
+        lockMarker?: T;
       };
   templatePredictionId?: T;
   templateUpscalePredictionId?: T;
