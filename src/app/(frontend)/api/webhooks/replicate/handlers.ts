@@ -360,7 +360,7 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
         })
         
         // ✅ CRITICAL: Use current webhook's predictionId as unique lock
-        const lockMarker = `LOCK_${prediction.id}`
+        const lockMarker = `LOCK_${predictionId}`
         
         console.log('[Webhook] 🔒 Lock marker:', lockMarker)
         
