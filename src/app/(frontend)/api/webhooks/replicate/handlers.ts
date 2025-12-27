@@ -264,8 +264,8 @@ export async function handleTextToImage(job: Job, predictionId: string, status: 
         }
         
         const filename = isUpscalePrediction 
-          ? `enhanced-${currentImg.predictionId}-upscaled`
-          : `enhanced-${predictionId}`
+          ? `enhanced-${currentImg.index}-upscaled`
+          : `enhanced-${currentImg.index}`
         
         const cloudinaryUrl = await uploadBufferToCloudinary(
           optimizedBuffer,
