@@ -186,7 +186,7 @@ async function processWebhook(rawBody: string, predictionId: string) {
         return
     }
 
-    //  Update job with result
+    //  Update job with result (with retry for write conflicts)
     const updateData: any = {
       enhancedImageUrls: result.updatedUrls,
       status: result.newJobStatus,
@@ -203,11 +203,31 @@ async function processWebhook(rawBody: string, predictionId: string) {
       updateData.templateUrl = result.templateUrl
     }
 
-    await payload.update({
-      collection: 'jobs',
-      id: job.id,
-      data: updateData,
-    })
+    // Retry on MongoDB WriteConflict (error code 112)
+    let retryCount = 0
+    const maxRetries = 3
+    while (retryCount < maxRetries) {
+      try {
+        await payload.update({
+          collection: 'jobs',
+          id: job.id,
+          data: updateData,
+        })
+        break // Success
+      } catch (error: any) {
+        const isWriteConflict = error?.code === 112 || error?.codeName === 'WriteConflict'
+        retryCount++
+        
+        if (!isWriteConflict || retryCount >= maxRetries) {
+          throw error // Not a write conflict or out of retries
+        }
+        
+        // Exponential backoff with jitter
+        const delay = 100 * Math.pow(2, retryCount - 1) + Math.random() * 50
+        console.log(`[Webhook] ⚠️ WriteConflict (attempt ${retryCount}/${maxRetries}), retrying in ${Math.round(delay)}ms...`)
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
+    }
 
     console.log('[Webhook] ✅ Job updated:', job.id)
 

@@ -35,15 +35,28 @@ export async function GET(
     })
 
     // Calculate progress
-    const images = job.enhancedImageUrls || []
+    let images = job.enhancedImageUrls || []
+    
+    // ✅ CRITICAL: Add index if missing (for old jobs) + sort by index
+    const hasIndex = images.length > 0 && (images[0] as any).index !== undefined
+    if (!hasIndex && images.length > 0) {
+      images = images.map((img: any, i: number) => ({
+        ...img,
+        index: i,
+      }))
+    }
+    
+    // ✅ Sort by index to ensure correct order
+    images = (images as any[]).sort((a: any, b: any) => (a.index || 0) - (b.index || 0))
+    
     const total = images.length
     const completed = images.filter(img => img.status === 'completed').length
     const failed = images.filter(img => img.status === 'failed').length
     const processing = images.filter(img => img.status === 'pending' || img.status === 'regenerating').length
 
-    // Map image status
-    const imageStatus = images.map((img, index) => ({
-      index: index + 1,
+    // Map image status (preserve original index from data)
+    const imageStatus = images.map((img: any) => ({
+      index: img.index !== undefined ? img.index : 0,
       status: img.status || 'pending',
       url: img.url || null,
       predictionId: img.predictionId || null,

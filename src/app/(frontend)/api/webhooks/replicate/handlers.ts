@@ -9,6 +9,35 @@ import { uploadBufferToCloudinary } from '@/utilities/cloudinaryUpload'
 type Job = any // TODO: Import proper type
 
 /**
+ * Retry helper for MongoDB WriteConflict errors
+ */
+async function retryOnWriteConflict<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  delayMs: number = 100
+): Promise<T> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation()
+    } catch (error: any) {
+      const isWriteConflict = error?.code === 112 || error?.codeName === 'WriteConflict'
+      const isLastAttempt = attempt === maxRetries
+      
+      if (!isWriteConflict || isLastAttempt) {
+        throw error // Not a write conflict or out of retries
+      }
+      
+      // Exponential backoff with jitter
+      const delay = delayMs * Math.pow(2, attempt - 1) + Math.random() * 50
+      console.log(`[Webhook] ⚠️ WriteConflict (attempt ${attempt}/${maxRetries}), retrying in ${Math.round(delay)}ms...`)
+      await new Promise(resolve => setTimeout(resolve, delay))
+    }
+  }
+  
+  throw new Error('Retry logic failed') // Should never reach here
+}
+
+/**
  * Validate output URL from Replicate
  */
 function validateReplicateUrl(output: any): string | null {
@@ -287,7 +316,18 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
   console.log('[Webhook]    Status:', status)
   console.log('[Webhook]    Prediction ID:', predictionId)
   
-  const updatedUrls = job.enhancedImageUrls || []
+  let updatedUrls = job.enhancedImageUrls || []
+  
+  // ✅ CRITICAL: Add index if missing (for old jobs created before fix)
+  const hasIndex = updatedUrls.length > 0 && updatedUrls[0].index !== undefined
+  if (!hasIndex && updatedUrls.length > 0) {
+    console.log('[Webhook] ⚠️ Old job without index field - adding indices now')
+    updatedUrls = updatedUrls.map((img: any, i: number) => ({
+      ...img,
+      index: i,
+    }))
+  }
+  
   console.log('[Webhook]    Total images:', updatedUrls.length)
   
   const currentImg = updatedUrls.find((img: any) => img.predictionId === predictionId)
@@ -317,7 +357,8 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
       })
       
       const imageBuffer = await imageResponse.arrayBuffer()
-      const filename = `enhanced-${predictionId}`
+      // ✅ Include index in filename to prevent cache collisions
+      const filename = `enhanced-idx${currentImg.index}-${predictionId}`
       
       const cloudinaryUrl = await uploadBufferToCloudinary(
         Buffer.from(imageBuffer),
@@ -387,16 +428,18 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
           console.log('[Webhook]    url:', latestTemplateGen.url)
           console.log('[Webhook]    lockMarker:', latestTemplateGen.lockMarker)
         } else {
-          // Set lock marker first
-          await payload.update({
-            collection: 'jobs',
-            id: job.id,
-            data: {
-              templateGeneration: {
-                lockMarker: lockMarker,
-                status: 'locking',
+          // Set lock marker first (with retry for write conflicts)
+          await retryOnWriteConflict(async () => {
+            await payload.update({
+              collection: 'jobs',
+              id: job.id,
+              data: {
+                templateGeneration: {
+                  lockMarker: lockMarker,
+                  status: 'locking',
+                },
               },
-            },
+            })
           })
           
           // Wait a bit for DB to propagate

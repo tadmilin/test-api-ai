@@ -352,12 +352,14 @@ export default function DashboardPage() {
                 
                 {/* Images */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {enhancedImages.map((img, index) => (
-                    <div key={index} className="border rounded p-2">
+                  {enhancedImages
+                    .sort((a: any, b: any) => (a.index || 0) - (b.index || 0))
+                    .map((img, index) => (
+                    <div key={img.index !== undefined ? `img-${img.index}` : index} className="border rounded p-2">
                       {img.url ? (
                         <img
                           src={img.url}
-                          alt={`Image ${index + 1}`}
+                          alt={`Image ${(img.index !== undefined ? img.index : index) + 1}`}
                           className="w-full h-auto rounded"
                         />
                       ) : (

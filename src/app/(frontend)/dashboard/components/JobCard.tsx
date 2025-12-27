@@ -38,10 +38,12 @@ export function JobCard({ job, onRefresh, onView, onDelete }: JobCardProps) {
   
   // ✅ แสดง template ก่อน ถ้าไม่มีค่อยแสดง enhanced images
   const templateUrl = job.templateUrl
-  const completedImages = (job.enhancedImageUrls || []).filter(
-    (img) => img.status === 'completed' && img.url && 
-    (img.url.includes('cloudinary.com') || img.url.includes('blob.vercel-storage.com'))
-  )
+  const completedImages = (job.enhancedImageUrls || [])
+    .filter(
+      (img) => img.status === 'completed' && img.url && 
+      (img.url.includes('cloudinary.com') || img.url.includes('blob.vercel-storage.com'))
+    )
+    .sort((a: any, b: any) => (a.index || 0) - (b.index || 0)) // ✅ Sort by index
   
   // ✅ ใช้ template ก่อน ถ้าไม่มีใช้ enhanced image
   const firstImageUrl = templateUrl || completedImages[0]?.url
