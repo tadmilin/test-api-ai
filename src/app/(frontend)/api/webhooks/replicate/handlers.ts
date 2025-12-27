@@ -126,12 +126,30 @@ export async function handleTextToImage(job: Job, predictionId: string, status: 
         console.error('[Webhook]    Output:', output)
         console.error('[Webhook]    Type:', typeof output)
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-        const updated = updatedUrls.map((img: any) =>
-          img.index === currentImg.index
-            ? { ...img, status: 'failed', error: 'Invalid URL from Replicate' }
-            : img
-        )
-        return { updatedUrls: updated, newJobStatus: 'failed' }
+        // Atomic update for failed case
+        const jobId = job.id
+        await retryOnWriteConflict(async () => {
+          const { getPayload } = await import('payload')
+          const configPromise = await import('@payload-config')
+          const payload = await getPayload({ config: configPromise.default })
+          const JobModel = (payload.db as any).collections['jobs']
+          
+          await JobModel.findOneAndUpdate(
+            {
+              _id: jobId,
+              'enhancedImageUrls.predictionId': isMainPrediction ? predictionId : undefined,
+              'enhancedImageUrls.upscalePredictionId': isUpscalePrediction ? predictionId : undefined,
+            },
+            {
+              $set: {
+                'enhancedImageUrls.$.status': 'failed',
+                'enhancedImageUrls.$.error': 'Invalid URL from Replicate',
+              },
+            },
+            { new: true }
+          )
+        })
+        return { updatedUrls: null, newJobStatus: 'failed' }
       }
       
       console.log('[Webhook] ✅ Valid URL:', replicateUrl.substring(0, 60) + '...')
@@ -160,29 +178,57 @@ export async function handleTextToImage(job: Job, predictionId: string, status: 
           console.log('[Webhook] 🔍 Current image predictionId:', currentImg.predictionId)
           console.log('[Webhook] 🔍 Saving upscalePredictionId to DB...')
           
-          const updated = updatedUrls.map((img: any) =>
-            img.predictionId === predictionId  // ✅ ใช้ predictionId แทน index
-              ? {
-                  ...img,
-                  tempOutputUrl: replicateUrl,
-                  upscalePredictionId: upscaleData.predictionId,
-                  predictionId: null,  // ✅ ลบ predictionId เดิม
-                  status: 'pending',
-                }
-              : img
-          )
+          // ✅ ATOMIC UPDATE: Use MongoDB positional operator
+          const jobId = job.id
+          await retryOnWriteConflict(async () => {
+            const { getPayload } = await import('payload')
+            const configPromise = await import('@payload-config')
+            const payload = await getPayload({ config: configPromise.default })
+            const JobModel = (payload.db as any).collections['jobs']
+            
+            await JobModel.findOneAndUpdate(
+              {
+                _id: jobId,
+                'enhancedImageUrls.predictionId': predictionId,
+              },
+              {
+                $set: {
+                  'enhancedImageUrls.$.tempOutputUrl': replicateUrl,
+                  'enhancedImageUrls.$.upscalePredictionId': upscaleData.predictionId,
+                  'enhancedImageUrls.$.predictionId': null,
+                  'enhancedImageUrls.$.status': 'pending',
+                },
+              },
+              { new: true }
+            )
+          })
           
-          console.log('[Webhook] 🔍 Updated image:', updated.find((img: any) => img.upscalePredictionId === upscaleData.predictionId))
-          
-          return { updatedUrls: updated, newJobStatus: 'enhancing' }
+          return { updatedUrls: null, newJobStatus: 'enhancing' }
         } catch (error) {
           console.error('[Webhook] ❌ Upscale failed:', error)
-          const updated = updatedUrls.map((img: any) =>
-            img.index === currentImg.index
-              ? { ...img, status: 'failed', error: 'Failed to start upscale' }
-              : img
-          )
-          return { updatedUrls: updated, newJobStatus: 'failed' }
+          // Atomic update for failed case
+          const jobId = job.id
+          await retryOnWriteConflict(async () => {
+            const { getPayload } = await import('payload')
+            const configPromise = await import('@payload-config')
+            const payload = await getPayload({ config: configPromise.default })
+            const JobModel = (payload.db as any).collections['jobs']
+            
+            await JobModel.findOneAndUpdate(
+              {
+                _id: jobId,
+                'enhancedImageUrls.predictionId': predictionId,
+              },
+              {
+                $set: {
+                  'enhancedImageUrls.$.status': 'failed',
+                  'enhancedImageUrls.$.error': 'Failed to start upscale',
+                },
+              },
+              { new: true }
+            )
+          })
+          return { updatedUrls: null, newJobStatus: 'failed' }
         }
       }
     
@@ -229,36 +275,76 @@ export async function handleTextToImage(job: Job, predictionId: string, status: 
         
         console.log('[Webhook] ✅ Uploaded:', cloudinaryUrl)
         
-        const updated = updatedUrls.map((img: any) =>
-          img.index === currentImg.index
-            ? {
-                ...img,
-                url: cloudinaryUrl,
-                originalUrl: replicateUrl,
-                status: 'completed',
-                upscalePredictionId: isUpscalePrediction ? null : img.upscalePredictionId,
-                predictionId: isMainPrediction ? null : img.predictionId,
-              }
-            : img
-        )
+        // ✅ ATOMIC UPDATE: Use MongoDB positional operator
+        const jobId = job.id
+        await retryOnWriteConflict(async () => {
+          const { getPayload } = await import('payload')
+          const configPromise = await import('@payload-config')
+          const payload = await getPayload({ config: configPromise.default })
+          const JobModel = (payload.db as any).collections['jobs']
+          
+          await JobModel.findOneAndUpdate(
+            {
+              _id: jobId,
+              'enhancedImageUrls.predictionId': isMainPrediction ? predictionId : undefined,
+              'enhancedImageUrls.upscalePredictionId': isUpscalePrediction ? predictionId : undefined,
+            },
+            {
+              $set: {
+                'enhancedImageUrls.$.url': cloudinaryUrl,
+                'enhancedImageUrls.$.originalUrl': replicateUrl,
+                'enhancedImageUrls.$.status': 'completed',
+                ...(isUpscalePrediction ? { 'enhancedImageUrls.$.upscalePredictionId': null } : {}),
+                ...(isMainPrediction ? { 'enhancedImageUrls.$.predictionId': null } : {}),
+              },
+            },
+            { new: true }
+          )
+        })
+        
+        // Re-fetch to check if all done
+        const { getPayload } = await import('payload')
+        const configPromise = await import('@payload-config')
+        const payload = await getPayload({ config: configPromise.default })
+        const finalJob = await payload.findByID({ collection: 'jobs', id: jobId })
+        const updated = (finalJob.enhancedImageUrls || []) as any[]
         
         // Check if all done
         const allDone = updated.every((img: any) => img.status === 'completed' || img.status === 'failed')
         const hasFailed = updated.some((img: any) => img.status === 'failed')
         
         return {
-          updatedUrls: updated,
+          updatedUrls: null, // ✅ Already updated atomically
           newJobStatus: allDone ? (hasFailed ? 'failed' : 'completed') : 'enhancing',
         }
         
       } catch (error) {
         console.error('[Webhook] ❌ Upload failed:', error)
-        const updated = updatedUrls.map((img: any) =>
-          img.index === currentImg.index
-            ? { ...img, status: 'failed', error: 'Upload failed', webhookFailed: true }
-            : img
-        )
-        return { updatedUrls: updated, newJobStatus: 'failed' }
+        // Atomic update for failed case
+        const jobId = job.id
+        await retryOnWriteConflict(async () => {
+          const { getPayload } = await import('payload')
+          const configPromise = await import('@payload-config')
+          const payload = await getPayload({ config: configPromise.default })
+          const JobModel = (payload.db as any).collections['jobs']
+          
+          await JobModel.findOneAndUpdate(
+            {
+              _id: jobId,
+              'enhancedImageUrls.predictionId': isMainPrediction ? predictionId : undefined,
+              'enhancedImageUrls.upscalePredictionId': isUpscalePrediction ? predictionId : undefined,
+            },
+            {
+              $set: {
+                'enhancedImageUrls.$.status': 'failed',
+                'enhancedImageUrls.$.error': 'Upload failed',
+                'enhancedImageUrls.$.webhookFailed': true,
+              },
+            },
+            { new: true }
+          )
+        })
+        return { updatedUrls: null, newJobStatus: 'failed' }
       }
     }
     
