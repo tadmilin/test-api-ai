@@ -294,8 +294,6 @@ export async function handleTextToImage(job: Job, predictionId: string, status: 
                 'enhancedImageUrls.$.url': cloudinaryUrl,
                 'enhancedImageUrls.$.originalUrl': replicateUrl,
                 'enhancedImageUrls.$.status': 'completed',
-                ...(isUpscalePrediction ? { 'enhancedImageUrls.$.upscalePredictionId': null } : {}),
-                ...(isMainPrediction ? { 'enhancedImageUrls.$.predictionId': null } : {}),
               },
             },
             { new: true }
