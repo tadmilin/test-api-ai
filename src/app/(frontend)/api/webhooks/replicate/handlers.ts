@@ -134,12 +134,16 @@ export async function handleTextToImage(job: Job, predictionId: string, status: 
           const payload = await getPayload({ config: configPromise.default })
           const JobModel = (payload.db as any).collections['jobs']
           
+          // Build query without undefined fields
+          const query: any = { _id: jobId }
+          if (isMainPrediction) {
+            query['enhancedImageUrls.predictionId'] = predictionId
+          } else if (isUpscalePrediction) {
+            query['enhancedImageUrls.upscalePredictionId'] = predictionId
+          }
+          
           await JobModel.findOneAndUpdate(
-            {
-              _id: jobId,
-              'enhancedImageUrls.predictionId': isMainPrediction ? predictionId : undefined,
-              'enhancedImageUrls.upscalePredictionId': isUpscalePrediction ? predictionId : undefined,
-            },
+            query,
             {
               $set: {
                 'enhancedImageUrls.$.status': 'failed',
@@ -283,12 +287,16 @@ export async function handleTextToImage(job: Job, predictionId: string, status: 
           const payload = await getPayload({ config: configPromise.default })
           const JobModel = (payload.db as any).collections['jobs']
           
+          // Build query without undefined fields
+          const query: any = { _id: jobId }
+          if (isMainPrediction) {
+            query['enhancedImageUrls.predictionId'] = predictionId
+          } else if (isUpscalePrediction) {
+            query['enhancedImageUrls.upscalePredictionId'] = predictionId
+          }
+          
           await JobModel.findOneAndUpdate(
-            {
-              _id: jobId,
-              'enhancedImageUrls.predictionId': isMainPrediction ? predictionId : undefined,
-              'enhancedImageUrls.upscalePredictionId': isUpscalePrediction ? predictionId : undefined,
-            },
+            query,
             {
               $set: {
                 'enhancedImageUrls.$.url': cloudinaryUrl,
@@ -337,12 +345,16 @@ export async function handleTextToImage(job: Job, predictionId: string, status: 
           const payload = await getPayload({ config: configPromise.default })
           const JobModel = (payload.db as any).collections['jobs']
           
+          // Build query without undefined fields
+          const query: any = { _id: jobId }
+          if (isMainPrediction) {
+            query['enhancedImageUrls.predictionId'] = predictionId
+          } else if (isUpscalePrediction) {
+            query['enhancedImageUrls.upscalePredictionId'] = predictionId
+          }
+          
           await JobModel.findOneAndUpdate(
-            {
-              _id: jobId,
-              'enhancedImageUrls.predictionId': isMainPrediction ? predictionId : undefined,
-              'enhancedImageUrls.upscalePredictionId': isUpscalePrediction ? predictionId : undefined,
-            },
+            query,
             {
               $set: {
                 'enhancedImageUrls.$.status': 'failed',
