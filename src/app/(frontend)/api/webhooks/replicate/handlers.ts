@@ -356,20 +356,31 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
   
   if (status === 'failed') {
     console.log(`[Webhook] ❌ Image ${currentImg.index} failed`)
-    // Atomic update: find array element by predictionId and update it
+    // Atomic update: Use MongoDB positional operator
     const jobId = job.id
     await retryOnWriteConflict(async () => {
-      const latestJob = await payload.findByID({ collection: 'jobs', id: jobId })
-      const urls = (latestJob.enhancedImageUrls || []) as any[]
-      const idx = urls.findIndex((img: any) => img.predictionId === predictionId)
-      if (idx !== -1) {
-        urls[idx] = { ...urls[idx], status: 'failed', error: body.error || 'Failed' }
-        await payload.update({
-          collection: 'jobs',
-          id: jobId,
-          data: { enhancedImageUrls: urls, status: 'failed' },
-        })
-      }
+      const JobModel = (payload.db as any).collections['jobs']
+      
+      await JobModel.findOneAndUpdate(
+        {
+          _id: jobId,
+          'enhancedImageUrls.predictionId': predictionId,
+        },
+        {
+          $set: {
+            'enhancedImageUrls.$.status': 'failed',
+            'enhancedImageUrls.$.error': body.error || 'Failed',
+          },
+        },
+        { new: true }
+      )
+      
+      // Also update job status to failed
+      await payload.update({
+        collection: 'jobs',
+        id: jobId,
+        data: { status: 'failed' },
+      })
     })
     
     // Return updated for checking
@@ -399,31 +410,37 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
       
       console.log('[Webhook] ✅ Enhanced image uploaded:', cloudinaryUrl)
       
-      // ✅ ATOMIC UPDATE: Update only this specific image in DB
+      // ✅ ATOMIC UPDATE: Use MongoDB positional operator to update only this specific image
       console.log(`[Webhook] 💾 Atomically updating image ${currentImg.index} in database...`)
-      let latestJob: any
+      
+      // Use Mongoose model directly with MongoDB positional operator
       await retryOnWriteConflict(async () => {
-        // Re-fetch latest state
-        const freshJob = await payload.findByID({ collection: 'jobs', id: jobId })
-        const urls = (freshJob.enhancedImageUrls || []) as any[]
-        const idx = urls.findIndex((img: any) => img.predictionId === predictionId)
+        // Access the underlying Mongoose model from Payload
+        const JobModel = (payload.db as any).collections['jobs']
         
-        if (idx !== -1) {
-          urls[idx] = {
-            ...urls[idx],
-            url: cloudinaryUrl,
-            originalUrl: replicateUrl,
-            status: 'completed',
-            predictionId: null,
+        // Use MongoDB positional operator $ for atomic array element update
+        const result = await JobModel.findOneAndUpdate(
+          {
+            _id: jobId,
+            'enhancedImageUrls.predictionId': predictionId, // Find matching array element
+          },
+          {
+            $set: {
+              'enhancedImageUrls.$.url': cloudinaryUrl,
+              'enhancedImageUrls.$.originalUrl': replicateUrl,
+              'enhancedImageUrls.$.status': 'completed',
+              'enhancedImageUrls.$.predictionId': null,
+            },
+          },
+          {
+            new: true, // Return updated document
           }
-          
-          await payload.update({
-            collection: 'jobs',
-            id: jobId,
-            data: { enhancedImageUrls: urls },
-          })
-          
-          latestJob = { ...freshJob, enhancedImageUrls: urls }
+        )
+        
+        if (!result) {
+          console.error('[Webhook] ❌ Failed to update image - not found')
+        } else {
+          console.log('[Webhook] ✅ Image updated atomically via MongoDB positional operator')
         }
       })
       
@@ -579,24 +596,34 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
       
     } catch (error) {
       console.error('[Webhook] ❌ Upload failed:', error)
-      // For failed case, we can still use atomic update
+      // For failed case, use MongoDB positional operator
       const jobId = job.id
-      const currentIndex = currentImg.index
       await retryOnWriteConflict(async () => {
         const { getPayload } = await import('payload')
         const configPromise = await import('@payload-config')
         const payload = await getPayload({ config: configPromise.default })
-        const latestJob = await payload.findByID({ collection: 'jobs', id: jobId })
-        const urls = (latestJob.enhancedImageUrls || []) as any[]
-        const idx = urls.findIndex((img: any) => img.index === currentIndex)
-        if (idx !== -1) {
-          urls[idx] = { ...urls[idx], status: 'failed', error: 'Upload failed', webhookFailed: true }
-          await payload.update({
-            collection: 'jobs',
-            id: jobId,
-            data: { enhancedImageUrls: urls, status: 'failed' },
-          })
-        }
+        const JobModel = (payload.db as any).collections['jobs']
+        
+        await JobModel.findOneAndUpdate(
+          {
+            _id: jobId,
+            'enhancedImageUrls.predictionId': predictionId,
+          },
+          {
+            $set: {
+              'enhancedImageUrls.$.status': 'failed',
+              'enhancedImageUrls.$.error': 'Upload failed',
+              'enhancedImageUrls.$.webhookFailed': true,
+            },
+          },
+          { new: true }
+        )
+        
+        await payload.update({
+          collection: 'jobs',
+          id: jobId,
+          data: { status: 'failed' },
+        })
       })
       return { updatedUrls: null, newJobStatus: 'failed' }
     }
