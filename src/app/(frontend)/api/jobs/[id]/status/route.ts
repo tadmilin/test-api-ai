@@ -4,6 +4,21 @@ import config from '@payload-config'
 
 export const runtime = 'nodejs'
 
+// Image interface matching Payload schema
+interface EnhancedImage {
+  index?: number
+  status?: 'pending' | 'completed' | 'failed' | 'approved' | 'regenerating' | null
+  url?: string | null
+  originalUrl?: string | null
+  tempOutputUrl?: string | null
+  predictionId?: string | null
+  upscalePredictionId?: string | null
+  error?: string | null
+  webhookFailed?: boolean | null
+  id?: string | null
+  [key: string]: unknown
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -38,16 +53,16 @@ export async function GET(
     let images = job.enhancedImageUrls || []
     
     // ✅ CRITICAL: Add index if missing (for old jobs) + sort by index
-    const hasIndex = images.length > 0 && (images[0] as any).index !== undefined
+    const hasIndex = images.length > 0 && (images[0] as EnhancedImage).index !== undefined
     if (!hasIndex && images.length > 0) {
-      images = images.map((img: any, i: number) => ({
+      images = images.map((img: EnhancedImage, i: number) => ({
         ...img,
         index: i,
       }))
     }
     
     // ✅ Sort by index to ensure correct order
-    images = (images as any[]).sort((a: any, b: any) => (a.index || 0) - (b.index || 0))
+    images = (images as EnhancedImage[]).sort((a: EnhancedImage, b: EnhancedImage) => (a.index || 0) - (b.index || 0))
     
     const total = images.length
     const completed = images.filter(img => img.status === 'completed').length
@@ -55,12 +70,12 @@ export async function GET(
     const processing = images.filter(img => img.status === 'pending' || img.status === 'regenerating').length
 
     // Map image status (preserve original index from data)
-    const imageStatus = images.map((img: any) => ({
+    const imageStatus = images.map((img: EnhancedImage) => ({
       index: img.index !== undefined ? img.index : 0,
       status: img.status || 'pending',
       url: img.url || null,
       predictionId: img.predictionId || null,
-      error: (img as { error?: string }).error || null,
+      error: img.error || null,
       canRetry: img.status === 'failed' && !img.predictionId, // Can retry if failed without prediction
     }))
 

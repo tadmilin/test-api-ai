@@ -18,6 +18,14 @@ interface CurrentUser {
   email: string
 }
 
+interface EnhancedImage {
+  index?: number
+  url?: string
+  status?: string
+  predictionId?: string | null
+  error?: string | null
+}
+
 interface Job {
   id: string
   productName: string
@@ -35,11 +43,7 @@ interface Job {
     status?: string
     url?: string
   }
-  enhancedImageUrls?: Array<{
-    url?: string
-    status?: string
-    [key: string]: any
-  }>
+  enhancedImageUrls?: EnhancedImage[]
   createdBy?: {
     id: string
     name: string
@@ -54,8 +58,7 @@ export default function DashboardPage() {
   const [jobs, setJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
   const [processingStatus, setProcessingStatus] = useState('')
-  const [currentJobId, setCurrentJobId] = useState<string | null>(null)
-  const [enhancedImages, setEnhancedImages] = useState<any[]>([])
+  const [enhancedImages, setEnhancedImages] = useState<EnhancedImage[]>([])
   const [generatedTemplateUrl, setGeneratedTemplateUrl] = useState<string>('')
   const [reviewMode, setReviewMode] = useState(false)
 
@@ -80,9 +83,8 @@ export default function DashboardPage() {
         )
       }
     },
-    onComplete: (jobId, statusData) => {
+    onComplete: (jobId) => {
       setProcessingStatus('✅ สำเร็จ!')
-      setCurrentJobId(jobId)
       setReviewMode(true)
       
       // Auto-dismiss after 3s
@@ -146,7 +148,6 @@ export default function DashboardPage() {
         
         // Show initial status
         setProcessingStatus('⏳ กำลังเริ่มต้น...')
-        setCurrentJobId(savedJobId)
         
         // Refresh after short delay to allow webhook to update
         setTimeout(() => {
@@ -208,7 +209,6 @@ export default function DashboardPage() {
   function handleViewJob(jobId: string) {
     refreshJob(jobId).then((statusData) => {
       if (statusData && statusData.images) {
-        setCurrentJobId(jobId)
         setEnhancedImages(statusData.images)
         setGeneratedTemplateUrl(statusData.templateUrl || '')
         setReviewMode(true)
@@ -353,7 +353,7 @@ export default function DashboardPage() {
                 {/* Images */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   {enhancedImages
-                    .sort((a: any, b: any) => (a.index || 0) - (b.index || 0))
+                    .sort((a, b) => (a.index || 0) - (b.index || 0))
                     .map((img, index) => (
                     <div key={img.index !== undefined ? `img-${img.index}` : index} className="border rounded p-2">
                       {img.url ? (

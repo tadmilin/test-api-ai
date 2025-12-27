@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       },
     })
     
-    const MAX_CONCURRENT_JOBS = 3  // ✅ จำกัดไม่เกิน 3 jobs พร้อมกัน (Free Plan)
+    const MAX_CONCURRENT_JOBS = 4  // ✅ จำกัดไม่เกิน 4 jobs พร้อมกัน (16-32 predictions, เหมาะกับ Free/Starter plan)
     
     if (processingCount.totalDocs >= MAX_CONCURRENT_JOBS) {
       console.log(`⚠️ Too many concurrent jobs (${processingCount.totalDocs}/${MAX_CONCURRENT_JOBS})`)

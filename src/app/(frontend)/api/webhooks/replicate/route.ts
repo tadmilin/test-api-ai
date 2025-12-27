@@ -4,8 +4,53 @@ import configPromise from '@payload-config'
 import { handleTextToImage, handleCustomPrompt, handleTemplateMerge } from './handlers'
 import { verifyWebhookSignature } from './verifyWebhook'
 
-//  Force Node.js runtime
+// Force Node.js runtime
 export const runtime = 'nodejs'
+
+// Types for webhook processing
+interface ReplicateWebhookBody {
+  status: string
+  output?: unknown
+  error?: string
+  logs?: string
+}
+
+interface EnhancedImage {
+  index?: number
+  status?: 'pending' | 'completed' | 'failed' | 'approved' | 'regenerating' | null
+  url?: string | null
+  predictionId?: string | null
+  upscalePredictionId?: string | null
+  originalUrl?: string | null
+  tempOutputUrl?: string | null
+  webhookFailed?: boolean | null
+  id?: string | null
+}
+
+interface TemplateGeneration {
+  predictionId?: string | null
+  upscalePredictionId?: string | null
+  url?: string | null
+  status?: string
+}
+
+interface JobDoc {
+  id: string
+  _id?: unknown
+  status: string
+  jobType?: string
+  enhancedImageUrls?: EnhancedImage[] | null
+  templateGeneration?: TemplateGeneration
+  templatePredictionId?: string | null
+  templateUrl?: string | null
+}
+
+interface HandlerResult {
+  updatedUrls?: EnhancedImage[] | null
+  newJobStatus?: string | null
+  templateUpdate?: Partial<TemplateGeneration>
+  templateUrl?: string | null
+}
 
 /**
  * Process webhook in background
@@ -54,7 +99,9 @@ async function processWebhook(rawBody: string, predictionId: string) {
       console.log('[Webhook] 🔍 Standard query failed, trying MongoDB direct query...')
       
       // ✅ Use MongoDB direct query to bypass Payload cache
-      const JobModel = (payload.db as any).collections['jobs']
+      const JobModel = (payload.db as { collections: Record<string, unknown> }).collections['jobs'] as {
+        find: (query: unknown) => { limit: (n: number) => { lean: () => { exec: () => Promise<JobDoc[]> } } }
+      }
       const enhancingJobsDocs = await JobModel.find({
         status: { $in: ['enhancing', 'processing', 'generating_template'] }
       }).limit(100).lean().exec()
@@ -79,9 +126,9 @@ async function processWebhook(rawBody: string, predictionId: string) {
       }
       
       const enhancingJobs = {
-        docs: enhancingJobsDocs.map((doc: any) => ({
+        docs: enhancingJobsDocs.map((doc: JobDoc) => ({
           ...doc,
-          id: doc._id.toString(), // ✅ Map _id to id
+          id: doc._id?.toString() || '', // ✅ Map _id to id
         })),
         totalDocs: enhancingJobsDocs.length
       }
@@ -91,7 +138,7 @@ async function processWebhook(rawBody: string, predictionId: string) {
       // Debug: แสดงทุก job ที่เจอ
       if (enhancingJobs.docs.length > 0) {
         console.log('[Webhook] 🔍 Checking jobs:')
-        enhancingJobs.docs.forEach((j: any, idx: number) => {
+        enhancingJobs.docs.forEach((j: JobDoc, idx: number) => {
           console.log(`[Webhook]   [${idx}] Job ${j.id}:`)
           console.log(`[Webhook]       status: ${j.status}`)
           console.log(`[Webhook]       jobType: ${j.jobType}`)
@@ -103,11 +150,11 @@ async function processWebhook(rawBody: string, predictionId: string) {
         })
       }
       
-      const found = enhancingJobs.docs.find((job: any) => {
+      const found = enhancingJobs.docs.find((job: JobDoc) => {
         // Check enhancedImageUrls
         if (job.enhancedImageUrls) {
           console.log(`[Webhook] 🔍 Job ${job.id} has ${job.enhancedImageUrls.length} images:`)
-          job.enhancedImageUrls.forEach((img: any, idx: number) => {
+          job.enhancedImageUrls.forEach((img: EnhancedImage, idx: number) => {
             console.log(`[Webhook]    [${idx}] index=${img.index}, predictionId=${img.predictionId || 'null'}, upscalePredictionId=${img.upscalePredictionId || 'null'}`)
           })
           
@@ -140,7 +187,7 @@ async function processWebhook(rawBody: string, predictionId: string) {
 
       if (found) {
         console.log('[Webhook] ✅ Manual search found job:', found.id)
-        jobs = { docs: [found] } as any
+        jobs = { docs: [found] } as typeof jobs
       } else {
         console.log('[Webhook] ❌ Manual search failed')
       }
@@ -165,9 +212,9 @@ async function processWebhook(rawBody: string, predictionId: string) {
         where: { status: { equals: 'enhancing' } },
         limit: 5,
       })
-      console.log('[Webhook] 🔍 All enhancing jobs:', allEnhancing.docs.map((j: any) => ({
+      console.log('[Webhook] 🔍 All enhancing jobs:', allEnhancing.docs.map(j => ({
         id: j.id,
-        images: j.enhancedImageUrls?.map((img: any) => ({
+        images: (j.enhancedImageUrls || []).map(img => ({
           predictionId: img.predictionId,
           upscalePredictionId: img.upscalePredictionId,
         }))
@@ -181,7 +228,7 @@ async function processWebhook(rawBody: string, predictionId: string) {
 
     // Idempotency: Check if already processed
     const alreadyProcessed = 
-      (job.enhancedImageUrls || []).some((img: any) => 
+      (job.enhancedImageUrls || []).some(img => 
         (img.predictionId === predictionId && img.url) ||
         (img.upscalePredictionId === predictionId && img.url)
       ) ||
@@ -194,7 +241,7 @@ async function processWebhook(rawBody: string, predictionId: string) {
     }
 
     //  Route to appropriate handler based on jobType
-    let result: any
+    let result: HandlerResult
     
     switch (job.jobType) {
       case 'text-to-image':
@@ -216,7 +263,7 @@ async function processWebhook(rawBody: string, predictionId: string) {
 
     //  Update job with result (with retry for write conflicts)
     // Update job with retry logic for WriteConflict
-    const updateData: any = {}
+    const updateData: Record<string, unknown> = {}
     
     // Only update status if changed
     if (result.newJobStatus !== null && result.newJobStatus !== undefined) {
@@ -252,8 +299,9 @@ async function processWebhook(rawBody: string, predictionId: string) {
             data: updateData,
           })
           break // Success
-        } catch (error: any) {
-          const isWriteConflict = error?.code === 112 || error?.codeName === 'WriteConflict'
+        } catch (error: unknown) {
+          const isWriteConflict = (error as { code?: number; codeName?: string })?.code === 112 || 
+                                  (error as { code?: number; codeName?: string })?.codeName === 'WriteConflict'
           retryCount++
           
           if (!isWriteConflict || retryCount >= maxRetries) {

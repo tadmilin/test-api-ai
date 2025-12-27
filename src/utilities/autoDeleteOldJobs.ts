@@ -5,7 +5,7 @@ import type { Payload } from 'payload'
  * This ensures MongoDB doesn't grow too large and Cloudinary storage is managed
  */
 
-const MAX_JOBS = 100 // Maximum number of jobs to keep
+const MAX_JOBS = 300 // Maximum number of jobs to keep (6 users × 50 jobs/user)
 
 /**
  * Check job count and delete oldest if over limit
