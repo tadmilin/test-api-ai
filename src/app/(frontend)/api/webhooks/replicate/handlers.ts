@@ -346,7 +346,7 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
   
   if (!currentImg) {
     console.log('[Webhook] ⚠️ Image not found')
-    return { updatedUrls, newJobStatus: job.status }
+    return { updatedUrls: null, newJobStatus: job.status }
   }
   
   // ✅ ATOMIC UPDATE: Use MongoDB to update only this specific image
@@ -373,12 +373,7 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
     })
     
     // Return updated for checking
-    const updated = updatedUrls.map((img: any) =>
-      img.predictionId === predictionId
-        ? { ...img, status: 'failed', error: body.error || 'Failed' }
-        : img
-    )
-    return { updatedUrls: updated, newJobStatus: 'failed' }
+    return { updatedUrls: null, newJobStatus: 'failed' }
   }
   
   if (status === 'succeeded' && output) {
@@ -449,6 +444,15 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
       console.log('[Webhook]    Image statuses:', updated.map((img: any) => `#${img.index}: ${img.status}`))
       
       if (allDone && !hasFailed && finalJob.selectedTemplateUrl) {
+        // ✅ CRITICAL: Check if template already started BEFORE waiting
+        const templateGen = finalJob.templateGeneration || {}
+        if (templateGen.predictionId || templateGen.url || templateGen.lockMarker) {
+          console.log('[Webhook] ⏭️ Template already started by another webhook - skipping')
+          return {
+            updatedUrls: null,
+            newJobStatus: 'generating_template',
+          }
+        }
         console.log('[Webhook] 🎨 All images done → Starting template generation...')
         
         // ✅ Log full URLs with index
@@ -569,22 +573,37 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
       }
       
       return {
-        updatedUrls: updated,
+        updatedUrls: null, // ✅ Don't return - already updated atomically
         newJobStatus: allDone ? (hasFailed ? 'failed' : 'generating_template') : 'enhancing',
       }
       
     } catch (error) {
       console.error('[Webhook] ❌ Upload failed:', error)
-      const updated = updatedUrls.map((img: any) =>
-        img.index === currentImg.index
-          ? { ...img, status: 'failed', error: 'Upload failed', webhookFailed: true }
-          : img
-      )
-      return { updatedUrls: updated, newJobStatus: 'failed' }
+      // For failed case, we can still use atomic update
+      const jobId = job.id
+      const currentIndex = currentImg.index
+      await retryOnWriteConflict(async () => {
+        const { getPayload } = await import('payload')
+        const configPromise = await import('@payload-config')
+        const payload = await getPayload({ config: configPromise.default })
+        const latestJob = await payload.findByID({ collection: 'jobs', id: jobId })
+        const urls = (latestJob.enhancedImageUrls || []) as any[]
+        const idx = urls.findIndex((img: any) => img.index === currentIndex)
+        if (idx !== -1) {
+          urls[idx] = { ...urls[idx], status: 'failed', error: 'Upload failed', webhookFailed: true }
+          await payload.update({
+            collection: 'jobs',
+            id: jobId,
+            data: { enhancedImageUrls: urls, status: 'failed' },
+          })
+        }
+      })
+      return { updatedUrls: null, newJobStatus: 'failed' }
     }
   }
   
-  return { updatedUrls, newJobStatus: job.status }
+  // Status still enhancing - no update needed
+  return { updatedUrls: null, newJobStatus: null }
 }
 
 /**
