@@ -328,6 +328,15 @@ export const Jobs: CollectionConfig = {
               label: 'Enhanced Images',
               fields: [
                 {
+                  name: 'index',
+                  type: 'number',
+                  label: 'Index',
+                  admin: {
+                    description: 'Array index for sorting and atomic updates (0, 1, 2, ...)',
+                    position: 'sidebar',
+                  },
+                },
+                {
                   name: 'originalUrl',
                   type: 'text',
                   label: 'Original Image URL',
