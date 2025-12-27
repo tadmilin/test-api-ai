@@ -163,28 +163,41 @@ export async function POST(request: NextRequest) {
 
         console.log(`   ✅ Prediction ${i + 1} created: ${prediction.id}`)
 
-        // Update job with prediction ID
-        imageUrls[i].predictionId = prediction.id
-        await payload.update({
-          collection: 'jobs',
-          id: job.id,
-          data: {
-            enhancedImageUrls: imageUrls,
+        // ✅ ATOMIC UPDATE: Use MongoDB positional operator to prevent race condition
+        const JobModel = (payload.db as any).collections['jobs']
+        await JobModel.findOneAndUpdate(
+          {
+            _id: job.id,
+            'enhancedImageUrls.index': i, // Find by index
           },
-        })
+          {
+            $set: {
+              'enhancedImageUrls.$.predictionId': prediction.id,
+            },
+          },
+          { new: true }
+        )
+        
+        console.log(`   💾 Atomically updated placeholder ${i} with predictionId`)
 
       } catch (error) {
         console.error(`   ❌ Failed to create prediction ${i + 1}:`, error)
-        imageUrls[i].status = 'failed'
-        imageUrls[i].error = error instanceof Error ? error.message : 'Unknown error'
         
-        await payload.update({
-          collection: 'jobs',
-          id: job.id,
-          data: {
-            enhancedImageUrls: imageUrls,
+        // ✅ ATOMIC UPDATE: Use MongoDB positional operator
+        const JobModel = (payload.db as any).collections['jobs']
+        await JobModel.findOneAndUpdate(
+          {
+            _id: job.id,
+            'enhancedImageUrls.index': i,
           },
-        })
+          {
+            $set: {
+              'enhancedImageUrls.$.status': 'failed',
+              'enhancedImageUrls.$.error': error instanceof Error ? error.message : 'Unknown error',
+            },
+          },
+          { new: true }
+        )
       }
     }
 

@@ -151,11 +151,7 @@ export async function POST(request: NextRequest) {
       })
       console.log(`✅ Placeholders created, job status: enhancing`)
 
-      // ✅ STEP 2: Keep local copy in memory (avoid DB reads in loop)
-      type EnhancedImage = NonNullable<Job['enhancedImageUrls']>[number]
-      const localEnhanced: EnhancedImage[] = [...placeholders]
-
-      // ✅ STEP 3: Process images sequentially with stagger delay
+      // ✅ STEP 2: Process images sequentially with stagger delay
       // ⚡ Increased to 2s (from 500ms) to prevent hitting Vercel function limit
       // 6 users × 5 images = 30 functions spread over 60s instead of 15s
       const STAGGER_DELAY_MS = 2000  // ✅ 2 วินาที (ป้องกันเกิน concurrent limit)
@@ -366,19 +362,22 @@ export async function POST(request: NextRequest) {
           
           console.log(`✅ Image ${i + 1} started: ${predictionId}`)
           
-          // ✅ STEP 4: Update local array + DB (no findByID needed)
+          // ✅ ATOMIC UPDATE: Use MongoDB positional operator to prevent race condition
           try {
-            localEnhanced[i] = {
-              ...localEnhanced[i],
-              predictionId: predictionId,
-            }
-            
-            await payload.update({
-              collection: 'jobs',
-              id: jobId,
-              data: { enhancedImageUrls: localEnhanced as typeof job.enhancedImageUrls },
-            })
-            console.log(`   ✅ Updated placeholder ${i} with predictionId`)
+            const JobModel = (payload.db as any).collections['jobs']
+            await JobModel.findOneAndUpdate(
+              {
+                _id: jobId,
+                'enhancedImageUrls.index': i,
+              },
+              {
+                $set: {
+                  'enhancedImageUrls.$.predictionId': predictionId,
+                },
+              },
+              { new: true }
+            )
+            console.log(`   💾 Atomically updated placeholder ${i} with predictionId`)
           } catch (updateErr) {
             console.warn(`   ⚠️ Failed to update placeholder:`, updateErr)
             // Don't fail - webhook will handle
@@ -388,21 +387,28 @@ export async function POST(request: NextRequest) {
           const message = error instanceof Error ? error.message : 'Unknown error'
           console.error(`❌ Image ${i + 1} failed:`, message)
           
-          // ✅ Mark placeholder as failed (use local array)
+          // ✅ ATOMIC UPDATE: Use MongoDB positional operator
           try {
-            localEnhanced[i] = {
-              ...localEnhanced[i],
-              status: 'failed',
-              error: message,
-            }
+            const JobModel = (payload.db as any).collections['jobs']
+            await JobModel.findOneAndUpdate(
+              {
+                _id: jobId,
+                'enhancedImageUrls.index': i,
+              },
+              {
+                $set: {
+                  'enhancedImageUrls.$.status': 'failed',
+                  'enhancedImageUrls.$.error': message,
+                },
+              },
+              { new: true }
+            )
             
+            // Mark job as failed
             await payload.update({
               collection: 'jobs',
               id: jobId,
-              data: { 
-                enhancedImageUrls: localEnhanced as typeof job.enhancedImageUrls,
-                status: 'failed'  // Mark job as failed
-              },
+              data: { status: 'failed' },
             })
           } catch (updateErr) {
             console.warn(`   ⚠️ Failed to update failed status:`, updateErr)
