@@ -326,6 +326,18 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
       ...img,
       index: i,
     }))
+    // Save the indices immediately for old jobs
+    const { getPayload } = await import('payload')
+    const configPromise = await import('@payload-config')
+    const payload = await getPayload({ config: configPromise.default })
+    await retryOnWriteConflict(async () => {
+      await payload.update({
+        collection: 'jobs',
+        id: job.id,
+        data: { enhancedImageUrls: updatedUrls as any },
+      })
+    })
+    console.log('[Webhook] ✅ Indices saved for old job')
   }
   
   console.log('[Webhook]    Total images:', updatedUrls.length)
@@ -337,9 +349,32 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
     return { updatedUrls, newJobStatus: job.status }
   }
   
+  // ✅ ATOMIC UPDATE: Use MongoDB to update only this specific image
+  const { getPayload } = await import('payload')
+  const configPromise = await import('@payload-config')
+  const payload = await getPayload({ config: configPromise.default })
+  
   if (status === 'failed') {
+    console.log(`[Webhook] ❌ Image ${currentImg.index} failed`)
+    // Atomic update: find array element by predictionId and update it
+    const jobId = job.id
+    await retryOnWriteConflict(async () => {
+      const latestJob = await payload.findByID({ collection: 'jobs', id: jobId })
+      const urls = (latestJob.enhancedImageUrls || []) as any[]
+      const idx = urls.findIndex((img: any) => img.predictionId === predictionId)
+      if (idx !== -1) {
+        urls[idx] = { ...urls[idx], status: 'failed', error: body.error || 'Failed' }
+        await payload.update({
+          collection: 'jobs',
+          id: jobId,
+          data: { enhancedImageUrls: urls, status: 'failed' },
+        })
+      }
+    })
+    
+    // Return updated for checking
     const updated = updatedUrls.map((img: any) =>
-      img.index === currentImg.index
+      img.predictionId === predictionId
         ? { ...img, status: 'failed', error: body.error || 'Failed' }
         : img
     )
@@ -360,25 +395,48 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
       // ✅ Include index in filename to prevent cache collisions
       const filename = `enhanced-idx${currentImg.index}-${predictionId}`
       
+      const jobId = job.id
       const cloudinaryUrl = await uploadBufferToCloudinary(
         Buffer.from(imageBuffer),
-        `jobs/${job.id}`,
+        `jobs/${jobId}`,
         filename
       )
       
       console.log('[Webhook] ✅ Enhanced image uploaded:', cloudinaryUrl)
       
-      const updated = updatedUrls.map((img: any) =>
-        img.index === currentImg.index
-          ? {
-              ...img,
-              url: cloudinaryUrl,
-              originalUrl: replicateUrl,
-              status: 'completed',
-              predictionId: null,
-            }
-          : img
-      )
+      // ✅ ATOMIC UPDATE: Update only this specific image in DB
+      console.log(`[Webhook] 💾 Atomically updating image ${currentImg.index} in database...`)
+      let latestJob: any
+      await retryOnWriteConflict(async () => {
+        // Re-fetch latest state
+        const freshJob = await payload.findByID({ collection: 'jobs', id: jobId })
+        const urls = (freshJob.enhancedImageUrls || []) as any[]
+        const idx = urls.findIndex((img: any) => img.predictionId === predictionId)
+        
+        if (idx !== -1) {
+          urls[idx] = {
+            ...urls[idx],
+            url: cloudinaryUrl,
+            originalUrl: replicateUrl,
+            status: 'completed',
+            predictionId: null,
+          }
+          
+          await payload.update({
+            collection: 'jobs',
+            id: jobId,
+            data: { enhancedImageUrls: urls },
+          })
+          
+          latestJob = { ...freshJob, enhancedImageUrls: urls }
+        }
+      })
+      
+      console.log('[Webhook] ✅ Database updated atomically')
+      
+      // Re-fetch to get absolute latest state for checking if all done
+      const finalJob = await payload.findByID({ collection: 'jobs', id: jobId })
+      const updated = (finalJob.enhancedImageUrls || []) as any[]
       
       // Check if all images done → start template generation
       const allDone = updated.every((img: any) => img.status === 'completed' || img.status === 'failed')
@@ -387,10 +445,10 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
       console.log('[Webhook] 📊 Checking if should start template:')
       console.log('[Webhook]    allDone:', allDone)
       console.log('[Webhook]    hasFailed:', hasFailed)
-      console.log('[Webhook]    selectedTemplateUrl:', job.selectedTemplateUrl ? 'exists' : 'MISSING')
+      console.log('[Webhook]    selectedTemplateUrl:', finalJob.selectedTemplateUrl ? 'exists' : 'MISSING')
       console.log('[Webhook]    Image statuses:', updated.map((img: any) => `#${img.index}: ${img.status}`))
       
-      if (allDone && !hasFailed && job.selectedTemplateUrl) {
+      if (allDone && !hasFailed && finalJob.selectedTemplateUrl) {
         console.log('[Webhook] 🎨 All images done → Starting template generation...')
         
         // ✅ Log full URLs with index
@@ -406,17 +464,13 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
         await new Promise(resolve => setTimeout(resolve, randomDelay))
         
         // ✅ Atomic check + lock: Set marker first, then verify we're the winner
-        const { getPayload } = await import('payload')
-        const configPromise = await import('@payload-config')
-        const payload = await getPayload({ config: configPromise.default })
-        
         const lockMarker = `lock-${Date.now()}-${Math.random().toString(36).substring(7)}`
         console.log(`[Webhook] 🔒 Attempting to lock with marker: ${lockMarker}`)
         
         // Try to set lock atomically
         const latestJob = await payload.findByID({
           collection: 'jobs',
-          id: job.id,
+          id: finalJob.id,
         })
         
         const latestTemplateGen = latestJob.templateGeneration || {}
@@ -432,7 +486,7 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
           await retryOnWriteConflict(async () => {
             await payload.update({
               collection: 'jobs',
-              id: job.id,
+              id: finalJob.id,
               data: {
                 templateGeneration: {
                   lockMarker: lockMarker,
@@ -448,7 +502,7 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
           // Verify we're the winner (refetch and check if our marker survived)
           const verifyJob = await payload.findByID({
             collection: 'jobs',
-            id: job.id,
+            id: finalJob.id,
           })
           
           const verifyGen = verifyJob.templateGeneration || {}
@@ -473,9 +527,9 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
             
             console.log('[Webhook] 🚀 Starting template with:', {
               enhancedImageCount: enhancedImageUrls.length,
-              templateUrl: job.selectedTemplateUrl,
-              jobId: job.id,
-              outputSize: job.outputSize,
+              templateUrl: finalJob.selectedTemplateUrl,
+              jobId: finalJob.id,
+              outputSize: finalJob.outputSize,
             })
             
             // ✅ Log each URL with order for debugging
@@ -493,9 +547,9 @@ async function handleEnhancedImages(job: Job, predictionId: string, status: stri
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   enhancedImageUrls,
-                  templateUrl: job.selectedTemplateUrl,
-                  jobId: job.id,
-                  outputSize: job.outputSize,
+                  templateUrl: finalJob.selectedTemplateUrl,
+                  jobId: finalJob.id,
+                  outputSize: finalJob.outputSize,
                 }),
               })
               
