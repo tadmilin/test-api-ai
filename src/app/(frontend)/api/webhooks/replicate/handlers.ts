@@ -310,10 +310,21 @@ export async function handleTextToImage(job: Job, predictionId: string, status: 
         // Check if all done
         const allDone = updated.every((img: any) => img.status === 'completed' || img.status === 'failed')
         const hasFailed = updated.some((img: any) => img.status === 'failed')
+        const newStatus = allDone ? (hasFailed ? 'failed' : 'completed') : 'enhancing'
+        
+        // ✅ UPDATE JOB STATUS
+        if (allDone) {
+          console.log(`[Webhook] 🎉 All images done! Updating job to: ${newStatus}`)
+          await payload.update({
+            collection: 'jobs',
+            id: jobId,
+            data: { status: newStatus },
+          })
+        }
         
         return {
           updatedUrls: null, // ✅ Already updated atomically
-          newJobStatus: allDone ? (hasFailed ? 'failed' : 'completed') : 'enhancing',
+          newJobStatus: newStatus,
         }
         
       } catch (error) {
@@ -355,16 +366,297 @@ export async function handleTextToImage(job: Job, predictionId: string, status: 
 }
 
 /**
- * 2. Custom Prompt Handler
+ * 2. Custom Prompt Handler (Direct Implementation)
  * - Nano Banana Pro output (แต่งภาพ)
  * - 1:1 → upscale 2x
  * - 3:4, 9:16 → resize
+ * - แยก logic เพื่อไม่กระทบ text-to-image
  */
 export async function handleCustomPrompt(job: Job, predictionId: string, status: string, output: any, body: any) {
-  console.log('[Webhook] ✏️ CUSTOM PROMPT Handler')
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+  console.log('[Webhook] ✏️ CUSTOM PROMPT Handler (Direct)')
+  console.log('[Webhook] 📋 Job ID:', job.id)
+  console.log('[Webhook] 🔑 Prediction ID:', predictionId)
+  console.log('[Webhook] 📊 Status:', status)
+  console.log('[Webhook] 📐 Output Size:', job.outputSize)
   
-  // ใช้ logic เดียวกับ Text to Image
-  return handleTextToImage(job, predictionId, status, output, body)
+  try {
+    const updatedUrls = job.enhancedImageUrls || []
+    console.log('[Webhook] 🖼️  Total images in job:', updatedUrls.length)
+    
+    // Find image by predictionId or upscalePredictionId
+    const currentImg = updatedUrls.find((img: any) => 
+      img.predictionId === predictionId || img.upscalePredictionId === predictionId
+    )
+    
+    if (!currentImg) {
+      console.log('[Webhook] ⚠️ Image not found for predictionId:', predictionId)
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+      return { updatedUrls, newJobStatus: job.status }
+    }
+    
+    const isMainPrediction = currentImg.predictionId === predictionId
+    const isUpscalePrediction = currentImg.upscalePredictionId === predictionId
+    
+    console.log('[Webhook] 🔍 Processing image #' + (currentImg.index + 1))
+    console.log('[Webhook]    Type:', isMainPrediction ? 'MAIN' : 'UPSCALE')
+    console.log('[Webhook]    Current status:', currentImg.status)
+    
+    // Handle failure
+    if (status === 'failed') {
+      const errorMsg = body.error || body.logs || 'Unknown error'
+      console.error('[Webhook] ❌ FAILED:', errorMsg)
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+      
+      const updated = updatedUrls.map((img: any) =>
+        img.index === currentImg.index
+          ? { ...img, status: 'failed', error: errorMsg }
+          : img
+      )
+      
+      return { updatedUrls: updated, newJobStatus: 'failed' }
+    }
+    
+    // Handle success
+    if (status === 'succeeded' && output) {
+      console.log('[Webhook] ✅ SUCCEEDED')
+      
+      const replicateUrl = Array.isArray(output) ? output[0] : output
+      
+      if (!replicateUrl || typeof replicateUrl !== 'string' || !replicateUrl.startsWith('http')) {
+        console.error('[Webhook] ❌ Invalid URL from Replicate')
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+        
+        const jobId = job.id
+        await retryOnWriteConflict(async () => {
+          const { getPayload } = await import('payload')
+          const configPromise = await import('@payload-config')
+          const payload = await getPayload({ config: configPromise.default })
+          const JobModel = (payload.db as any).collections['jobs']
+          
+          await JobModel.findOneAndUpdate(
+            {
+              _id: jobId,
+              'enhancedImageUrls.predictionId': isMainPrediction ? predictionId : undefined,
+              'enhancedImageUrls.upscalePredictionId': isUpscalePrediction ? predictionId : undefined,
+            },
+            {
+              $set: {
+                'enhancedImageUrls.$.status': 'failed',
+                'enhancedImageUrls.$.error': 'Invalid URL from Replicate',
+              },
+            },
+            { new: true }
+          )
+        })
+        return { updatedUrls: null, newJobStatus: 'failed' }
+      }
+      
+      console.log('[Webhook] ✅ Valid URL:', replicateUrl.substring(0, 60) + '...')
+      
+      // Check if 1:1 → need upscale
+      const shouldUpscale = isMainPrediction && job.outputSize?.includes('1:1')
+      
+      if (shouldUpscale) {
+        console.log('[Webhook] 📐 1:1 detected → Starting upscale...')
+        
+        try {
+          const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
+          const upscaleRes = await fetch(`${baseUrl}/api/generate/upscale`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              imageUrl: replicateUrl,
+              scale: 2,
+            }),
+          })
+          
+          const upscaleData = await upscaleRes.json()
+          console.log('[Webhook] ✅ Upscale started:', upscaleData.predictionId)
+          
+          const jobId = job.id
+          await retryOnWriteConflict(async () => {
+            const { getPayload } = await import('payload')
+            const configPromise = await import('@payload-config')
+            const payload = await getPayload({ config: configPromise.default })
+            const JobModel = (payload.db as any).collections['jobs']
+            
+            await JobModel.findOneAndUpdate(
+              {
+                _id: jobId,
+                'enhancedImageUrls.predictionId': predictionId,
+              },
+              {
+                $set: {
+                  'enhancedImageUrls.$.tempOutputUrl': replicateUrl,
+                  'enhancedImageUrls.$.upscalePredictionId': upscaleData.predictionId,
+                  'enhancedImageUrls.$.predictionId': null,
+                  'enhancedImageUrls.$.status': 'pending',
+                },
+              },
+              { new: true }
+            )
+          })
+          
+          return { updatedUrls: null, newJobStatus: 'enhancing' }
+        } catch (error) {
+          console.error('[Webhook] ❌ Upscale failed:', error)
+          
+          const jobId = job.id
+          await retryOnWriteConflict(async () => {
+            const { getPayload } = await import('payload')
+            const configPromise = await import('@payload-config')
+            const payload = await getPayload({ config: configPromise.default })
+            const JobModel = (payload.db as any).collections['jobs']
+            
+            await JobModel.findOneAndUpdate(
+              {
+                _id: jobId,
+                'enhancedImageUrls.predictionId': predictionId,
+              },
+              {
+                $set: {
+                  'enhancedImageUrls.$.status': 'failed',
+                  'enhancedImageUrls.$.error': 'Failed to start upscale',
+                },
+              },
+              { new: true }
+            )
+          })
+          return { updatedUrls: null, newJobStatus: 'failed' }
+        }
+      }
+    
+      // Resize for 3:4 or 9:16
+      try {
+        console.log('[Webhook] 📤 Downloading and uploading to Cloudinary...')
+        
+        const imageResponse = await fetch(replicateUrl, { 
+          signal: AbortSignal.timeout(5000),
+        })
+        
+        const imageBuffer = await imageResponse.arrayBuffer()
+        
+        // Resize if needed
+        const OUTPUT_SIZE_MAP: Record<string, { width: number; height: number } | null> = {
+          '1:1-2K': null,
+          '3:4-2K': { width: 1080, height: 1350 },
+          '4:5-2K': { width: 1080, height: 1350 },
+          '9:16-2K': { width: 1080, height: 1920 },
+        }
+        
+        const targetSize = OUTPUT_SIZE_MAP[job.outputSize || '1:1-2K']
+        let optimizedBuffer: Buffer
+        
+        if (targetSize && !isUpscalePrediction) {
+          console.log(`[Webhook] 🔧 Resizing to ${targetSize.width}×${targetSize.height}...`)
+          optimizedBuffer = await sharp(Buffer.from(imageBuffer))
+            .resize(targetSize.width, targetSize.height, { fit: 'cover' })
+            .jpeg({ quality: 90 })
+            .toBuffer()
+        } else {
+          optimizedBuffer = Buffer.from(imageBuffer)
+        }
+        
+        const filename = isUpscalePrediction 
+          ? `enhanced-${currentImg.index}-upscaled`
+          : `enhanced-${currentImg.index}`
+        
+        const cloudinaryUrl = await uploadBufferToCloudinary(
+          optimizedBuffer,
+          `jobs/${job.id}`,
+          filename
+        )
+        
+        console.log('[Webhook] ✅ Uploaded:', cloudinaryUrl)
+        
+        // ✅ ATOMIC UPDATE: Use MongoDB positional operator
+        const jobId = job.id
+        await retryOnWriteConflict(async () => {
+          const { getPayload } = await import('payload')
+          const configPromise = await import('@payload-config')
+          const payload = await getPayload({ config: configPromise.default })
+          const JobModel = (payload.db as any).collections['jobs']
+          
+          await JobModel.findOneAndUpdate(
+            {
+              _id: jobId,
+              'enhancedImageUrls.predictionId': isMainPrediction ? predictionId : undefined,
+              'enhancedImageUrls.upscalePredictionId': isUpscalePrediction ? predictionId : undefined,
+            },
+            {
+              $set: {
+                'enhancedImageUrls.$.url': cloudinaryUrl,
+                'enhancedImageUrls.$.originalUrl': replicateUrl,
+                'enhancedImageUrls.$.status': 'completed',
+              },
+            },
+            { new: true }
+          )
+        })
+        
+        // ✅ Re-fetch to check if all done
+        const { getPayload } = await import('payload')
+        const configPromise = await import('@payload-config')
+        const payload = await getPayload({ config: configPromise.default })
+        const finalJob = await payload.findByID({ collection: 'jobs', id: jobId })
+        const updated = (finalJob.enhancedImageUrls || []) as any[]
+        
+        // ✅ Check if all done
+        const allDone = updated.every((img: any) => img.status === 'completed' || img.status === 'failed')
+        const hasFailed = updated.some((img: any) => img.status === 'failed')
+        const newStatus = allDone ? (hasFailed ? 'failed' : 'completed') : 'enhancing'
+        
+        console.log('[Webhook] 📊 Job completion check:')
+        console.log('[Webhook]    All done:', allDone)
+        console.log('[Webhook]    Has failed:', hasFailed)
+        console.log('[Webhook]    New status:', newStatus)
+        console.log('[Webhook]    Image statuses:', updated.map((img: any) => `#${img.index}: ${img.status}`))
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+        
+        return {
+          updatedUrls: null,
+          newJobStatus: newStatus,
+        }
+        
+      } catch (error) {
+        console.error('[Webhook] ❌ Upload failed:', error)
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+        
+        const jobId = job.id
+        await retryOnWriteConflict(async () => {
+          const { getPayload } = await import('payload')
+          const configPromise = await import('@payload-config')
+          const payload = await getPayload({ config: configPromise.default })
+          const JobModel = (payload.db as any).collections['jobs']
+          
+          await JobModel.findOneAndUpdate(
+            {
+              _id: jobId,
+              'enhancedImageUrls.predictionId': isMainPrediction ? predictionId : undefined,
+              'enhancedImageUrls.upscalePredictionId': isUpscalePrediction ? predictionId : undefined,
+            },
+            {
+              $set: {
+                'enhancedImageUrls.$.status': 'failed',
+                'enhancedImageUrls.$.error': 'Upload failed',
+                'enhancedImageUrls.$.webhookFailed': true,
+              },
+            },
+            { new: true }
+          )
+        })
+        return { updatedUrls: null, newJobStatus: 'failed' }
+      }
+    }
+    
+    return { updatedUrls, newJobStatus: job.status }
+    
+  } catch (error) {
+    console.error('[Webhook] ❌ CUSTOM PROMPT Handler error:', error)
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    return { updatedUrls: job.enhancedImageUrls || [], newJobStatus: 'failed' }
+  }
 }
 
 /**
