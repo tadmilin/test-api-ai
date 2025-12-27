@@ -378,7 +378,8 @@ export async function handleCustomPrompt(job: Job, predictionId: string, status:
   console.log('[Webhook] 📋 Job ID:', job.id)
   console.log('[Webhook] 🔑 Prediction ID:', predictionId)
   console.log('[Webhook] 📊 Status:', status)
-  console.log('[Webhook] 📐 Output Size:', job.outputSize)
+  console.log('[Webhook] 📐 Output Size:', job.outputSize || 'NOT SET (will use 1:1-2K default)')
+  console.log('[Webhook] 🎯 Job Type:', job.jobType)
   
   try {
     const updatedUrls = job.enhancedImageUrls || []
@@ -454,8 +455,12 @@ export async function handleCustomPrompt(job: Job, predictionId: string, status:
       
       console.log('[Webhook] ✅ Valid URL:', replicateUrl.substring(0, 60) + '...')
       
+      // ✅ Determine outputSize (fallback to 1:1-2K if not set)
+      const outputSize = job.outputSize || '1:1-2K'
+      console.log('[Webhook] 📐 Using output size:', outputSize)
+      
       // Check if 1:1 → need upscale
-      const shouldUpscale = isMainPrediction && job.outputSize?.includes('1:1')
+      const shouldUpscale = isMainPrediction && outputSize.includes('1:1')
       
       if (shouldUpscale) {
         console.log('[Webhook] 📐 1:1 detected → Starting upscale...')
@@ -527,7 +532,7 @@ export async function handleCustomPrompt(job: Job, predictionId: string, status:
         }
       }
     
-      // Resize for 3:4 or 9:16
+      // Resize for 3:4 or 9:16 (custom-prompt handler)
       try {
         console.log('[Webhook] 📤 Downloading and uploading to Cloudinary...')
         
@@ -545,7 +550,7 @@ export async function handleCustomPrompt(job: Job, predictionId: string, status:
           '9:16-2K': { width: 1080, height: 1920 },
         }
         
-        const targetSize = OUTPUT_SIZE_MAP[job.outputSize || '1:1-2K']
+        const targetSize = OUTPUT_SIZE_MAP[outputSize]
         let optimizedBuffer: Buffer
         
         if (targetSize && !isUpscalePrediction) {
