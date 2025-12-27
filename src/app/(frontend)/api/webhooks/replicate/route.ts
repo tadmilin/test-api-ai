@@ -51,17 +51,18 @@ async function processWebhook(rawBody: string, predictionId: string) {
 
     // If not found, search in enhancing/processing jobs manually
     if (jobs.docs.length === 0) {
-      console.log('[Webhook] 🔍 Standard query failed, trying manual search...')
+      console.log('[Webhook] 🔍 Standard query failed, trying MongoDB direct query...')
       
-      const enhancingJobs = await payload.find({
-        collection: 'jobs',
-        where: {
-          status: {
-            in: ['enhancing', 'processing', 'generating_template'],
-          },
-        },
-        limit: 100,  // ✅ Increased limit
-      })
+      // ✅ Use MongoDB direct query to bypass Payload cache
+      const JobModel = (payload.db as any).collections['jobs']
+      const enhancingJobsDocs = await JobModel.find({
+        status: { $in: ['enhancing', 'processing', 'generating_template'] }
+      }).limit(100).lean()
+      
+      const enhancingJobs = {
+        docs: enhancingJobsDocs,
+        totalDocs: enhancingJobsDocs.length
+      }
 
       console.log('[Webhook] 🔍 Found', enhancingJobs.docs.length, 'jobs with status enhancing/processing/generating_template')
       
@@ -83,6 +84,11 @@ async function processWebhook(rawBody: string, predictionId: string) {
       const found = enhancingJobs.docs.find((job: any) => {
         // Check enhancedImageUrls
         if (job.enhancedImageUrls) {
+          console.log(`[Webhook] 🔍 Job ${job.id} has ${job.enhancedImageUrls.length} images:`)
+          job.enhancedImageUrls.forEach((img: any, idx: number) => {
+            console.log(`[Webhook]    [${idx}] index=${img.index}, predictionId=${img.predictionId || 'null'}, upscalePredictionId=${img.upscalePredictionId || 'null'}`)
+          })
+          
           for (const img of job.enhancedImageUrls) {
             if (img.predictionId === predictionId || img.upscalePredictionId === predictionId) {
               console.log('[Webhook] 🎯 Found match in enhancedImageUrls for job:', job.id)
