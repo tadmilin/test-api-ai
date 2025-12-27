@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import Replicate from 'replicate'
-import { ObjectId } from 'mongodb'
+import mongoose from 'mongoose'
 
 // ✅ Force Node.js runtime
 export const runtime = 'nodejs'
@@ -168,7 +168,7 @@ export async function POST(request: NextRequest) {
         const JobModel = (payload.db as any).collections['jobs']
         await JobModel.findOneAndUpdate(
           {
-            _id: new ObjectId(job.id),
+            _id: new mongoose.Types.ObjectId(job.id),
             'enhancedImageUrls.index': i, // Find by index
           },
           {
@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
         const JobModel = (payload.db as any).collections['jobs']
         await JobModel.findOneAndUpdate(
           {
-            _id: new ObjectId(job.id),
+            _id: new mongoose.Types.ObjectId(job.id),
             'enhancedImageUrls.index': i,
           },
           {
