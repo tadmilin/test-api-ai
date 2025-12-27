@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import type { Job } from '@/payload-types'
+import { ObjectId } from 'mongodb'
 
 // ✅ Force Node.js runtime
 export const runtime = 'nodejs'
@@ -367,7 +368,7 @@ export async function POST(request: NextRequest) {
             const JobModel = (payload.db as any).collections['jobs']
             await JobModel.findOneAndUpdate(
               {
-                _id: jobId,
+                _id: new ObjectId(jobId),
                 'enhancedImageUrls.index': i,
               },
               {
@@ -392,7 +393,7 @@ export async function POST(request: NextRequest) {
             const JobModel = (payload.db as any).collections['jobs']
             await JobModel.findOneAndUpdate(
               {
-                _id: jobId,
+                _id: new ObjectId(jobId),
                 'enhancedImageUrls.index': i,
               },
               {

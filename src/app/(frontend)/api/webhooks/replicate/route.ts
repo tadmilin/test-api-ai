@@ -57,10 +57,32 @@ async function processWebhook(rawBody: string, predictionId: string) {
       const JobModel = (payload.db as any).collections['jobs']
       const enhancingJobsDocs = await JobModel.find({
         status: { $in: ['enhancing', 'processing', 'generating_template'] }
-      }).limit(100).lean()
+      }).limit(100).lean().exec()
+      
+      console.log(`[Webhook] 🔍 MongoDB found ${enhancingJobsDocs.length} jobs`)
+      
+      // ✅ Log first job to see field structure
+      if (enhancingJobsDocs.length > 0) {
+        const firstJob = enhancingJobsDocs[0]
+        console.log('[Webhook] 🔍 First job structure:')
+        console.log('[Webhook]    _id:', firstJob._id)
+        console.log('[Webhook]    status:', firstJob.status)
+        console.log('[Webhook]    jobType:', firstJob.jobType)
+        console.log('[Webhook]    enhancedImageUrls length:', firstJob.enhancedImageUrls?.length || 0)
+        if (firstJob.enhancedImageUrls && firstJob.enhancedImageUrls.length > 0) {
+          console.log('[Webhook]    First image:', {
+            index: firstJob.enhancedImageUrls[0].index,
+            predictionId: firstJob.enhancedImageUrls[0].predictionId,
+            upscalePredictionId: firstJob.enhancedImageUrls[0].upscalePredictionId,
+          })
+        }
+      }
       
       const enhancingJobs = {
-        docs: enhancingJobsDocs,
+        docs: enhancingJobsDocs.map((doc: any) => ({
+          ...doc,
+          id: doc._id.toString(), // ✅ Map _id to id
+        })),
         totalDocs: enhancingJobsDocs.length
       }
 
